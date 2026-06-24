@@ -1,7 +1,6 @@
-package model.modifiers;
+package model.cards.capability;
 
 public interface Buyable {
-    int shopValue = 0;
     int getShopValue();
-    void setShopValue();
+    void setShopValue(int value);
 }

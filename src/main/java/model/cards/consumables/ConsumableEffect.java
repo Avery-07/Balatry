@@ -1,9 +1,9 @@
-package model.cards.consumableHelpers;
+package model.cards.consumables;
 
-import model.cards.ConsumableCard;
+import model.game.player.Run;
 
 @FunctionalInterface
 public interface ConsumableEffect {
-    void use(GameContext ctx, ConsumableCard self);
-    ConsumableEffect NO_OP = (ctx, self) -> {};
+    void consume(Run run, ConsumableCard self);
+    ConsumableEffect NO_OP = (run, self) -> {};
 }

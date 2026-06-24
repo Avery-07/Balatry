@@ -1,9 +1,9 @@
-package model.cards.jokerHelpers;
+package model.cards.jokers;
 
-import model.cards.JokerCard;
+import model.game.player.Run;
 
 @FunctionalInterface
 public interface JokerEffect {
-    void apply(GameContext ctx, JokerCard self);
-    JokerEffect NO_OP = (ctx, self) -> {};
+    void apply(Run run, JokerCard self);
+    JokerEffect NO_OP = (run, self) -> {};
 }

@@ -1,6 +1,6 @@
-package model.modifiers;
+package model.cards.capability;
 
 public interface Sellable {
-    int sellValue = 0;
     int getSellValue();
+    void setSellValue(int value);
 }
