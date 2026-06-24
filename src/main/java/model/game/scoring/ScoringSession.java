@@ -13,6 +13,7 @@ public final class ScoringSession {
     private BigDecimal mult;
     private DeckCard currentCard;   // the card being scored right now, or null
 
+    /** Intended for {@link Run#beginScoring} only. */
     public ScoringSession(Run run, long baseChips, long baseMult) {
         this.run = run;
         this.chips = BigDecimal.valueOf(baseChips);

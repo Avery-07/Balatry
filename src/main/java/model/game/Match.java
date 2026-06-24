@@ -122,8 +122,7 @@ public final class Match {
         Run runB = getRun(b);
         JokerCard cardA = runA.getJokers().get(indexA);
         JokerCard cardB = runB.getJokers().get(indexB);
-        runA.replaceJoker(indexA, cardB);
-        runB.replaceJoker(indexB, cardA);
+        // Swap jokers
     }
 
     private void require(MatchPhase expected, String op) {

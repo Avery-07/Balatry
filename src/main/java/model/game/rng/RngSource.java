@@ -25,6 +25,8 @@ public enum RngSource {
     LUCKY_MONEY        (16),       // a played Lucky card's +money roll
     WHEEL_OF_FORTUNE   (17),       // Wheel of Fortune's edition roll
 
+    DECK_SHUFFLE       (18),       // per-round deck shuffle
+
     MISC               (99);       // anything not yet promoted to its own source
 
     private final int code;
