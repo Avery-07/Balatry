@@ -43,12 +43,28 @@ public final class HandEvaluator {
         boolean straight = hasStraight(live);
 
         HandType type = classify(sizes, flush, straight);
+        HandContext context = context(type, sizes, flush, straight, played.size());
         Set<DeckCard> selected = selectLive(type, live, groups);
 
         List<DeckCard> scoring = new ArrayList<>();
         for (DeckCard c : played) if (isStone(c) || selected.contains(c)) scoring.add(c);
 
-        return new HandEvaluation(type, scoring);
+        return new HandEvaluation(scoring, context);
+    }
+
+    /** Builds the trait view joker effects read during scoring. "Contains X" follows vanilla: a group of {@code n} satisfies every smaller-group query. */
+    private static HandContext context(HandType type, int[] sizes, boolean flush, boolean straight, int playedCount) {
+        int top = sizes.length > 0 ? sizes[0] : 0;
+        int second = sizes.length > 1 ? sizes[1] : 0;
+        return new HandContext(
+                type,
+                playedCount,
+                top >= 2,                 // hasPair
+                top >= 2 && second >= 2,  // hasTwoPair (full house qualifies)
+                top >= 3,                 // hasThreeOfAKind
+                top >= 4,                 // hasFourOfAKind
+                straight,
+                flush);
     }
 
     /** Resolves the highest-ranking hand the cards satisfy, in {@link HandType} order. */

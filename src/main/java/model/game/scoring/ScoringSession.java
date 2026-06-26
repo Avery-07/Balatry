@@ -12,6 +12,7 @@ public final class ScoringSession {
     private BigDecimal chips;
     private BigDecimal mult;
     private DeckCard currentCard;   // the card being scored right now, or null
+    private HandContext hand;       // the hand being scored (its traits); set once per session by the engine
 
     /** Intended for {@link Run#beginScoring} only. */
     public ScoringSession(Run run, long baseChips, long baseMult) {
@@ -33,6 +34,11 @@ public final class ScoringSession {
     public DeckCard getCurrentScoredCard() { return currentCard; }
 
     void setCurrentCard(DeckCard card) { this.currentCard = card; }   // engine only
+
+    /** Traits of the hand being scored, read by joker effects; {@code null} before the engine sets it. */
+    public HandContext getHand() { return hand; }
+
+    void setHand(HandContext hand) { this.hand = hand; }   // engine only
 
     /** Final score for this hand (chips x mult), rounded to an integer. */
     public BigDecimal finalScore() {

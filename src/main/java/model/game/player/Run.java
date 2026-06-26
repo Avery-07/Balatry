@@ -1,5 +1,6 @@
 package model.game.player;
 
+import model.cards.Card;
 import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
@@ -11,6 +12,7 @@ import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.scoring.HandType;
 import model.game.scoring.ScoringSession;
+import model.modifiers.Edition;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,9 +35,15 @@ public final class Run {
     private int baseHands = 4;
     private int baseDiscards = 3;
     private int interestCap = 5;      // max $ of interest per round (raised by To the Moon / Seed Money)
+    private int jokerSlots = 5;       // capacity for slot-consuming jokers (NEGATIVE jokers are free)
+    private int consumableSlots = 2;  // capacity for slot-consuming consumables (NEGATIVE are free)
+    private int shopSlots = 2;        // card slots offered per shop
+    private int baseRerollCost = 5;   // first reroll cost; +$1 per reroll within a shop
     private Round round;              // non-null only during a blind
+    private Shop shop;                // non-null only during a shop
     private ScoringSession scoring;   // non-null only during a hand
     private int shuffleIndex;         // per-round shuffle salt (Nth shuffle on this run)
+    private int shopIndex;            // per-shop salt coordinate (Nth shop on this run)
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
     public Run(long seed) { this(new DeterministicRng(seed)); }
@@ -78,6 +86,77 @@ public final class Run {
     public void levelUpHand(HandType h)       { handLevels.levelUp(h); }
     public void createConsumable(ConsumableSpec s) { /* ... */ }
 
+    // --- inventory: acquisition routing and slot accounting (NEGATIVE cards don't consume a slot) ---
+
+    /** Whether {@code card} can be taken into inventory right now (deck cards always can). */
+    public boolean canAcquire(Card card) {
+        if (card instanceof JokerCard joker)        return canAddJoker(joker);
+        if (card instanceof ConsumableCard consumable) return canAddConsumable(consumable);
+        return true;
+    }
+
+    /** Routes {@code card} into the matching inventory; callers should check {@link #canAcquire} first. */
+    public void acquire(Card card) {
+        if (card instanceof JokerCard joker)              jokers.add(joker);
+        else if (card instanceof ConsumableCard consumable) consumables.add(consumable);
+        else if (card instanceof DeckCard deckCard)       deck.add(deckCard);
+        else throw new IllegalArgumentException("cannot acquire " + card.getClass().getSimpleName());
+    }
+
+    /** Jokers occupying a slot (NEGATIVE jokers are free). */
+    public int usedJokerSlots() {
+        int n = 0;
+        for (JokerCard j : jokers) if (j.getEdition() != Edition.NEGATIVE) n++;
+        return n;
+    }
+
+    /** Consumables occupying a slot (NEGATIVE consumables are free). */
+    public int usedConsumableSlots() {
+        int n = 0;
+        for (ConsumableCard c : consumables) if (c.getEdition() != Edition.NEGATIVE) n++;
+        return n;
+    }
+
+    public boolean canAddJoker(JokerCard joker) {
+        return joker.getEdition() == Edition.NEGATIVE || usedJokerSlots() < jokerSlots;
+    }
+
+    public boolean canAddConsumable(ConsumableCard consumable) {
+        return consumable.getEdition() == Edition.NEGATIVE || usedConsumableSlots() < consumableSlots;
+    }
+
+    /** Sells the joker at {@code index}, banking its sell value and freeing its slot. */
+    public int sellJoker(int index) {
+        JokerCard joker = jokers.remove(index);
+        int value = joker.getSellValue();
+        addMoney(value);
+        return value;
+    }
+
+    /** Sells the consumable at {@code index}, banking its sell value and freeing its slot. */
+    public int sellConsumable(int index) {
+        ConsumableCard consumable = consumables.remove(index);
+        int value = consumable.getSellValue();
+        addMoney(value);
+        return value;
+    }
+
+    /** Uses the consumable at {@code index}: fires its effect, then removes it from inventory. */
+    public void useConsumable(int index) {
+        ConsumableCard consumable = consumables.get(index);
+        consumable.consume(this);
+        consumables.remove(consumable);   // by reference: safe if the effect mutated the list
+    }
+
+    public int getJokerSlots()         { return jokerSlots; }
+    public void setJokerSlots(int n)   { jokerSlots = n; }
+    public int getConsumableSlots()    { return consumableSlots; }
+    public void setConsumableSlots(int n) { consumableSlots = n; }
+    public int getShopSlots()          { return shopSlots; }
+    public void setShopSlots(int n)    { shopSlots = n; }
+    public int getBaseRerollCost()     { return baseRerollCost; }
+    public void setBaseRerollCost(int n) { baseRerollCost = n; }
+
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
 
@@ -106,6 +185,17 @@ public final class Run {
         round = null;
         return result;
     }
+
+    /** The active shop, or {@code null} outside the shop phase. */
+    public Shop getShop() { return shop; }
+
+    /** Opens this run's shop for the SHOP phase, with seed-mirrored contents. */
+    public Shop openShop() {
+        return shop = new Shop(this, shopIndex++, shopSlots, ShopPool.PLACEHOLDER);
+    }
+
+    /** Closes the active shop. */
+    public void closeShop() { shop = null; }
 
     /** Begins a scoring session; intended for the {@link model.game.scoring.ScoringEngine} only. */
     public ScoringSession beginScoring(long baseChips, long baseMult) {

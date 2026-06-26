@@ -20,9 +20,10 @@ public final class ScoringEngine {
     private static final BigDecimal X2   = new BigDecimal("2");
 
     /** Scores one played hand: scored cards, then held cards, then independent joker/edition contributors. */
-    public ScoringResult score(Run run, HandType type, long baseChips, long baseMult,
+    public ScoringResult score(Run run, HandContext hand, long baseChips, long baseMult,
                                List<DeckCard> scoringCards, List<DeckCard> heldCards) {
         ScoringSession s = run.beginScoring(baseChips, baseMult);
+        s.setHand(hand);
         List<DeckCard> destroyed = new ArrayList<>();
 
         // Phase A — scored cards, left to right; retrigger repeats the sub-sequence in place.

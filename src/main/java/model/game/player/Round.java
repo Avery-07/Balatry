@@ -53,7 +53,7 @@ public final class Round {
 
         long baseChips = run.getHandLevels().chipsFor(eval.type());
         long baseMult = run.getHandLevels().multFor(eval.type());
-        ScoringResult result = ENGINE.score(run, eval.type(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
+        ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
 
         score = score.add(result.score());
         hand.removeAll(cards);

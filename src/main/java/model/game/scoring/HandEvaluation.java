@@ -4,9 +4,12 @@ import model.cards.DeckCard;
 
 import java.util.List;
 
-/** Result of evaluating a played hand: its {@link HandType} and the cards that score, in play order. */
-public record HandEvaluation(HandType type, List<DeckCard> scoringCards) {
+/** Result of evaluating a played hand: the cards that score (in play order) and the {@link HandContext} traits read by joker effects. */
+public record HandEvaluation(List<DeckCard> scoringCards, HandContext context) {
     public HandEvaluation {
         scoringCards = List.copyOf(scoringCards);
     }
+
+    /** The classified hand type; shortcut for {@code context().type()}. */
+    public HandType type() { return context.type(); }
 }
