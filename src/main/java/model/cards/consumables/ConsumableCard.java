@@ -8,10 +8,10 @@ public final class ConsumableCard extends Card implements Sellable {
     private final ConsumableSpec spec;
     private int sellValue;
 
-    public ConsumableCard(ConsumableSpec spec, int shopValue) {
+    public ConsumableCard(ConsumableSpec spec) {
         this.spec = spec;
-        setShopValue(shopValue);
-        setSellValue(shopValue / 2);
+        setShopValue(spec.getCost());
+        setSellValue(spec.getCost() / 2);
     }
 
     public void consume(Run run) { spec.getEffect().consume(run, this); }

@@ -19,7 +19,7 @@ public enum RngSource {
     CARD_DESTROY       (12),       // card destruction (deterministic / non-counter removal)
     ANTE_MODIFIER      (13),       // which sin is active for an ante
 
-    // counter-keyed luck streams: one source per LuckEvent, salted by that event's occurrence counter
+    // counter-keyed emergent-event streams: each salted by a per-source occurrence counter (see PlayerStats / Run#roll)
     GLASS_BREAK        (14),       // a played Glass card's shatter roll
     LUCKY_MULT         (15),       // a played Lucky card's +mult roll
     LUCKY_MONEY        (16),       // a played Lucky card's +money roll

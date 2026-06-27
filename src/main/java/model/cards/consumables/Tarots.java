@@ -7,7 +7,6 @@ import model.cards.DeckCard.Suit;
 import model.cards.jokers.JokerCard;
 import model.cards.jokers.Jokers;
 import model.game.player.Run;
-import model.game.rng.LuckEvent;
 import model.game.rng.RngSource;
 import model.modifiers.Edition;
 import model.modifiers.Enhancement;
@@ -44,7 +43,7 @@ public enum Tarots {
     JUSTICE("Justice", (run, self) -> enhance(run, 1, Enhancement.GLASS)),
     THE_HERMIT("The Hermit", (run, self) -> run.addMoney(Math.max(0, Math.min(run.getMoney(), 20)))),
     THE_WHEEL_OF_FORTUNE("The Wheel of Fortune", (run, self) -> {
-        if (run.roll(LuckEvent.WHEEL_OF_FORTUNE, 1, 2)) run.addMoney(15);
+        if (run.roll(RngSource.WHEEL_OF_FORTUNE, 1, 2)) run.addMoney(15);
     }),
     STRENGTH("Strength", (run, self) -> {
         List<DeckCard> targets = run.getConsumableTargets();
@@ -76,28 +75,28 @@ public enum Tarots {
     THE_DEVIL("The Devil", (run, self) -> enhance(run, 1, Enhancement.GOLD)),
     THE_TOWER("The Tower", (run, self) -> enhance(run, 2, Enhancement.STONE)),
     THE_STAR("The Star", (run, self) -> {
-        if (!run.roll(LuckEvent.STAR_NEGATIVE, 1, 8)) return;
+        if (!run.roll(RngSource.STAR_NEGATIVE, 1, 8)) return;
         List<Card> pool = new ArrayList<>();
         pool.addAll(run.getHeld());
         pool.addAll(run.getJokers());
         pool.addAll(run.getConsumables());
         pool.remove(self);   // the Star card is removed after consume; don't let it target itself
         if (pool.isEmpty()) return;
-        RandomGenerator stream = run.getRng().streamFor(RngSource.STAR_NEGATIVE, run.nextGenSalt());
+        RandomGenerator stream = run.getRng().streamFor(RngSource.STAR_NEGATIVE, run.nextSalt(RngSource.STAR_NEGATIVE));
         pool.get(stream.nextInt(pool.size())).apply(Edition.NEGATIVE);
     }),
     THE_MOON("The Moon", (run, self) -> {
-        if (!run.roll(LuckEvent.MOON_EDITION, 1, 4)) return;
+        if (!run.roll(RngSource.MOON_EDITION, 1, 4)) return;
         List<DeckCard> held = run.getHeld();
         if (held.isEmpty()) return;
-        RandomGenerator stream = run.getRng().streamFor(RngSource.MOON_EDITION, run.nextGenSalt());
+        RandomGenerator stream = run.getRng().streamFor(RngSource.MOON_EDITION, run.nextSalt(RngSource.MOON_EDITION));
         held.get(stream.nextInt(held.size())).apply(randomShinyEdition(stream));
     }),
     THE_SUN("The Sun", (run, self) -> {
-        if (!run.roll(LuckEvent.SUN_EDITION, 1, 4)) return;
+        if (!run.roll(RngSource.SUN_EDITION, 1, 4)) return;
         List<JokerCard> jokers = run.getJokers();
         if (jokers.isEmpty()) return;
-        RandomGenerator stream = run.getRng().streamFor(RngSource.SUN_EDITION, run.nextGenSalt());
+        RandomGenerator stream = run.getRng().streamFor(RngSource.SUN_EDITION, run.nextSalt(RngSource.SUN_EDITION));
         jokers.get(stream.nextInt(jokers.size())).apply(randomShinyEdition(stream));
     }),
     JUDGEMENT("Judgement", (run, self) -> createRandomJoker(run)),
@@ -114,13 +113,13 @@ public enum Tarots {
     private final ConsumableSpec spec;
 
     Tarots(String displayName, ConsumableEffect effect) {
-        this.spec = new ConsumableSpec(displayName, ConsumableType.TAROT, displayName, effect);
+        this.spec = new ConsumableSpec(displayName, ConsumableType.TAROT, COST, effect);
     }
 
     public ConsumableSpec spec() { return spec; }
 
-    /** A fresh card for this tarot at its shop price. */
-    public ConsumableCard make() { return new ConsumableCard(spec, COST); }
+    /** A fresh card for this tarot at its spec's price. */
+    public ConsumableCard make() { return new ConsumableCard(spec); }
 
     // --- effect helpers ---
 
@@ -132,19 +131,19 @@ public enum Tarots {
 
     private static void createRandomPlanet(Run run) {
         Planets[] all = Planets.values();
-        RandomGenerator stream = run.getRng().streamFor(RngSource.PLANET_GENERATION, run.nextGenSalt());
+        RandomGenerator stream = run.getRng().streamFor(RngSource.PLANET_GENERATION, run.nextSalt(RngSource.PLANET_GENERATION));
         run.createConsumable(all[stream.nextInt(all.length)].spec());
     }
 
     private static void createRandomTarot(Run run) {
         Tarots[] all = values();
-        RandomGenerator stream = run.getRng().streamFor(RngSource.TAROT_GENERATION, run.nextGenSalt());
+        RandomGenerator stream = run.getRng().streamFor(RngSource.TAROT_GENERATION, run.nextSalt(RngSource.TAROT_GENERATION));
         run.createConsumable(all[stream.nextInt(all.length)].spec());
     }
 
     private static void createRandomJoker(Run run) {
         Jokers[] all = Jokers.values();
-        RandomGenerator stream = run.getRng().streamFor(RngSource.JOKER_GENERATION, run.nextGenSalt());
+        RandomGenerator stream = run.getRng().streamFor(RngSource.JOKER_GENERATION, run.nextSalt(RngSource.JOKER_GENERATION));
         run.createJoker(all[stream.nextInt(all.length)].make());
     }
 

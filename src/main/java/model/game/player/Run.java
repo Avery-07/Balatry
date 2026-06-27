@@ -9,7 +9,6 @@ import model.cards.consumables.ConsumableType;
 import model.cards.consumables.Tarots;
 import model.game.*;
 import model.game.rng.DeterministicRng;
-import model.game.rng.LuckEvent;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.scoring.HandType;
@@ -49,11 +48,8 @@ public final class Run {
     private ScoringSession scoring;   // non-null only during a hand
     private int shuffleIndex;         // per-round shuffle salt (Nth shuffle on this run)
     private int shopIndex;            // per-shop salt coordinate (Nth shop on this run)
-    private int genSalt;              // monotonic salt for effect-driven generation/selection
     private List<DeckCard> consumableTargets = List.of();   // transient: the active consumable's selected cards
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
-
-    private static final int GENERATED_CONSUMABLE_COST = 3;   // shop value stamped on effect-created consumables
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
     public Run(long seed) { this(new DeterministicRng(seed)); }
@@ -82,9 +78,15 @@ public final class Run {
     /** Per-player hand levels (raised by Planet cards). */
     public HandLevels getHandLevels() { return handLevels; }
 
-    /** Resolves one luck roll: draws {@code numerator/denominator} on {@code event}'s stream using its next occurrence salt. */
-    public boolean roll(LuckEvent event, int numerator, int denominator) {
-        return rng.chance(event.getSource(), stats.nextSalt(event), numerator, denominator);
+    /**
+     * Resolves one chance on {@code source}, salted by that source's next per-player occurrence counter.
+     * <p>Salting rule: use this counter form only for <em>emergent-timing</em> events that have no stable
+     * coordinate (glass shatter, lucky procs, effect rolls). For <em>positioned</em> draws (shop slot, ante,
+     * hand/card index) hash the coordinates with {@link Rng#combine} instead — it mirrors across players for
+     * free and needs no mutable state.
+     */
+    public boolean roll(RngSource source, int numerator, int denominator) {
+        return rng.chance(source, stats.nextSalt(source), numerator, denominator);
     }
 
     public ScoringSession getScoring()        { return scoring; }
@@ -122,7 +124,7 @@ public final class Run {
 
     /** Adds a fresh card for {@code spec} to the consumable area, if there is room (NEGATIVE cards are free). */
     public void createConsumable(ConsumableSpec spec) {
-        ConsumableCard card = new ConsumableCard(spec, GENERATED_CONSUMABLE_COST);
+        ConsumableCard card = new ConsumableCard(spec);
         if (canAddConsumable(card)) consumables.add(card);
     }
 
@@ -137,8 +139,8 @@ public final class Run {
     /** The last Tarot or Planet spec used this run (The Fool excluded), or {@code null}. Read by The Fool. */
     public ConsumableSpec getLastTarotOrPlanet() { return lastTarotOrPlanet; }
 
-    /** Monotonic salt for effect-driven generation/selection; advances on each call. */
-    public long nextGenSalt() { return genSalt++; }
+    /** Salt for the next draw on {@code source}; advances that source's per-player occurrence counter. */
+    public long nextSalt(RngSource source) { return stats.nextSalt(source); }
 
     /** Permanently removes each card (by identity) from the deck and, if a round is active, from the hand. */
     public void destroyDeckCards(List<DeckCard> cards) {

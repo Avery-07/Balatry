@@ -39,6 +39,6 @@ public interface ShopPool {
             return new JokerCard(JokerSpec.named("Stub Joker", rarity).build(), cost);
         }
         ConsumableType type = ConsumableType.values()[stream.nextInt(ConsumableType.values().length)];
-        return new ConsumableCard(new ConsumableSpec("Stub " + type, type, "placeholder", ConsumableEffect.NO_OP), 3);
+        return new ConsumableCard(new ConsumableSpec("Stub " + type, type, 3, ConsumableEffect.NO_OP));
     };
 }

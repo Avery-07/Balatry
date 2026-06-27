@@ -3,7 +3,7 @@ package model.game.scoring;
 import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
-import model.game.rng.LuckEvent;
+import model.game.rng.RngSource;
 import model.game.player.Run;
 import model.modifiers.Enhancement;
 import model.modifiers.Seal;
@@ -98,14 +98,14 @@ public final class ScoringEngine {
             case MULT  -> s.addMult(5);
             case GLASS -> {
                 s.multiplyMult(X2);
-                if (run.roll(LuckEvent.GLASS_BREAK, 1, 4) && !destroyed.contains(card)) {
+                if (run.roll(RngSource.GLASS_BREAK, 1, 4) && !destroyed.contains(card)) {
                     destroyed.add(card);
                 }
             }
             case STONE -> s.addChips(50);
             case LUCKY -> {
-                if (run.roll(LuckEvent.LUCKY_MULT, 1, 5))   s.addMult(20);
-                if (run.roll(LuckEvent.LUCKY_MONEY, 1, 10)) run.addMoney(10);
+                if (run.roll(RngSource.LUCKY_MULT, 1, 5))   s.addMult(20);
+                if (run.roll(RngSource.LUCKY_MONEY, 1, 10)) run.addMoney(10);
             }
             default -> { }   // WILD/STEEL/GOLD: nothing at scored time
         }

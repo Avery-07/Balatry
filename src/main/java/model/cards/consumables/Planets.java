@@ -24,13 +24,13 @@ public enum Planets {
 
     Planets(String displayName, HandType hand) {
         this.hand = hand;
-        this.spec = new ConsumableSpec(displayName, ConsumableType.PLANET,
-                "Levels up " + hand, (run, self) -> run.levelUpHand(hand));
+        this.spec = new ConsumableSpec(displayName, ConsumableType.PLANET, COST,
+                (run, self) -> run.levelUpHand(hand));
     }
 
     public HandType hand()       { return hand; }
     public ConsumableSpec spec() { return spec; }
 
-    /** A fresh card for this planet at its shop price. */
-    public ConsumableCard make() { return new ConsumableCard(spec, COST); }
+    /** A fresh card for this planet at its spec's price. */
+    public ConsumableCard make() { return new ConsumableCard(spec); }
 }
