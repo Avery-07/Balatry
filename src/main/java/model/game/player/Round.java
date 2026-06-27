@@ -75,6 +75,7 @@ public final class Round {
 
         hand.removeAll(cards);
         discardsRemaining--;
+        run.fireDiscard(cards);   // jokers (Faceless, Mail-In Rebate, ...) react to the discarded cards
         draw();
     }
 

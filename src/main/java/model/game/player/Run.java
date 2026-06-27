@@ -49,6 +49,7 @@ public final class Run {
     private int shuffleIndex;         // per-round shuffle salt (Nth shuffle on this run)
     private int shopIndex;            // per-shop salt coordinate (Nth shop on this run)
     private List<DeckCard> consumableTargets = List.of();   // transient: the active consumable's selected cards
+    private List<DeckCard> lastDiscarded = List.of();       // transient: cards of the discard currently being broadcast
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
@@ -93,7 +94,7 @@ public final class Run {
     public int getMoney()                     { return money; }
     public void addMoney(int amount) {
         money += amount;
-        if (amount > 0) for (JokerCard j : List.copyOf(jokers)) if (!j.isDebuffed()) j.trigger(Trigger.ON_EARN, this);
+        if (amount > 0) fire(Trigger.ON_EARN);
     }
 
     /** Lowest balance this run may reach: $0 minus every owned joker's debt allowance (e.g. Credit Card). */
@@ -107,7 +108,7 @@ public final class Run {
     public void spend(int amount) {
         lastInDebtSpend = Math.max(0, amount - Math.max(0, money));   // portion spent while below $0
         money -= amount;
-        for (JokerCard j : List.copyOf(jokers)) if (!j.isDebuffed()) j.trigger(Trigger.ON_SPEND, this);
+        fire(Trigger.ON_SPEND);
     }
 
     /** Dollars of the most recent {@link #spend} made while in debt; read by ON_SPEND effects. */
@@ -194,6 +195,7 @@ public final class Run {
         JokerCard joker = jokers.remove(index);
         int value = joker.getSellValue();
         addMoney(value);
+        fire(Trigger.ON_SOLD);
         return value;
     }
 
@@ -202,6 +204,7 @@ public final class Run {
         ConsumableCard consumable = consumables.remove(index);
         int value = consumable.getSellValue();
         addMoney(value);
+        fire(Trigger.ON_SOLD);
         return value;
     }
 
@@ -246,16 +249,26 @@ public final class Run {
 
     /** Starts a round against a blind requiring {@code target} chips; shuffles the deck on this run's seed. */
     public Round beginRound(long target) {
-        fireRoundStart();   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
+        fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
         return round = new Round(this, target, handSize, baseHands, baseDiscards, shuffle);
     }
 
-    /** Fires {@link Trigger#ON_ROUND_START} on each non-debuffed joker. Iterates a snapshot so an effect may add or remove jokers. */
-    private void fireRoundStart() {
+    /** Fires {@code trigger} on every non-debuffed joker, in board order. Iterates a snapshot so an effect may add or remove jokers. */
+    public void fire(Trigger trigger) {
         for (JokerCard joker : List.copyOf(jokers))
-            if (!joker.isDebuffed()) joker.trigger(Trigger.ON_ROUND_START, this);
+            if (!joker.isDebuffed()) joker.trigger(trigger, this);
     }
+
+    /** Records the just-discarded cards and fires ON_HAND_DISCARDED so jokers can react to them, then clears the channel. */
+    public void fireDiscard(List<DeckCard> discarded) {
+        lastDiscarded = List.copyOf(discarded);
+        fire(Trigger.ON_HAND_DISCARDED);
+        lastDiscarded = List.of();
+    }
+
+    /** The cards of the discard currently being broadcast; empty outside an ON_HAND_DISCARDED fire. */
+    public List<DeckCard> getLastDiscarded() { return lastDiscarded; }
 
     /** Settles and ends the active round against {@code blind}, returning its competition result. */
     public BlindResult endRound(Blind blind) {
@@ -270,11 +283,16 @@ public final class Run {
 
     /** Opens this run's shop for the SHOP phase, with seed-mirrored contents. */
     public Shop openShop() {
-        return shop = new Shop(this, shopIndex++, shopSlots, ShopPool.PLACEHOLDER);
+        shop = new Shop(this, shopIndex++, shopSlots, ShopPool.PLACEHOLDER);
+        fire(Trigger.ON_SHOP_START);
+        return shop;
     }
 
     /** Closes the active shop. */
-    public void closeShop() { shop = null; }
+    public void closeShop() {
+        fire(Trigger.ON_SHOP_END);
+        shop = null;
+    }
 
     /** Begins a scoring session; intended for the {@link model.game.scoring.ScoringEngine} only. */
     public ScoringSession beginScoring(long baseChips, long baseMult) {

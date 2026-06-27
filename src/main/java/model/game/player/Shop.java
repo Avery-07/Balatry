@@ -1,7 +1,6 @@
 package model.game.player;
 
 import model.cards.Card;
-import model.cards.jokers.JokerCard;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.scoring.Trigger;
@@ -45,7 +44,7 @@ public final class Shop {
             throw new IllegalStateException("no inventory slot for " + item);
         int price = item.getShopValue();
         run.beginPurchase();
-        for (JokerCard j : run.getJokers()) if (!j.isDebuffed()) j.trigger(Trigger.ON_BOUGHT, run);
+        run.fire(Trigger.ON_BOUGHT);
         int effective = run.isPurchaseFree() ? 0 : price;
         if (run.getMoney() - effective < run.minBalance())
             throw new IllegalStateException("cannot afford " + effective + " (have " + run.getMoney() + ", floor " + run.minBalance() + ")");
@@ -62,6 +61,7 @@ public final class Shop {
         run.spend(cost);
         rerolls++;
         fill();
+        run.fire(Trigger.ON_SHOP_REROLL);
     }
 
     /** (Re)generates every slot from the run's seed at the current reroll count. */
