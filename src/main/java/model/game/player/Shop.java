@@ -1,8 +1,10 @@
 package model.game.player;
 
 import model.cards.Card;
+import model.cards.jokers.JokerCard;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
+import model.game.scoring.Trigger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,12 +41,15 @@ public final class Shop {
     public Card buy(int slotIndex) {
         Card item = slots.get(slotIndex);
         if (item == null) throw new IllegalStateException("slot " + slotIndex + " is empty");
-        int price = item.getShopValue();
-        if (run.getMoney() < price)
-            throw new IllegalStateException("cannot afford " + price + " (have " + run.getMoney() + ")");
         if (!run.canAcquire(item))
             throw new IllegalStateException("no inventory slot for " + item);
-        run.addMoney(-price);
+        int price = item.getShopValue();
+        run.beginPurchase();
+        for (JokerCard j : run.getJokers()) if (!j.isDebuffed()) j.trigger(Trigger.ON_BOUGHT, run);
+        int effective = run.isPurchaseFree() ? 0 : price;
+        if (run.getMoney() - effective < run.minBalance())
+            throw new IllegalStateException("cannot afford " + effective + " (have " + run.getMoney() + ", floor " + run.minBalance() + ")");
+        run.spend(effective);
         run.acquire(item);
         slots.set(slotIndex, null);
         return item;
@@ -53,8 +58,8 @@ public final class Shop {
     /** Rerolls every slot for a fresh, still-seeded set of offerings; charges the reroll cost. */
     public void reroll() {
         int cost = rerollCost();
-        if (run.getMoney() < cost) throw new IllegalStateException("cannot afford reroll " + cost);
-        run.addMoney(-cost);
+        if (run.getMoney() - cost < run.minBalance()) throw new IllegalStateException("cannot afford reroll " + cost);
+        run.spend(cost);
         rerolls++;
         fill();
     }

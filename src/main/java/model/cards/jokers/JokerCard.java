@@ -21,10 +21,20 @@ public final class JokerCard extends Card implements Sellable {
         spec.effectFor(trigger).apply(run, this);
     }
 
+    /** Extra passes this joker grants {@code card} when it is a played scoring card. */
+    public int playedRetriggers(Run run, model.cards.DeckCard card) { return spec.getPlayedRetrigger().extra(run, this, card); }
+
+    /** Extra passes this joker grants {@code card} when it is held in hand. */
+    public int heldRetriggers(Run run, model.cards.DeckCard card)   { return spec.getHeldRetrigger().extra(run, this, card); }
+
     public JokerSpec getSpec()       { return spec; }
     public int getCounter()          { return counter; }
     public void setCounter(int value) { counter = value; }
 
     @Override public int getSellValue()        { return sellValue; }
     @Override public void setSellValue(int value) { sellValue = value; }
+
+    public void addCounter(int i) {
+        counter += i;
+    }
 }

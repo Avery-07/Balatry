@@ -5,7 +5,6 @@ import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
 import model.game.rng.LuckEvent;
 import model.game.player.Run;
-import model.modifiers.Edition;
 import model.modifiers.Enhancement;
 import model.modifiers.Seal;
 
@@ -30,7 +29,7 @@ public final class ScoringEngine {
         for (int i = 0; i < scoringCards.size(); i++) {
             DeckCard card = scoringCards.get(i);
             if (card.isDebuffed()) continue;
-            int passes = 1 + retriggers(card);
+            int passes = 1 + retriggers(card) + jokerRetriggers(run, card, true);
             for (int pass = 0; pass < passes; pass++) {
                 s.setCurrentCard(card);
                 scoreScoredCard(s, run, card, destroyed);
@@ -42,7 +41,7 @@ public final class ScoringEngine {
         // Phase B — held cards.
         for(DeckCard card : heldCards) {
             if (card.isDebuffed()) continue;
-            int passes = 1 + retriggers(card);
+            int passes = 1 + retriggers(card) + jokerRetriggers(run, card, false);
             for (int pass = 0; pass < passes; pass++) {
                 s.setCurrentCard(card);
                 scoreHeldCard(s, card);
@@ -55,11 +54,11 @@ public final class ScoringEngine {
         for (JokerCard joker : run.getJokers()) {
             if (joker.isDebuffed()) continue;
             joker.trigger(Trigger.ON_HAND_PLAYED, run);
-            applyEdition(s, joker.getEdition());
+            s.applyEdition(joker.getEdition());
         }
         for (ConsumableCard consumable : run.getConsumables()) {
             if (consumable.isDebuffed()) continue;
-            applyEdition(s, consumable.getEdition());
+            s.applyEdition(consumable.getEdition());
         }
 
         BigDecimal score = s.finalScore();
@@ -77,6 +76,16 @@ public final class ScoringEngine {
     /** Extra scoring passes for a card. RED_SEAL adds one. */
     private int retriggers(DeckCard card) {
         return card.getSeal() == Seal.RED_SEAL ? 1 : 0;
+    }
+
+    /** Extra passes granted by jokers for {@code card} this phase, summed across the board. */
+    private int jokerRetriggers(Run run, DeckCard card, boolean played) {
+        int extra = 0;
+        for (JokerCard joker : run.getJokers()) {
+            if (joker.isDebuffed()) continue;
+            extra += played ? joker.playedRetriggers(run, card) : joker.heldRetriggers(run, card);
+        }
+        return extra;
     }
 
     /** Applies one scored card's chips, enhancement, edition and seal to the session. */
@@ -101,7 +110,7 @@ public final class ScoringEngine {
             default -> { }   // WILD/STEEL/GOLD: nothing at scored time
         }
 
-        applyEdition(s, card.getEdition());
+        s.applyEdition(card.getEdition());
         if (card.getSeal() == Seal.GOLD_SEAL) run.addMoney(3);
     }
 
@@ -114,14 +123,4 @@ public final class ScoringEngine {
         }
     }
 
-    /** Applies an edition's scoring contribution (NEGATIVE contributes nothing here). */
-    private void applyEdition(ScoringSession s, Edition edition) {
-        if (edition == null) return;
-        switch (edition) {
-            case FOIL        -> s.addChips(50);
-            case HOLOGRAPHIC -> s.addMult(10);
-            case POLYCHROME  -> s.multiplyMult(X1_5);
-            case NEGATIVE    -> { }
-        }
-    }
 }

@@ -2,9 +2,15 @@ package model.cards.jokers;
 
 import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
+import model.game.rng.RngSource;
 import model.game.scoring.ScoringSession;
 import model.game.scoring.Trigger;
+import model.modifiers.Enhancement;
+import model.modifiers.Seal;
+import model.modifiers.Sticker;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.function.UnaryOperator;
 
 /**
@@ -14,54 +20,116 @@ import java.util.function.UnaryOperator;
  */
 public enum Jokers {
 
-    // --- independent: fire once per played hand (Trigger.ON_HAND_PLAYED) ---
+    // Jokers 1-5
     JOKER("Joker", Rarity.COMMON, 2, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().addMult(4))),
-
-    ABSTRACT_JOKER("Abstract Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(3L * run.getJokers().size()))),
-
-    HALF_JOKER("Half Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getScoring().getHand().playedCount() <= 3) run.getScoring().addMult(20); })),
-
-    BANNER("Banner", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getRound() != null) run.getScoring().addChips(30L * run.getRound().getDiscardsRemaining()); })),
-
-    // --- hand-type containment (Trigger.ON_HAND_PLAYED) ---
-    JOLLY_JOKER("Jolly Joker", Rarity.COMMON, 3, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getScoring().getHand().hasPair()) run.getScoring().addMult(8); })),
-
-    SLY_JOKER("Sly Joker", Rarity.COMMON, 3, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getScoring().getHand().hasPair()) run.getScoring().addChips(50); })),
-
-    DROLL_JOKER("Droll Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getScoring().getHand().hasFlush()) run.getScoring().addMult(10); })),
-
-    CRAFTY_JOKER("Crafty Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getScoring().getHand().hasFlush()) run.getScoring().addChips(80); })),
-
-    // --- per-scored-card by suit (Trigger.ON_SCORED_CARD) ---
     GREEDY_JOKER("Greedy Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND)) run.getScoring().addMult(3); })),
-
     LUSTY_JOKER("Lusty Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART)) run.getScoring().addMult(3); })),
-
     WRATHFUL_JOKER("Wrathful Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { if (isSuit(run.getScoring(), Suit.SPADE)) run.getScoring().addMult(3); })),
-
     GLUTTONOUS_JOKER("Gluttonous Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { if (isSuit(run.getScoring(), Suit.CLUB)) run.getScoring().addMult(3); })),
+    // Jokers 6-10
+    JOLLY_JOKER("Jolly Joker", Rarity.COMMON, 3, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasPair()) run.getScoring().addMult(8); })),
+    ZANY_JOKER("Zany Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasThreeOfAKind()) run.getScoring().addMult(12); })),
+    MAD_JOKER("Mad Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasTwoPair()) run.getScoring().addMult(10); })),
+    CRAZY_JOKER("Crazy Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasStraight()) run.getScoring().addMult(12); })),
+    DROLL_JOKER("Droll Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasFlush()) run.getScoring().addMult(10); })),
+    // Jokers 11-15
+    SLY_JOKER("Sly Joker", Rarity.COMMON, 3, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasPair()) run.getScoring().addChips(50); })),
+    WILY_JOKER("Wily Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasThreeOfAKind()) run.getScoring().addChips(100); })),
+    CLEVER_JOKER("Clever Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasTwoPair()) run.getScoring().addChips(80); })),
+    DEVIOUS_JOKER("Devious Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasStraight()) run.getScoring().addChips(100); })),
+    CRAFTY_JOKER("Crafty Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().hasFlush()) run.getScoring().addChips(80); })),
+    // Jokers 16-20
+    HALF_JOKER("Half Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getScoring().getHand().playedCount() <= 3) run.getScoring().addMult(20); })),
+    JOKER_STENCIL("Joker Stencil", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                int jokers = 0;
+                for (JokerCard j : run.getJokers()) if (j.getSpec() != self.getSpec()) jokers++;
+                int empty = run.getJokerSlots() - jokers;
+                if (empty > 0) run.getScoring().multiplyMult(BigDecimal.valueOf(empty));
+            })),
+    //FOUR_FINGERS("", , , ), //To Be Implemented
+    MIME("Mime", Rarity.UNCOMMON, 5, b -> b.retriggerHeld((run, self, card) -> 1)),
+    //CREDIT_CARD("", , , ), //To Be Implemented
+    // Jokers 21-25
+    CEREMONIAL_DAGGER("Ceremonial Dagger", Rarity.UNCOMMON, 6, b -> b
+            .on(Trigger.ON_ROUND_START, (run, self) -> {
+                List<JokerCard> jokers = run.getJokers();
+                int i = jokers.indexOf(self);
+                if (i >= 0 && i + 1 < jokers.size()) {
+                    JokerCard right = jokers.get(i + 1);
+                    if (!right.hasSticker(Sticker.ETERNAL)) {
+                        self.setCounter(self.getCounter() + 3 * right.getSellValue());
+                        jokers.remove(i + 1);
+                    }
+                }
+            })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
+    BANNER("Banner", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getRound() != null) run.getScoring().addChips(30L * run.getRound().getDiscardsRemaining()); })),
+    MYSTIC_SUMMIT("Mystic Summit", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                if (run.getRound() != null && run.getRound().getDiscardsRemaining() == 0)
+                    run.getScoring().addMult(15);
+            })),
+    MARBLE_JOKER("Marble Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
+            (run, self) -> {
+                DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);   // rank/suit are cosmetic on a Stone card
+                stone.apply(Enhancement.STONE);
+                long salt = run.getDeck().size();   // structural, seed-mirrored coordinate
+                if (run.getRng().chance(RngSource.CARD_SEAL, salt, 1, 2)) {
+                    Seal[] seals = Seal.values();
+                    stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt + 1, seals.length)]);
+                }
+                run.getDeck().add(stone);
+            })),
+    LOYALTY_CARD("Loyalty Card", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_BOUGHT,
+            (run, self) -> {
+                self.setCounter(self.getCounter() + 1);
+                if (self.getCounter() % 4 == 0) run.makePurchaseFree();
+            })),
+    // Jokers 26-30
+    EIGHT_BALL("8_Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> {
 
-    // --- per-scored-card by rank/face (Trigger.ON_SCORED_CARD) ---
+            })),
+    // Jokers 31-35
     SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addChips(30); })),
-
+    ABSTRACT_JOKER("Abstract Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(3L * run.getJokers().size()))),
+    // Jokers 36-40
     EVEN_STEVEN("Even Steven", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && isEven(c.getRank())) run.getScoring().addMult(4); })),
-
     ODD_TODD("Odd Todd", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && isOdd(c.getRank())) run.getScoring().addChips(31); }));
+            (run, self) -> { DeckCard c = scored(run); if (c != null && isOdd(c.getRank())) run.getScoring().addChips(31); })),
+
+
+
+    GREEN_JOKER("Green Joker", Rarity.COMMON, 4, b -> b
+            .on(Trigger.ON_HAND_PLAYED,    (run, self) -> {
+                self.addCounter(1);
+                run.getScoring().addMult(self.getCounter());
+            })
+            .on(Trigger.ON_HAND_DISCARDED, (run, self) ->
+                    self.setCounter(Math.max(0, self.getCounter() - 1))));
+
+
 
     private final Rarity rarity;
     private final int cost;

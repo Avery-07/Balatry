@@ -9,16 +9,26 @@ public final class JokerSpec {
     private final String name;
     private final Rarity rarity;
     private final Map<Trigger, JokerEffect> effects;
+    private final CardRetrigger playedRetrigger;   // extra passes this joker grants a played card
+    private final CardRetrigger heldRetrigger;     // extra passes this joker grants a held card
+    private final int debtAllowance;               // how far below $0 this joker lets the balance go
 
-    private JokerSpec(String name, Rarity rarity, Map<Trigger, JokerEffect> effects) {
-        this.name = name;
-        this.rarity = rarity;
-        this.effects = Map.copyOf(effects);
+    private JokerSpec(Builder b) {
+        this.name = b.name;
+        this.rarity = b.rarity;
+        this.effects = Map.copyOf(b.effects);
+        this.playedRetrigger = b.playedRetrigger;
+        this.heldRetrigger = b.heldRetrigger;
+        this.debtAllowance = b.debtAllowance;
     }
 
     public JokerEffect effectFor(Trigger t) {
         return effects.getOrDefault(t, JokerEffect.NO_OP);
     }
+
+    public CardRetrigger getPlayedRetrigger() { return playedRetrigger; }
+    public CardRetrigger getHeldRetrigger()   { return heldRetrigger; }
+    public int getDebtAllowance()             { return debtAllowance; }
 
     public static Builder named(String name, Rarity rarity) {
         return new Builder(name, rarity);
@@ -28,9 +38,15 @@ public final class JokerSpec {
         private final String name;
         private final Rarity rarity;
         private final Map<Trigger, JokerEffect> effects = new EnumMap<>(Trigger.class);
+        private CardRetrigger playedRetrigger = CardRetrigger.NONE;
+        private CardRetrigger heldRetrigger = CardRetrigger.NONE;
+        private int debtAllowance = 0;
         private Builder(String name, Rarity rarity) { this.name = name; this.rarity = rarity; }
         public Builder on(Trigger t, JokerEffect e) { effects.put(t, e); return this; }
-        public JokerSpec build() { return new JokerSpec(name, rarity, effects); }
+        public Builder retriggerPlayed(CardRetrigger r) { this.playedRetrigger = r; return this; }
+        public Builder retriggerHeld(CardRetrigger r)   { this.heldRetrigger = r; return this; }
+        public Builder debtAllowance(int dollars)       { this.debtAllowance = dollars; return this; }
+        public JokerSpec build() { return new JokerSpec(this); }
     }
 
     public String getName() { return name; }

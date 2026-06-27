@@ -12,6 +12,7 @@ import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.scoring.HandType;
 import model.game.scoring.ScoringSession;
+import model.game.scoring.Trigger;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;
@@ -23,6 +24,8 @@ public final class Run {
     private static final RoundSettlement SETTLEMENT = new RoundSettlement();
 
     private int money;
+    private int lastInDebtSpend;   // dollars of the last spend made while below $0 (read by ON_SPEND)
+    private boolean purchaseFree;  // transient: set true during a buy to waive its cost
     private final Rng rng;
     private final PlayerStats stats = new PlayerStats();
     private final HandLevels handLevels = new HandLevels();
@@ -79,7 +82,32 @@ public final class Run {
 
     public ScoringSession getScoring()        { return scoring; }
     public int getMoney()                     { return money; }
-    public void addMoney(int amount)          { money += amount; }
+    public void addMoney(int amount) {
+        money += amount;
+        if (amount > 0) for (JokerCard j : List.copyOf(jokers)) if (!j.isDebuffed()) j.trigger(Trigger.ON_EARN, this);
+    }
+
+    /** Lowest balance this run may reach: $0 minus every owned joker's debt allowance (e.g. Credit Card). */
+    public int minBalance() {
+        int floor = 0;
+        for (JokerCard j : jokers) if (!j.isDebuffed()) floor -= j.getSpec().getDebtAllowance();
+        return floor;
+    }
+
+    /** Spends {@code amount} (may go negative, down to {@link #minBalance()}); fires ON_SPEND so debt jokers can react. */
+    public void spend(int amount) {
+        lastInDebtSpend = Math.max(0, amount - Math.max(0, money));   // portion spent while below $0
+        money -= amount;
+        for (JokerCard j : List.copyOf(jokers)) if (!j.isDebuffed()) j.trigger(Trigger.ON_SPEND, this);
+    }
+
+    /** Dollars of the most recent {@link #spend} made while in debt; read by ON_SPEND effects. */
+    public int getLastInDebtSpend() { return lastInDebtSpend; }
+
+    /** Transient per-purchase flags, driven by {@link Shop#buy} around the ON_BOUGHT dispatch. */
+    public void beginPurchase()     { purchaseFree = false; }
+    public void makePurchaseFree()  { purchaseFree = true; }
+    public boolean isPurchaseFree() { return purchaseFree; }
     public List<JokerCard> getJokers()        { return jokers; }
     public List<ConsumableCard> getConsumables() { return consumables; }
     public List<DeckCard> getDeck()           { return deck; }
@@ -174,8 +202,15 @@ public final class Run {
 
     /** Starts a round against a blind requiring {@code target} chips; shuffles the deck on this run's seed. */
     public Round beginRound(long target) {
+        fireRoundStart();   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
         return round = new Round(this, target, handSize, baseHands, baseDiscards, shuffle);
+    }
+
+    /** Fires {@link Trigger#ON_ROUND_START} on each non-debuffed joker. Iterates a snapshot so an effect may add or remove jokers. */
+    private void fireRoundStart() {
+        for (JokerCard joker : List.copyOf(jokers))
+            if (!joker.isDebuffed()) joker.trigger(Trigger.ON_ROUND_START, this);
     }
 
     /** Settles and ends the active round against {@code blind}, returning its competition result. */

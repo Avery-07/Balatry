@@ -11,5 +11,7 @@ public enum Trigger {
     ON_SHOP_REROLL,
     ON_SHOP_END,
     ON_BOUGHT,
-    ON_SOLD
+    ON_SOLD,
+    ON_SPEND,
+    ON_EARN
 }
