@@ -27,6 +27,10 @@ public enum RngSource {
 
     DECK_SHUFFLE       (18),       // per-round deck shuffle
 
+    STAR_NEGATIVE      (19),       // The Star's negative-edition roll + target pick
+    MOON_EDITION       (20),       // The Moon's edition roll + target pick
+    SUN_EDITION        (21),       // The Sun's edition roll + target pick
+
     MISC               (99);       // anything not yet promoted to its own source
 
     private final int code;

@@ -2,6 +2,7 @@ package model.cards.jokers;
 
 import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
+import model.cards.consumables.ConsumableCard;
 import model.game.rng.RngSource;
 import model.game.scoring.ScoringSession;
 import model.game.scoring.Trigger;
@@ -65,7 +66,11 @@ public enum Jokers {
             })),
     //FOUR_FINGERS("", , , ), //To Be Implemented
     MIME("Mime", Rarity.UNCOMMON, 5, b -> b.retriggerHeld((run, self, card) -> 1)),
-    //CREDIT_CARD("", , , ), //To Be Implemented
+    CREDIT_CARD("Credit Card", Rarity.COMMON, 2, b -> b
+            .debtAllowance(20)
+            .on(Trigger.ON_SPEND, (run, self) -> self.setCounter(self.getCounter() + run.getLastInDebtSpend()))
+            .on(Trigger.ON_EARN, (run, self) -> { if (run.getMoney() >= 0) self.setCounter(0); })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
     // Jokers 21-25
     CEREMONIAL_DAGGER("Ceremonial Dagger", Rarity.UNCOMMON, 6, b -> b
             .on(Trigger.ON_ROUND_START, (run, self) -> {
@@ -89,12 +94,12 @@ public enum Jokers {
             })),
     MARBLE_JOKER("Marble Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
             (run, self) -> {
-                DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);   // rank/suit are cosmetic on a Stone card
+                DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);
                 stone.apply(Enhancement.STONE);
-                long salt = run.getDeck().size();   // structural, seed-mirrored coordinate
-                if (run.getRng().chance(RngSource.CARD_SEAL, salt, 1, 2)) {
+                long salt = run.getDeck().size();
+                if (run.getRng().chance(RngSource.MISC, salt, 1, 2)) {
                     Seal[] seals = Seal.values();
-                    stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt + 1, seals.length)]);
+                    stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt, seals.length)]);
                 }
                 run.getDeck().add(stone);
             })),
@@ -106,7 +111,18 @@ public enum Jokers {
     // Jokers 26-30
     EIGHT_BALL("8_Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
-
+                if(run.getScoring().getCurrentScoredCard().getRank() == Rank.EIGHT) {
+                    long salt = run.getDeck().size();
+                    if(run.getRng().chance(RngSource.MISC, salt, 1, 4)) {
+                        // Must create tarot cards to finish implementation
+                    }
+                }
+            })),
+    MISPRINT("Misprint", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+            long salt = run.getDeck().size();
+            run.getScoring().addMult((int) (run.getRng().nextDouble(RngSource.MISC, salt) * 16));
+                run.getScoring().multiplyMult((long) (run.getRng().nextDouble(RngSource.MISC, salt) * 1.26 + 0.75));
             })),
     // Jokers 31-35
     SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,

@@ -30,6 +30,7 @@ public final class ScoringSession {
     public void addChips(long c)           { chips = chips.add(BigDecimal.valueOf(c)); }
     public void addMult(long m)            { mult = mult.add(BigDecimal.valueOf(m)); }
     public void addMult(BigDecimal m)      { mult = mult.add(m); }
+    public void multiplyMult(long f)       { mult = mult.multiply(BigDecimal.valueOf(f)); }
     public void multiplyMult(BigDecimal f) { mult = mult.multiply(f); }
 
     public BigDecimal getChips() { return chips; }

@@ -11,7 +11,10 @@ public enum LuckEvent {
     GLASS_BREAK(RngSource.GLASS_BREAK),
     LUCKY_MULT(RngSource.LUCKY_MULT),
     LUCKY_MONEY(RngSource.LUCKY_MONEY),
-    WHEEL_OF_FORTUNE(RngSource.WHEEL_OF_FORTUNE);
+    WHEEL_OF_FORTUNE(RngSource.WHEEL_OF_FORTUNE),
+    STAR_NEGATIVE(RngSource.STAR_NEGATIVE),
+    MOON_EDITION(RngSource.MOON_EDITION),
+    SUN_EDITION(RngSource.SUN_EDITION);
 
     private final RngSource source;
 

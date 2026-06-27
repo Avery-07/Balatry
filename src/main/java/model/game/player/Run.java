@@ -5,6 +5,8 @@ import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
 import model.cards.consumables.ConsumableSpec;
+import model.cards.consumables.ConsumableType;
+import model.cards.consumables.Tarots;
 import model.game.*;
 import model.game.rng.DeterministicRng;
 import model.game.rng.LuckEvent;
@@ -47,6 +49,11 @@ public final class Run {
     private ScoringSession scoring;   // non-null only during a hand
     private int shuffleIndex;         // per-round shuffle salt (Nth shuffle on this run)
     private int shopIndex;            // per-shop salt coordinate (Nth shop on this run)
+    private int genSalt;              // monotonic salt for effect-driven generation/selection
+    private List<DeckCard> consumableTargets = List.of();   // transient: the active consumable's selected cards
+    private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
+
+    private static final int GENERATED_CONSUMABLE_COST = 3;   // shop value stamped on effect-created consumables
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
     public Run(long seed) { this(new DeterministicRng(seed)); }
@@ -112,7 +119,34 @@ public final class Run {
     public List<ConsumableCard> getConsumables() { return consumables; }
     public List<DeckCard> getDeck()           { return deck; }
     public void levelUpHand(HandType h)       { handLevels.levelUp(h); }
-    public void createConsumable(ConsumableSpec s) { /* ... */ }
+
+    /** Adds a fresh card for {@code spec} to the consumable area, if there is room (NEGATIVE cards are free). */
+    public void createConsumable(ConsumableSpec spec) {
+        ConsumableCard card = new ConsumableCard(spec, GENERATED_CONSUMABLE_COST);
+        if (canAddConsumable(card)) consumables.add(card);
+    }
+
+    /** Adds {@code joker} to the board, if there is room (NEGATIVE jokers are free). */
+    public void createJoker(JokerCard joker) {
+        if (canAddJoker(joker)) jokers.add(joker);
+    }
+
+    /** The cards the active consumable is being applied to; empty outside {@link #useConsumable}. */
+    public List<DeckCard> getConsumableTargets() { return consumableTargets; }
+
+    /** The last Tarot or Planet spec used this run (The Fool excluded), or {@code null}. Read by The Fool. */
+    public ConsumableSpec getLastTarotOrPlanet() { return lastTarotOrPlanet; }
+
+    /** Monotonic salt for effect-driven generation/selection; advances on each call. */
+    public long nextGenSalt() { return genSalt++; }
+
+    /** Permanently removes each card (by identity) from the deck and, if a round is active, from the hand. */
+    public void destroyDeckCards(List<DeckCard> cards) {
+        for (DeckCard c : cards) {
+            deck.removeIf(d -> d == c);
+            if (round != null) round.removeFromHand(c);
+        }
+    }
 
     // --- inventory: acquisition routing and slot accounting (NEGATIVE cards don't consume a slot) ---
 
@@ -169,11 +203,19 @@ public final class Run {
         return value;
     }
 
-    /** Uses the consumable at {@code index}: fires its effect, then removes it from inventory. */
-    public void useConsumable(int index) {
+    /** Uses the consumable at {@code index} with no selected targets. */
+    public void useConsumable(int index) { useConsumable(index, List.of()); }
+
+    /** Uses the consumable at {@code index}, applying its effect to {@code targets}, then removes it from inventory. */
+    public void useConsumable(int index, List<DeckCard> targets) {
         ConsumableCard consumable = consumables.get(index);
+        ConsumableSpec spec = consumable.getSpec();
+        consumableTargets = List.copyOf(targets);
         consumable.consume(this);
+        consumableTargets = List.of();
         consumables.remove(consumable);   // by reference: safe if the effect mutated the list
+        if (spec.getType() != ConsumableType.SPECTRAL && spec != Tarots.THE_FOOL.spec())
+            lastTarotOrPlanet = spec;     // The Fool later recreates the last Tarot/Planet used
     }
 
     public int getJokerSlots()         { return jokerSlots; }
