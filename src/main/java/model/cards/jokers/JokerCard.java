@@ -13,6 +13,11 @@ public final class JokerCard extends MarketCard {
         price(shopValue);
     }
 
+    /** Prices the joker from its spec — the catalog path, matching consumables and vouchers. */
+    public JokerCard(JokerSpec spec) {
+        this(spec, spec.getCost());
+    }
+
     /** Applies the spec's effect for this trigger. Callers must check {@link #isDebuffed()} first; this does not. */
     public void trigger(Trigger trigger, Run run) {
         spec.effectFor(trigger).apply(run, this);

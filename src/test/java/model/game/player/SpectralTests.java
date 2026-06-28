@@ -66,6 +66,14 @@ public final class SpectralTests {
         aura.useConsumable(0, List.of(at));
         check("Aura -> card gains an edition", at.getEdition() != null);
 
+        // widened selection channel: Aura can now target a non-deck card (a joker)
+        Run auraJoker = new Run(21L);
+        JokerCard auraTarget = joker();
+        auraJoker.getJokers().add(auraTarget);
+        auraJoker.getConsumables().add(Spectrals.AURA.make());
+        auraJoker.useConsumable(0, List.of(auraTarget));
+        check("Aura -> can edition a joker target", auraTarget.getEdition() != null);
+
         // --- Exorcism: removes a sticker from the selected card ---
         Run ex = new Run(3L);
         DeckCard sticky = card(Rank.TEN, Suit.HEARTS);

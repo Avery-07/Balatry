@@ -19,9 +19,7 @@ import model.game.scoring.Trigger;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.random.RandomGenerator;
 
 /** One player's private state: money, jokers, consumables, deck, the active scoring session, and keyed randomness. */
@@ -52,14 +50,11 @@ public final class Run {
     private int shopDiscount;         // % off shop prices (Clearance Sale / Liquidation)
     private int packOptionBonus;      // extra options shown per booster pack (Sampler)
     private int packMegaPickBonus;    // extra cards kept from Mega packs (Connoisseur)
-    private final Set<VoucherSpec> redeemedVouchers = new HashSet<>();
-    private boolean voucherRedeemedThisAnte;
     private Round round;              // non-null only during a blind
     private Shop shop;                // non-null only during a shop
     private ScoringSession scoring;   // non-null only during a hand
     private int shuffleIndex;         // per-round shuffle salt (Nth shuffle on this run)
-    private int shopIndex;            // per-shop salt coordinate (Nth shop on this run)
-    private List<DeckCard> consumableTargets = List.of();   // transient: the active consumable's selected cards
+    private List<Card> consumableTargets = List.of();       // transient: the active consumable's selected cards
     private List<DeckCard> lastDiscarded = List.of();       // transient: cards of the discard currently being broadcast
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
 
@@ -155,7 +150,14 @@ public final class Run {
     }
 
     /** The cards the active consumable is being applied to; empty outside {@link #useConsumable}. */
-    public List<DeckCard> getConsumableTargets() { return consumableTargets; }
+    public List<Card> getConsumableTargets() { return consumableTargets; }
+
+    /** The selected targets that are playing cards — the common case for card-modifying consumables. */
+    public List<DeckCard> getDeckCardTargets() {
+        List<DeckCard> out = new ArrayList<>();
+        for (Card c : consumableTargets) if (c instanceof DeckCard d) out.add(d);
+        return out;
+    }
 
     /** The last Tarot or Planet spec used this run (The Fool excluded), or {@code null}. Read by The Fool. */
     public ConsumableSpec getLastTarotOrPlanet() { return lastTarotOrPlanet; }
@@ -232,7 +234,7 @@ public final class Run {
     public void useConsumable(int index) { useConsumable(index, List.of()); }
 
     /** Uses the consumable at {@code index}, applying its effect to {@code targets}, then removes it from inventory. */
-    public void useConsumable(int index, List<DeckCard> targets) {
+    public void useConsumable(int index, List<? extends Card> targets) {
         ConsumableCard consumable = consumables.get(index);
         ConsumableSpec spec = consumable.getSpec();
         consumableTargets = List.copyOf(targets);
@@ -263,26 +265,20 @@ public final class Run {
     public void setPackMegaPickBonus(int n) { packMegaPickBonus = n; }
 
     /** Whether {@code spec} has been redeemed on this run (used for upgrade prerequisites). */
-    public boolean hasRedeemed(VoucherSpec spec) { return redeemedVouchers.contains(spec); }
+    public boolean hasRedeemed(VoucherSpec spec) { return stats.hasRedeemed(spec); }
 
     /** Whether {@code voucher} may be redeemed now: not already redeemed, base satisfied, and none used yet this ante. */
-    public boolean canRedeem(Voucher voucher) {
-        VoucherSpec spec = voucher.getSpec();
-        if (voucherRedeemedThisAnte || redeemedVouchers.contains(spec)) return false;
-        return spec.getBase() == null || redeemedVouchers.contains(spec.getBase());
-    }
+    public boolean canRedeem(Voucher voucher) { return stats.canRedeem(voucher); }
 
     /** Applies {@code voucher}'s effect and records it; consumes this ante's single redemption. */
     public void redeemVoucher(Voucher voucher) {
-        VoucherSpec spec = voucher.getSpec();
-        if (!canRedeem(voucher)) throw new IllegalStateException("voucher not redeemable: " + spec.getName());
-        spec.getEffect().apply(this);
-        redeemedVouchers.add(spec);
-        voucherRedeemedThisAnte = true;
+        if (!stats.canRedeem(voucher)) throw new IllegalStateException("voucher not redeemable: " + voucher.getSpec().getName());
+        voucher.getSpec().getEffect().apply(this);
+        stats.markRedeemed(voucher.getSpec());
     }
 
     /** Resets this run's per-ante allowances; call at the start of each ante. */
-    public void beginAnte() { voucherRedeemedThisAnte = false; }
+    public void beginAnte() { stats.beginAnte(); }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -335,7 +331,7 @@ public final class Run {
 
     /** Opens this run's shop for the SHOP phase, with seed-mirrored card, pack, and voucher rows. */
     public Shop openShop() {
-        shop = new Shop(this, shopIndex++,
+        shop = new Shop(this, stats.nextShopIndex(),
                 shopSlots, CatalogShopPool.INSTANCE,
                 packSlots, CatalogPackPool.INSTANCE,
                 voucherSlots, CatalogVoucherPool.INSTANCE);

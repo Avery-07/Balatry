@@ -148,17 +148,14 @@ public enum Jokers {
 
 
     private final Rarity rarity;
-    private final int cost;
     private final JokerSpec spec;
 
     Jokers(String displayName, Rarity rarity, int cost, UnaryOperator<JokerSpec.Builder> define) {
         this.rarity = rarity;
-        this.cost = cost;
-        this.spec = define.apply(JokerSpec.named(displayName, rarity)).build();
+        this.spec = define.apply(JokerSpec.named(displayName, rarity).cost(cost)).build();
     }
 
     public Rarity rarity()  { return rarity; }
-    public int cost()       { return cost; }
     public JokerSpec spec() { return spec; }
 
     // rarity split for shop/pack draws (cumulative, out of 100): Common 70 / Uncommon 25 / Rare 5
@@ -189,7 +186,7 @@ public enum Jokers {
     }
 
     /** A fresh card for this joker at its shop price. */
-    public JokerCard make() { return new JokerCard(spec, cost); }
+    public JokerCard make() { return new JokerCard(spec); }
 
     // --- effect helpers ---
 

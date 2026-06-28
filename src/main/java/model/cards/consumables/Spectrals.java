@@ -1,5 +1,6 @@
 package model.cards.consumables;
 
+import model.cards.Card;
 import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
 import model.cards.DeckCard.Suit;
@@ -21,9 +22,9 @@ import java.util.random.RandomGenerator;
 
 /**
  * The nineteen Spectral cards (the Balatry effect where the master sheet diverges, otherwise the base effect).
- * Reuses the consumable plumbing: card-targeting spectrals read {@link Run#getConsumableTargets()}; random and
- * generative effects draw on {@link RngSource#SPECTRAL_GENERATION}. Aura targets the first selected deck card
- * (the "consumables included" extension would need a Card-typed selection channel, not built yet).
+ * Reuses the consumable plumbing: card-targeting spectrals read {@link Run#getDeckCardTargets()}; Aura reads the
+ * general {@link Run#getConsumableTargets()} so it can target a deck card, joker, or consumable. Random and
+ * generative effects draw on {@link RngSource#SPECTRAL_GENERATION}.
  */
 public enum Spectrals {
 
@@ -44,7 +45,7 @@ public enum Spectrals {
     }),
     TALISMAN("Talisman", (run, self) -> sealFirst(run, Seal.GOLD_SEAL)),
     AURA("Aura", (run, self) -> {
-        List<DeckCard> t = run.getConsumableTargets();
+        List<Card> t = run.getConsumableTargets();   // any selected card: deck card, joker, or consumable
         if (t.isEmpty()) return;
         t.get(0).apply(randomAuraEdition(gen(run)));
     }),
@@ -53,13 +54,13 @@ public enum Spectrals {
         run.addMoney(run.getMoney() / 3 - run.getMoney());   // divide money by 3
     }),
     SIGIL("Sigil", (run, self) -> {
-        List<DeckCard> t = run.getConsumableTargets();
+        List<DeckCard> t = run.getDeckCardTargets();
         if (t.isEmpty()) return;
         Suit suit = t.get(0).getSuit();
         for (int i = 1; i < Math.min(5, t.size()); i++) t.get(i).setSuit(suit);
     }),
     OUIJA("Ouija", (run, self) -> {
-        List<DeckCard> t = run.getConsumableTargets();
+        List<DeckCard> t = run.getDeckCardTargets();
         if (t.isEmpty()) return;
         Rank rank = t.get(0).getRank();
         for (int i = 1; i < Math.min(4, t.size()); i++) t.get(i).setRank(rank);
@@ -99,7 +100,7 @@ public enum Spectrals {
     TRANCE("Trance", (run, self) -> sealFirst(run, Seal.BLUE_SEAL)),
     MEDIUM("Medium", (run, self) -> sealFirst(run, Seal.GREEN_SEAL)),
     EXORCISM("Exorcism", (run, self) -> {
-        List<DeckCard> t = run.getConsumableTargets();
+        List<DeckCard> t = run.getDeckCardTargets();
         if (t.isEmpty()) return;
         DeckCard card = t.get(0);
         List<Sticker> stickers = new ArrayList<>(card.getStickers().keySet());
@@ -107,7 +108,7 @@ public enum Spectrals {
         card.remove(stickers.get(gen(run).nextInt(stickers.size())));
     }),
     CRYPTID("Cryptid", (run, self) -> {
-        List<DeckCard> t = run.getConsumableTargets();
+        List<DeckCard> t = run.getDeckCardTargets();
         if (t.isEmpty()) return;
         for (int i = 0; i < 2; i++) run.addCardToHand(copyOf(t.get(0)));
     }),
@@ -159,7 +160,7 @@ public enum Spectrals {
     }
 
     private static void sealFirst(Run run, Seal seal) {
-        List<DeckCard> t = run.getConsumableTargets();
+        List<DeckCard> t = run.getDeckCardTargets();
         if (!t.isEmpty()) t.get(0).apply(seal);
     }
 

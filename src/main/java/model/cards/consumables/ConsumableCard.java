@@ -11,7 +11,7 @@ public final class ConsumableCard extends MarketCard {
         price(spec.getCost());
     }
 
-    public void consume(Run run) { spec.getEffect().consume(run, this); }
+    public void consume(Run run) { spec.getEffect().apply(run, this); }
 
     public ConsumableSpec getSpec() { return spec; }
 }

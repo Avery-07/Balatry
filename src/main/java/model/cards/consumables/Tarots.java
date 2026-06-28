@@ -46,7 +46,7 @@ public enum Tarots {
         if (run.roll(RngSource.WHEEL_OF_FORTUNE, 1, 2)) run.addMoney(15);
     }),
     STRENGTH("Strength", (run, self) -> {
-        List<DeckCard> targets = run.getConsumableTargets();
+        List<DeckCard> targets = run.getDeckCardTargets();
         Rank[] ranks = Rank.values();
         for (int i = 0; i < Math.min(2, targets.size()); i++) {
             DeckCard card = targets.get(i);
@@ -54,11 +54,11 @@ public enum Tarots {
         }
     }),
     THE_HANGED_MAN("The Hanged Man", (run, self) -> {
-        List<DeckCard> targets = run.getConsumableTargets();
+        List<DeckCard> targets = run.getDeckCardTargets();
         run.destroyDeckCards(targets.subList(0, Math.min(2, targets.size())));
     }),
     DEATH("Death", (run, self) -> {
-        List<DeckCard> targets = run.getConsumableTargets();
+        List<DeckCard> targets = run.getDeckCardTargets();
         if (targets.size() < 2) return;
         DeckCard left = targets.get(0), right = targets.get(1);
         left.setRank(right.getRank());
@@ -101,7 +101,7 @@ public enum Tarots {
     }),
     JUDGEMENT("Judgement", (run, self) -> createRandomJoker(run)),
     THE_WORLD("The World", (run, self) -> {
-        List<DeckCard> targets = run.getConsumableTargets();
+        List<DeckCard> targets = run.getDeckCardTargets();
         if (targets.size() < 3) return;
         Suit suit = targets.get(2).getSuit();
         targets.get(0).setSuit(suit);
@@ -131,7 +131,7 @@ public enum Tarots {
 
     /** Applies {@code enhancement} to the first {@code min(max, selection)} selected cards. */
     private static void enhance(Run run, int max, Enhancement enhancement) {
-        List<DeckCard> targets = run.getConsumableTargets();
+        List<DeckCard> targets = run.getDeckCardTargets();
         for (int i = 0; i < Math.min(max, targets.size()); i++) targets.get(i).apply(enhancement);
     }
 
