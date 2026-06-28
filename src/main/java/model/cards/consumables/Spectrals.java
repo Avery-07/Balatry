@@ -22,9 +22,9 @@ import java.util.random.RandomGenerator;
 
 /**
  * The nineteen Spectral cards (the Balatry effect where the master sheet diverges, otherwise the base effect).
- * Reuses the consumable plumbing: card-targeting spectrals read {@link Run#getDeckCardTargets()}; Aura reads the
- * general {@link Run#getConsumableTargets()} so it can target a deck card, joker, or consumable. Random and
- * generative effects draw on {@link RngSource#SPECTRAL_GENERATION}.
+ * Reuses the consumable plumbing: card-targeting spectrals read {@link Run#getDeckCardTargets()}; Aura and
+ * Exorcism read the general {@link Run#getConsumableTargets()} so they can target a deck card, joker, or
+ * consumable. Random and generative effects draw on {@link RngSource#SPECTRAL_GENERATION}.
  */
 public enum Spectrals {
 
@@ -100,9 +100,9 @@ public enum Spectrals {
     TRANCE("Trance", (run, self) -> sealFirst(run, Seal.BLUE_SEAL)),
     MEDIUM("Medium", (run, self) -> sealFirst(run, Seal.GREEN_SEAL)),
     EXORCISM("Exorcism", (run, self) -> {
-        List<DeckCard> t = run.getDeckCardTargets();
+        List<Card> t = run.getConsumableTargets();   // any selected card: deck card, joker, or consumable
         if (t.isEmpty()) return;
-        DeckCard card = t.get(0);
+        Card card = t.get(0);
         List<Sticker> stickers = new ArrayList<>(card.getStickers().keySet());
         if (stickers.isEmpty()) return;
         card.remove(stickers.get(gen(run).nextInt(stickers.size())));
@@ -115,7 +115,8 @@ public enum Spectrals {
     THE_SOUL("The Soul", 0, (run, self) -> run.createJoker(Jokers.randomOfRarity(Rarity.LEGENDARY, gen(run)).make())),
     BLACK_HOLE("Black Hole", 0, (run, self) -> {
         for (HandType h : HandType.values()) run.levelUpHand(h);
-        // most-played hand's extra +1 level awaits a play-count tracking system (also needed by Obelisk/Satellite/Supernova)
+        HandType mostPlayed = run.getStats().getMostPlayedHand();
+        if (mostPlayed != null) run.levelUpHand(mostPlayed);   // most-played hand gains a second level (+2 total)
     });
 
     private static final int COST = 4;

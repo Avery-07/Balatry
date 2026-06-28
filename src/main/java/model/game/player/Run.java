@@ -245,10 +245,10 @@ public final class Run {
     public void useConsumable(int index, List<? extends Card> targets) {
         ConsumableCard consumable = consumables.get(index);
         ConsumableSpec spec = consumable.getSpec();
+        consumables.remove(consumable);   // free its slot before the effect runs, so creation effects (Emperor, High Priestess) can fill it
         consumableTargets = List.copyOf(targets);
         consumable.consume(this);
         consumableTargets = List.of();
-        consumables.remove(consumable);   // by reference: safe if the effect mutated the list
         stats.recordConsumableUsed(spec);
         if (spec.getType() != ConsumableType.SPECTRAL && spec != Tarots.THE_FOOL.spec())
             lastTarotOrPlanet = spec;     // The Fool later recreates the last Tarot/Planet used

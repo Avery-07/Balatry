@@ -82,6 +82,15 @@ public final class SpectralTests {
         ex.useConsumable(0, List.of(sticky));
         check("Exorcism -> sticker removed", !sticky.hasSticker(Sticker.ETERNAL));
 
+        // Exorcism can also strip a sticker off a joker (widened selection channel)
+        Run exJ = new Run(31L);
+        JokerCard stickyJoker = joker();
+        stickyJoker.apply(Sticker.PERISHABLE);
+        exJ.getJokers().add(stickyJoker);
+        exJ.getConsumables().add(Spectrals.EXORCISM.make());
+        exJ.useConsumable(0, List.of(stickyJoker));
+        check("Exorcism -> sticker removed from joker", !stickyJoker.hasSticker(Sticker.PERISHABLE));
+
         // --- Wraith: creates a joker and divides money by 3 (new) ---
         Run wr = new Run(4L); wr.addMoney(30);
         wr.getConsumables().add(Spectrals.WRAITH.make());
@@ -116,6 +125,14 @@ public final class SpectralTests {
         bh.useConsumable(0);
         check("Black Hole -> Pair L2", bh.getHandLevels().levelOf(HandType.PAIR) == 2);
         check("Black Hole -> Flush L2", bh.getHandLevels().levelOf(HandType.FLUSH) == 2);
+
+        // --- Black Hole: the most-played hand gains a second level (+2 total) ---
+        Run bh2 = new Run(81L);
+        bh2.getStats().recordHandPlayed(HandType.FLUSH);   // Flush is now the most-played hand
+        bh2.getConsumables().add(Spectrals.BLACK_HOLE.make());
+        bh2.useConsumable(0);
+        check("Black Hole -> most-played Flush L3", bh2.getHandLevels().levelOf(HandType.FLUSH) == 3);
+        check("Black Hole -> other hand Pair L2", bh2.getHandLevels().levelOf(HandType.PAIR) == 2);
 
         // --- Ankh: copies a joker and destroys one; with one joker, count holds and the copy is not negative ---
         Run ankh = new Run(9L);
