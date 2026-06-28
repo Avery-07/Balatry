@@ -48,6 +48,7 @@ public final class Round {
         validateSelection(cards);
 
         HandEvaluation eval = evaluator.evaluate(cards);
+        run.getStats().recordHandPlayed(eval.type());   // before scoring: ON_HAND_PLAYED jokers see the current play counted
         List<DeckCard> heldAfterPlay = new ArrayList<>(hand);
         heldAfterPlay.removeAll(cards);
 
@@ -55,6 +56,7 @@ public final class Round {
         long baseMult = run.getHandLevels().multFor(eval.type());
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
 
+        if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());
         score = score.add(result.score());
         hand.removeAll(cards);
         hand.removeAll(result.destroyed());
@@ -75,6 +77,7 @@ public final class Round {
 
         hand.removeAll(cards);
         discardsRemaining--;
+        run.getStats().recordDiscard(cards);
         run.fireDiscard(cards);   // jokers (Faceless, Mail-In Rebate, ...) react to the discarded cards
         draw();
     }

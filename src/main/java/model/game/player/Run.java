@@ -150,6 +150,7 @@ public final class Run {
     /** Adds {@code card} to the deck and, if a round is active, to the current hand (Familiar, Cryptid, ...). */
     public void addCardToHand(DeckCard card) {
         deck.add(card);
+        stats.recordCardAdded();
         if (round != null) round.addToHand(card);
     }
 
@@ -175,6 +176,7 @@ public final class Run {
             deck.removeIf(d -> d == c);
             if (round != null) round.removeFromHand(c);
         }
+        stats.recordCardsDestroyed(cards.size());
     }
 
     // --- inventory: acquisition routing and slot accounting (NEGATIVE cards don't consume a slot) ---
@@ -190,7 +192,7 @@ public final class Run {
     public void acquire(Card card) {
         if (card instanceof JokerCard joker)              jokers.add(joker);
         else if (card instanceof ConsumableCard consumable) consumables.add(consumable);
-        else if (card instanceof DeckCard deckCard)       deck.add(deckCard);
+        else if (card instanceof DeckCard deckCard)       { deck.add(deckCard); stats.recordCardAdded(); }
         else throw new IllegalArgumentException("cannot acquire " + card.getClass().getSimpleName());
     }
 
@@ -222,6 +224,7 @@ public final class Run {
         int value = joker.getSellValue();
         addMoney(value);
         fire(Trigger.ON_SOLD);
+        stats.recordCardSold();
         return value;
     }
 
@@ -231,6 +234,7 @@ public final class Run {
         int value = consumable.getSellValue();
         addMoney(value);
         fire(Trigger.ON_SOLD);
+        stats.recordCardSold();
         return value;
     }
 
@@ -245,6 +249,7 @@ public final class Run {
         consumable.consume(this);
         consumableTargets = List.of();
         consumables.remove(consumable);   // by reference: safe if the effect mutated the list
+        stats.recordConsumableUsed(spec);
         if (spec.getType() != ConsumableType.SPECTRAL && spec != Tarots.THE_FOOL.spec())
             lastTarotOrPlanet = spec;     // The Fool later recreates the last Tarot/Planet used
     }
@@ -301,6 +306,7 @@ public final class Run {
 
     /** Starts a round against a blind requiring {@code target} chips; shuffles the deck on this run's seed. */
     public Round beginRound(long target) {
+        stats.beginRound();             // fresh round-scoped tallies before any round-start joker reads them
         fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
         return round = new Round(this, target, handSize, baseHands, baseDiscards, shuffle);

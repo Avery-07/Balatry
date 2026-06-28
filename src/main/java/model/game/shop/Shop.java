@@ -65,6 +65,7 @@ public final class Shop {
         if (!run.canAcquire(item)) throw new IllegalStateException("no inventory slot for " + item);
         charge(priced(item.getShopValue()));
         run.acquire(item);
+        run.getStats().recordPurchase();
         slots.set(slotIndex, null);
         return item;
     }
@@ -75,6 +76,7 @@ public final class Shop {
         if (run.getMoney() - cost < run.minBalance()) throw new IllegalStateException("cannot afford reroll " + cost);
         run.spend(cost);
         rerolls++;
+        run.getStats().recordReroll();
         fill();
         run.fire(Trigger.ON_SHOP_REROLL);
     }
@@ -89,6 +91,7 @@ public final class Shop {
     public BoosterPack buyPack(int packIndex) {
         BoosterPack pack = require(packs, packIndex);
         charge(priced(pack.getShopValue()));
+        run.getStats().recordPurchase();
         packs.set(packIndex, null);
         return pack;
     }
