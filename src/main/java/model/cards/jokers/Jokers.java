@@ -161,6 +161,33 @@ public enum Jokers {
     public int cost()       { return cost; }
     public JokerSpec spec() { return spec; }
 
+    // rarity split for shop/pack draws (cumulative, out of 100): Common 70 / Uncommon 25 / Rare 5
+    private static final int COMMON_WEIGHT = 70, UNCOMMON_WEIGHT = 95;
+
+    /** A random joker of {@code rarity}; falls back to a rarity-weighted pick while that bucket is unimplemented. */
+    public static Jokers randomOfRarity(Rarity rarity, java.util.random.RandomGenerator stream) {
+        Jokers[] all = values();
+        int matching = 0;
+        for (Jokers j : all) if (j.rarity() == rarity) matching++;
+        if (matching == 0) return weightedRandom(stream);
+        int nth = stream.nextInt(matching);
+        for (Jokers j : all) if (j.rarity() == rarity && nth-- == 0) return j;
+        return all[0];   // unreachable
+    }
+
+    /** A random joker weighted by rarity; falls back to any joker while a rarity bucket is unimplemented. */
+    public static Jokers weightedRandom(java.util.random.RandomGenerator stream) {
+        int r = stream.nextInt(100);
+        Rarity target = r < COMMON_WEIGHT ? Rarity.COMMON : r < UNCOMMON_WEIGHT ? Rarity.UNCOMMON : Rarity.RARE;
+        Jokers[] all = values();
+        int matching = 0;
+        for (Jokers j : all) if (j.rarity() == target) matching++;
+        if (matching == 0) return all[stream.nextInt(all.length)];
+        int nth = stream.nextInt(matching);
+        for (Jokers j : all) if (j.rarity() == target && nth-- == 0) return j;
+        return all[0];   // unreachable
+    }
+
     /** A fresh card for this joker at its shop price. */
     public JokerCard make() { return new JokerCard(spec, cost); }
 

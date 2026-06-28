@@ -97,7 +97,7 @@ public final class ShopTests {
         match.toShop();
         boolean opened = true;
         for (PlayerId id : match.getSeats())
-            opened &= match.getRun(id).getShop() != null && match.getRun(id).getShop().getSlotCount() == 2;
+            opened &= match.getRun(id).getShop() != null && match.getRun(id).getShop().getSlotCount() == 3;
         check("shop opened per seat", opened);
         match.nextBlind();
         boolean closed = true;

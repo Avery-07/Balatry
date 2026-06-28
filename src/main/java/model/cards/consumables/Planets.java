@@ -33,4 +33,10 @@ public enum Planets {
 
     /** A fresh card for this planet at its spec's price. */
     public ConsumableCard make() { return new ConsumableCard(spec); }
+
+    /** A uniformly random planet (planets carry no appearance weights). */
+    public static Planets random(java.util.random.RandomGenerator stream) {
+        Planets[] all = values();
+        return all[stream.nextInt(all.length)];
+    }
 }

@@ -103,6 +103,7 @@ public final class Match {
         blind = Blind.SMALL;
         activeSin = sinSelector.selectFor(ante, rng);
         phase = MatchPhase.BLIND;
+        for (Player p : players.values()) p.run().beginAnte();
         dealBlind();
     }
 
@@ -132,6 +133,7 @@ public final class Match {
                 ante++;
                 blind = Blind.SMALL;
                 activeSin = sinSelector.selectFor(ante, rng);
+                for (Player p : players.values()) p.run().beginAnte();
             }
         }
         phase = MatchPhase.BLIND;

@@ -1,41 +1,33 @@
 package model.game.player;
 
 import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
 import model.cards.consumables.Planets;
+import model.cards.consumables.Tarots;
 import model.cards.jokers.Jokers;
 
 import java.util.random.RandomGenerator;
 
 /**
- * Catalog-backed {@link ShopPool}: draws real content (the {@link Jokers} slice, all {@link Planets},
- * and plain playing cards) using only the supplied stream, so a shared seed mirrors offerings across runs.
- * Replaces the {@link ShopPool#PLACEHOLDER} stub as the catalog grows; weights are provisional.
+ * Catalog-backed {@link ShopPool} for the card row: Jokers (rarity-weighted), Tarots, and Planets, in a
+ * base-game-style mix (no playing cards by default). Costs come straight off each card. Draws use only the
+ * supplied stream, so a shared seed mirrors offerings across runs. Spectrals are excluded until that catalog exists.
  */
 public final class CatalogShopPool implements ShopPool {
 
-    /** Shared instance; the pool holds no per-shop state. */
     public static final CatalogShopPool INSTANCE = new CatalogShopPool();
+
+    // card-row type split (out of 100)
+    private static final int JOKER_WEIGHT = 72;
+    private static final int TAROT_WEIGHT = 14;   // remainder is Planet
+
 
     private CatalogShopPool() { }
 
     @Override
     public Card roll(RandomGenerator stream) {
-        int r = stream.nextInt(100);
-        if (r < 50) {                       // ~50% playing card
-            DeckCard card = new DeckCard(
-                    Rank.values()[stream.nextInt(Rank.values().length)],
-                    Suit.values()[stream.nextInt(Suit.values().length)]);
-            card.setShopValue(1);
-            return card;
-        }
-        if (r < 80) {                       // ~30% joker
-            Jokers[] jokers = Jokers.values();
-            return jokers[stream.nextInt(jokers.length)].make();
-        }
-        Planets[] planets = Planets.values();   // ~20% planet
-        return planets[stream.nextInt(planets.length)].make();
+        int type = stream.nextInt(100);
+        if (type < JOKER_WEIGHT)                return Jokers.weightedRandom(stream).make();
+        if (type < JOKER_WEIGHT + TAROT_WEIGHT) return Tarots.random(stream).make();
+        return Planets.random(stream).make();
     }
 }

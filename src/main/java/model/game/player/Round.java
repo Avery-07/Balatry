@@ -113,6 +113,9 @@ public final class Round {
     /** Removes {@code card} (by identity) from the hand; used by destructive consumables (e.g. The Hanged Man). */
     void removeFromHand(DeckCard card) { hand.removeIf(c -> c == card); }
 
+    /** Adds {@code card} to the hand; used by card-creating spectrals (Familiar, Cryptid, ...). */
+    void addToHand(DeckCard card) { hand.add(card); }
+
     /** Seeded Fisher-Yates, so identical decks shuffle identically on a shared seed. */
     private static void shuffle(List<DeckCard> cards, RandomGenerator rng) {
         for (int i = cards.size() - 1; i > 0; i--) {

@@ -31,6 +31,9 @@ public enum RngSource {
     MOON_EDITION       (20),       // The Moon's edition roll + target pick
     SUN_EDITION        (21),       // The Sun's edition roll + target pick
 
+    SHOP_PACKS         (22),       // structural: which booster packs fill the shop's pack row
+    SHOP_VOUCHERS      (23),       // structural: which vouchers fill the shop's voucher row
+
     MISC               (99);       // anything not yet promoted to its own source
 
     private final int code;

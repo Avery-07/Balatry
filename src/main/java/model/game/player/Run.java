@@ -7,6 +7,8 @@ import model.cards.jokers.JokerCard;
 import model.cards.consumables.ConsumableSpec;
 import model.cards.consumables.ConsumableType;
 import model.cards.consumables.Tarots;
+import model.cards.vouchers.Voucher;
+import model.cards.vouchers.VoucherSpec;
 import model.game.*;
 import model.game.rng.DeterministicRng;
 import model.game.rng.Rng;
@@ -17,7 +19,9 @@ import model.game.scoring.Trigger;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.random.RandomGenerator;
 
 /** One player's private state: money, jokers, consumables, deck, the active scoring session, and keyed randomness. */
@@ -41,8 +45,15 @@ public final class Run {
     private int interestCap = 5;      // max $ of interest per round (raised by To the Moon / Seed Money)
     private int jokerSlots = 5;       // capacity for slot-consuming jokers (NEGATIVE jokers are free)
     private int consumableSlots = 2;  // capacity for slot-consuming consumables (NEGATIVE are free)
-    private int shopSlots = 2;        // card slots offered per shop
+    private int shopSlots = 3;        // card slots offered per shop
+    private int packSlots = 3;        // booster-pack slots offered per shop
+    private int voucherSlots = 2;     // voucher slots offered per shop (one redeemable per ante)
     private int baseRerollCost = 5;   // first reroll cost; +$1 per reroll within a shop
+    private int shopDiscount;         // % off shop prices (Clearance Sale / Liquidation)
+    private int packOptionBonus;      // extra options shown per booster pack (Sampler)
+    private int packMegaPickBonus;    // extra cards kept from Mega packs (Connoisseur)
+    private final Set<VoucherSpec> redeemedVouchers = new HashSet<>();
+    private boolean voucherRedeemedThisAnte;
     private Round round;              // non-null only during a blind
     private Shop shop;                // non-null only during a shop
     private ScoringSession scoring;   // non-null only during a hand
@@ -132,6 +143,15 @@ public final class Run {
     /** Adds {@code joker} to the board, if there is room (NEGATIVE jokers are free). */
     public void createJoker(JokerCard joker) {
         if (canAddJoker(joker)) jokers.add(joker);
+    }
+
+    /** Removes {@code joker} (by identity) from the board; used by destructive spectrals (Ankh, Hex). */
+    public void destroyJoker(JokerCard joker) { jokers.removeIf(j -> j == joker); }
+
+    /** Adds {@code card} to the deck and, if a round is active, to the current hand (Familiar, Cryptid, ...). */
+    public void addCardToHand(DeckCard card) {
+        deck.add(card);
+        if (round != null) round.addToHand(card);
     }
 
     /** The cards the active consumable is being applied to; empty outside {@link #useConsumable}. */
@@ -229,8 +249,40 @@ public final class Run {
     public void setConsumableSlots(int n) { consumableSlots = n; }
     public int getShopSlots()          { return shopSlots; }
     public void setShopSlots(int n)    { shopSlots = n; }
+    public int getPackSlots()          { return packSlots; }
+    public void setPackSlots(int n)    { packSlots = n; }
+    public int getVoucherSlots()       { return voucherSlots; }
+    public void setVoucherSlots(int n) { voucherSlots = n; }
     public int getBaseRerollCost()     { return baseRerollCost; }
     public void setBaseRerollCost(int n) { baseRerollCost = n; }
+    public int getShopDiscount()       { return shopDiscount; }
+    public void setShopDiscount(int pct) { shopDiscount = pct; }
+    public int getPackOptionBonus()    { return packOptionBonus; }
+    public void setPackOptionBonus(int n) { packOptionBonus = n; }
+    public int getPackMegaPickBonus()  { return packMegaPickBonus; }
+    public void setPackMegaPickBonus(int n) { packMegaPickBonus = n; }
+
+    /** Whether {@code spec} has been redeemed on this run (used for upgrade prerequisites). */
+    public boolean hasRedeemed(VoucherSpec spec) { return redeemedVouchers.contains(spec); }
+
+    /** Whether {@code voucher} may be redeemed now: not already redeemed, base satisfied, and none used yet this ante. */
+    public boolean canRedeem(Voucher voucher) {
+        VoucherSpec spec = voucher.getSpec();
+        if (voucherRedeemedThisAnte || redeemedVouchers.contains(spec)) return false;
+        return spec.getBase() == null || redeemedVouchers.contains(spec.getBase());
+    }
+
+    /** Applies {@code voucher}'s effect and records it; consumes this ante's single redemption. */
+    public void redeemVoucher(Voucher voucher) {
+        VoucherSpec spec = voucher.getSpec();
+        if (!canRedeem(voucher)) throw new IllegalStateException("voucher not redeemable: " + spec.getName());
+        spec.getEffect().apply(this);
+        redeemedVouchers.add(spec);
+        voucherRedeemedThisAnte = true;
+    }
+
+    /** Resets this run's per-ante allowances; call at the start of each ante. */
+    public void beginAnte() { voucherRedeemedThisAnte = false; }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -281,9 +333,12 @@ public final class Run {
     /** The active shop, or {@code null} outside the shop phase. */
     public Shop getShop() { return shop; }
 
-    /** Opens this run's shop for the SHOP phase, with seed-mirrored contents. */
+    /** Opens this run's shop for the SHOP phase, with seed-mirrored card, pack, and voucher rows. */
     public Shop openShop() {
-        shop = new Shop(this, shopIndex++, shopSlots, ShopPool.PLACEHOLDER);
+        shop = new Shop(this, shopIndex++,
+                shopSlots, CatalogShopPool.INSTANCE,
+                packSlots, CatalogPackPool.INSTANCE,
+                voucherSlots, CatalogVoucherPool.INSTANCE);
         fire(Trigger.ON_SHOP_START);
         return shop;
     }

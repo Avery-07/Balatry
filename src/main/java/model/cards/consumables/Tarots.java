@@ -121,6 +121,12 @@ public enum Tarots {
     /** A fresh card for this tarot at its spec's price. */
     public ConsumableCard make() { return new ConsumableCard(spec); }
 
+    /** A uniformly random tarot (tarots carry no appearance weights). */
+    public static Tarots random(RandomGenerator stream) {
+        Tarots[] all = values();
+        return all[stream.nextInt(all.length)];
+    }
+
     // --- effect helpers ---
 
     /** Applies {@code enhancement} to the first {@code min(max, selection)} selected cards. */
@@ -130,21 +136,18 @@ public enum Tarots {
     }
 
     private static void createRandomPlanet(Run run) {
-        Planets[] all = Planets.values();
         RandomGenerator stream = run.getRng().streamFor(RngSource.PLANET_GENERATION, run.nextSalt(RngSource.PLANET_GENERATION));
-        run.createConsumable(all[stream.nextInt(all.length)].spec());
+        run.createConsumable(Planets.random(stream).spec());
     }
 
     private static void createRandomTarot(Run run) {
-        Tarots[] all = values();
         RandomGenerator stream = run.getRng().streamFor(RngSource.TAROT_GENERATION, run.nextSalt(RngSource.TAROT_GENERATION));
-        run.createConsumable(all[stream.nextInt(all.length)].spec());
+        run.createConsumable(Tarots.random(stream).spec());
     }
 
     private static void createRandomJoker(Run run) {
-        Jokers[] all = Jokers.values();
         RandomGenerator stream = run.getRng().streamFor(RngSource.JOKER_GENERATION, run.nextSalt(RngSource.JOKER_GENERATION));
-        run.createJoker(all[stream.nextInt(all.length)].make());
+        run.createJoker(Jokers.weightedRandom(stream).make());
     }
 
     /** One of Foil / Holographic / Polychrome (Negative excluded), drawn from {@code stream}. */
