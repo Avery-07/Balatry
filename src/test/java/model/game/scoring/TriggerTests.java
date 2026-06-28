@@ -1,4 +1,4 @@
-package model.game.player;
+package model.game.scoring;
 
 import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
@@ -8,7 +8,8 @@ import model.cards.jokers.JokerCard;
 import model.cards.jokers.JokerEffect;
 import model.cards.jokers.JokerSpec;
 import model.cards.jokers.Rarity;
-import model.game.scoring.Trigger;
+import model.game.player.Round;
+import model.game.player.Run;
 
 import java.util.List;
 
@@ -17,7 +18,7 @@ import java.util.List;
  * ON_SHOP_REROLL, ON_SHOP_END, ON_HAND_DISCARDED. Each uses a probe joker whose counter advances on its
  * trigger; ON_HAND_DISCARDED also proves the discarded-card context channel is readable from the effect.
  */
-public final class TriggerWiringTests {
+public final class TriggerTests {
 
     private static int failures = 0;
 

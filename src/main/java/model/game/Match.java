@@ -10,6 +10,7 @@ import model.game.player.RoundOutcome;
 import model.game.rng.DeterministicRng;
 import model.game.rng.Rng;
 import model.game.player.Run;
+import model.game.shop.Shop;
 
 import java.util.ArrayList;
 import java.util.Collection;

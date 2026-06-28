@@ -1,4 +1,4 @@
-package model.game.player;
+package model.game.shop;
 
 import model.cards.packs.BoosterPack;
 import model.cards.packs.PackKind;

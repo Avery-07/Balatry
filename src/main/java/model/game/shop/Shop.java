@@ -1,4 +1,5 @@
-package model.game.player;
+package model.game.shop;
+import model.game.player.Run;
 
 import model.cards.Card;
 import model.cards.packs.BoosterPack;
@@ -27,12 +28,12 @@ public final class Shop {
     private int rerolls;
 
     /** Card-only shop (used directly by tests and simple callers). */
-    Shop(Run run, int shopIndex, int slotCount, ShopPool pool) {
+    public Shop(Run run, int shopIndex, int slotCount, ShopPool pool) {
         this(run, shopIndex, slotCount, pool, 0, null, 0, null);
     }
 
     /** Full three-row shop. */
-    Shop(Run run, int shopIndex, int slotCount, ShopPool pool,
+    public Shop(Run run, int shopIndex, int slotCount, ShopPool pool,
          int packCount, PackPool packPool, int voucherCount, VoucherPool voucherPool) {
         this.run = run;
         this.shopIndex = shopIndex;

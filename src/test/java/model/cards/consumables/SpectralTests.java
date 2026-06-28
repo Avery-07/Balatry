@@ -1,9 +1,9 @@
-package model.game.player;
+package model.cards.consumables;
 
+import model.game.player.Run;
 import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
 import model.cards.DeckCard.Suit;
-import model.cards.consumables.Spectrals;
 import model.cards.jokers.JokerCard;
 import model.cards.jokers.JokerSpec;
 import model.cards.jokers.Rarity;

@@ -16,6 +16,10 @@ import model.game.rng.RngSource;
 import model.game.scoring.HandType;
 import model.game.scoring.ScoringSession;
 import model.game.scoring.Trigger;
+import model.game.shop.CatalogPackPool;
+import model.game.shop.CatalogShopPool;
+import model.game.shop.CatalogVoucherPool;
+import model.game.shop.Shop;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;

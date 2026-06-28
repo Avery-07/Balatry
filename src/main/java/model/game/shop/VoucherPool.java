@@ -1,4 +1,5 @@
-package model.game.player;
+package model.game.shop;
+import model.game.player.Run;
 
 import model.cards.vouchers.Voucher;
 

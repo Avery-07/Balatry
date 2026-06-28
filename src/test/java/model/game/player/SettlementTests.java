@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Run-as-main harness for {@link RoundSettlement}: win economy, interest cap, gold, rental, and inert loss. */
-public final class CashOutTests {
+public final class SettlementTests {
 
     private static int failures = 0;
 

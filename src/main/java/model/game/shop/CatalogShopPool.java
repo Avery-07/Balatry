@@ -1,4 +1,4 @@
-package model.game.player;
+package model.game.shop;
 
 import model.cards.Card;
 import model.cards.consumables.Planets;
