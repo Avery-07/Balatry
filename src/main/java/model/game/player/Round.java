@@ -1,6 +1,8 @@
 package model.game.player;
 
 import model.cards.DeckCard;
+import model.game.BossBlind;
+import model.game.rng.RngSource;
 import model.game.scoring.HandEvaluation;
 import model.game.scoring.HandEvaluator;
 import model.game.scoring.HandType;
@@ -29,6 +31,7 @@ public final class Round {
     private BigDecimal score = BigDecimal.ZERO;
     private RoundOutcome outcome = RoundOutcome.IN_PROGRESS;
     private HandType lastPlayedType;   // for Blue Seal at cash-out; null until a hand is played
+    private HandType firstTypeThisRound;   // for The Mouth (only this type playable this round)
 
     Round(Run run, long target, int handSize, int hands, int discards, RandomGenerator shuffle) {
         this.run = run;
@@ -48,12 +51,26 @@ public final class Round {
         validateSelection(cards);
 
         HandEvaluation eval = evaluator.evaluate(cards);
-        run.getStats().recordHandPlayed(eval.type());   // before scoring: ON_HAND_PLAYED jokers see the current play counted
+        HandType type = eval.type();
+
+        BossBlind boss = run.effectiveBoss();
+        if (boss != null) enforceBossRestrictions(boss, cards, type);
+
+        run.getStats().recordHandPlayed(type);   // before scoring: ON_HAND_PLAYED jokers see the current play counted
+        if (firstTypeThisRound == null) firstTypeThisRound = type;
         List<DeckCard> heldAfterPlay = new ArrayList<>(hand);
         heldAfterPlay.removeAll(cards);
 
-        long baseChips = run.getHandLevels().chipsFor(eval.type());
-        long baseMult = run.getHandLevels().multFor(eval.type());
+        if (boss != null && boss.levelsDownPlayed()) run.getHandLevels().levelDown(type);   // The Arm
+
+        long baseChips = run.getHandLevels().chipsFor(type);
+        long baseMult  = run.getHandLevels().multFor(type);
+        if (boss != null && boss.halvesBase()) { baseChips /= 2; baseMult /= 2; }            // The Flint
+
+        // Matador reads this during scoring (Phase C), so set it before the engine runs.
+        run.setBossTriggered(boss != null && boss.triggersOnPlay()
+                && (!boss.zerosMoneyOnMostPlayed() || type == run.getStats().getMostPlayedHand()));
+
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
 
         if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());
@@ -61,12 +78,15 @@ public final class Round {
         hand.removeAll(cards);
         hand.removeAll(result.destroyed());
         run.getDeck().removeAll(result.destroyed());   // glass breaks are permanent
-        lastPlayedType = eval.type();
+        lastPlayedType = type;
         handsRemaining--;
-        updateOutcome();
-        if (outcome == RoundOutcome.IN_PROGRESS) draw();   // no redraw once the blind is cleared
 
-        return new PlayResult(eval.type(), result.score(), score, result.destroyed());
+        if (boss != null) applyBossAfterPlay(boss, type, cards.size());
+
+        updateOutcome();
+        if (outcome == RoundOutcome.IN_PROGRESS) redraw();   // no redraw once the blind is cleared
+
+        return new PlayResult(type, result.score(), score, result.destroyed());
     }
 
     /** Discards 1-5 cards from the hand and redraws; costs one discard, never ends the round. */
@@ -79,17 +99,51 @@ public final class Round {
         discardsRemaining--;
         run.getStats().recordDiscard(cards);
         run.fireDiscard(cards);   // jokers (Faceless, Mail-In Rebate, ...) react to the discarded cards
-        draw();
+        redraw();
     }
 
     private void updateOutcome() {
         if (score.compareTo(BigDecimal.valueOf(target)) >= 0) outcome = RoundOutcome.WON;
-        else if (handsRemaining == 0)                          outcome = RoundOutcome.LOST;
+        else if (handsRemaining == 0)                          outcome = run.tryPreventLoss() ? RoundOutcome.WON : RoundOutcome.LOST;   // Mr. Bones
     }
 
     private void draw() {
         while (hand.size() < handSize && !drawPile.isEmpty()) {
             hand.add(drawPile.remove(drawPile.size() - 1));
+        }
+    }
+
+    /** Post-action draw: The Serpent always draws a fixed count; otherwise refill to hand size. */
+    private void redraw() {
+        BossBlind boss = run.effectiveBoss();
+        if (boss != null && boss.fixedDraw() > 0) {
+            for (int i = 0; i < boss.fixedDraw() && !drawPile.isEmpty(); i++)
+                hand.add(drawPile.remove(drawPile.size() - 1));
+        } else {
+            draw();
+        }
+    }
+
+    /** Boss play restrictions (The Psychic / The Eye / The Mouth); throws if the play is not allowed. */
+    private void enforceBossRestrictions(BossBlind boss, List<DeckCard> cards, HandType type) {
+        if (boss.requiresFiveCards() && cards.size() != 5)
+            throw new IllegalStateException("The Psychic: must play exactly 5 cards");
+        if (boss.forbidsRepeatType() && run.getStats().getHandPlaysThisRound(type) > 0)
+            throw new IllegalStateException("The Eye: hand type already played this round");
+        if (boss.oneTypeOnly() && firstTypeThisRound != null && type != firstTypeThisRound)
+            throw new IllegalStateException("The Mouth: only " + firstTypeThisRound + " may be played this round");
+    }
+
+    /** Boss effects applied after a hand scores: The Ox, The Tooth, The Hook. */
+    private void applyBossAfterPlay(BossBlind boss, HandType type, int cardsPlayed) {
+        if (boss.zerosMoneyOnMostPlayed() && type == run.getStats().getMostPlayedHand())
+            run.addMoney(-run.getMoney());                 // The Ox
+        if (boss.losesDollarPerCard())
+            run.addMoney(-cardsPlayed);                    // The Tooth
+        int n = boss.afterPlayDiscard();                   // The Hook
+        if (n > 0) {
+            RandomGenerator r = run.getRng().streamFor(RngSource.MISC, run.nextSalt(RngSource.MISC));
+            for (int i = 0; i < n && !hand.isEmpty(); i++) hand.remove(r.nextInt(hand.size()));
         }
     }
 

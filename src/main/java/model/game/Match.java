@@ -9,6 +9,7 @@ import model.game.player.Round;
 import model.game.player.RoundOutcome;
 import model.game.rng.DeterministicRng;
 import model.game.rng.Rng;
+import model.game.rng.RngSource;
 import model.game.player.Run;
 import model.game.shop.Shop;
 
@@ -35,6 +36,7 @@ public final class Match {
     private Blind blind = Blind.SMALL;
     private Sin activeSin;                         // null until started
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
+    private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
 
     private Match(long seed, SinSelector sinSelector) {
         this.seed = seed;
@@ -75,8 +77,14 @@ public final class Match {
     public Blind getBlind()         { return blind; }
     public Sin getActiveSin()       { return activeSin; }
 
-    /** Chips required to clear the current blind. */
-    public long getCurrentTarget()  { return BlindTargets.target(ante, blind); }
+    /** Chips required to clear the current blind (boss target multipliers applied). */
+    public long getCurrentTarget() {
+        long base = BlindTargets.target(ante, blind);
+        return (blind == Blind.BOSS && currentBoss != null) ? base * currentBoss.targetMultiplier() : base;
+    }
+
+    /** The boss for the current BOSS blind, or {@code null} on small/big blinds. */
+    public BossBlind getCurrentBoss() { return currentBoss; }
 
     /** The most recent blind's results by seat, empty before the first cash-out. */
     public Map<PlayerId, BlindResult> getResults() { return Map.copyOf(lastResults); }
@@ -146,8 +154,9 @@ public final class Match {
 
     /** Deals every seat into the current blind on its own seed. */
     private void dealBlind() {
+        currentBoss = (blind == Blind.BOSS) ? BossBlind.select(rng.streamFor(RngSource.BOSS_BLIND, ante), ante) : null;   // table-level: same boss for every seat
         long target = getCurrentTarget();
-        for (Player p : players.values()) p.run().beginRound(target);
+        for (Player p : players.values()) p.run().beginRound(target, currentBoss);
     }
 
     // --- cross-player operations ---

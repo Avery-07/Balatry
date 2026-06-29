@@ -28,7 +28,7 @@ public final class ScoringEngine {
         // Phase A — scored cards, left to right; retrigger repeats the sub-sequence in place.
         for (int i = 0; i < scoringCards.size(); i++) {
             DeckCard card = scoringCards.get(i);
-            if (card.isDebuffed()) continue;
+            if (card.isDebuffed() || run.bossDebuffs(card)) continue;
             int passes = 1 + retriggers(card) + jokerRetriggers(run, card, true);
             for (int pass = 0; pass < passes; pass++) {
                 s.setCurrentCard(card);
@@ -40,7 +40,7 @@ public final class ScoringEngine {
 
         // Phase B — held cards.
         for(DeckCard card : heldCards) {
-            if (card.isDebuffed()) continue;
+            if (card.isDebuffed() || run.bossDebuffs(card)) continue;
             int passes = 1 + retriggers(card) + jokerRetriggers(run, card, false);
             for (int pass = 0; pass < passes; pass++) {
                 s.setCurrentCard(card);

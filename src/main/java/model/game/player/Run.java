@@ -61,6 +61,10 @@ public final class Run {
     private List<Card> consumableTargets = List.of();       // transient: the active consumable's selected cards
     private List<DeckCard> lastDiscarded = List.of();       // transient: cards of the discard currently being broadcast
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
+    private BossBlind activeBoss;          // the boss for the current blind, or null (small/big blinds, headless rounds)
+    private boolean luchadorDisable;       // per-round: Luchador was sold, disabling the boss for this player
+    private boolean verdantSold;           // per-round: a joker was sold (lifts Verdant Leaf's all-cards debuff)
+    private boolean bossTriggered;         // per-play: the boss ability fired this hand (read by Matador)
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
     public Run(long seed) { this(new DeterministicRng(seed)); }
@@ -220,11 +224,13 @@ public final class Run {
 
     /** Sells the joker at {@code index}, banking its sell value and freeing its slot. */
     public int sellJoker(int index) {
-        JokerCard joker = jokers.remove(index);
+        JokerCard joker = jokers.get(index);
+        joker.trigger(Trigger.ON_SOLD, this);   // the joker reacts to its own sale (e.g. Luchador) while still on the board
+        jokers.remove(index);
         int value = joker.getSellValue();
         addMoney(value);
-        fire(Trigger.ON_SOLD);
         stats.recordCardSold();
+        verdantSold = true;                      // Verdant Leaf: selling a joker lifts its all-cards debuff this round
         return value;
     }
 
@@ -233,7 +239,6 @@ public final class Run {
         ConsumableCard consumable = consumables.remove(index);
         int value = consumable.getSellValue();
         addMoney(value);
-        fire(Trigger.ON_SOLD);
         stats.recordCardSold();
         return value;
     }
@@ -305,11 +310,59 @@ public final class Run {
     public Round getRound() { return round; }
 
     /** Starts a round against a blind requiring {@code target} chips; shuffles the deck on this run's seed. */
-    public Round beginRound(long target) {
+    public Round beginRound(long target) { return beginRound(target, null); }
+
+    /** Starts a round against {@code boss} (null on small/big blinds); applies the boss's hand/discard/hand-size changes. */
+    public Round beginRound(long target, BossBlind boss) {
+        activeBoss = boss;
+        luchadorDisable = false;
+        verdantSold = false;
+        bossTriggered = false;
         stats.beginRound();             // fresh round-scoped tallies before any round-start joker reads them
         fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
-        return round = new Round(this, target, handSize, baseHands, baseDiscards, shuffle);
+        BossBlind eff = effectiveBoss();   // Chicot disables effects at build time; Luchador can only disable later in the round
+        int hands    = (eff != null && eff.oneHandOnly())    ? 1 : baseHands;
+        int discards = (eff != null && eff.clearsDiscards()) ? 0 : baseDiscards;
+        int hsize    = Math.max(1, handSize + (eff != null ? eff.handSizeDelta() : 0));
+        return round = new Round(this, target, hsize, hands, discards, shuffle);
+    }
+
+    public BossBlind getActiveBoss() { return activeBoss; }
+
+    /** The active boss after per-player disabling (owns Chicot, or sold Luchador this round), or null. */
+    public BossBlind effectiveBoss() { return bossDisabled() ? null : activeBoss; }
+
+    /** Whether the active boss is disabled for this player. */
+    public boolean bossDisabled() {
+        if (luchadorDisable) return true;
+        for (JokerCard j : jokers) if (j.getSpec().getName().equals("Chicot")) return true;
+        return false;
+    }
+
+    /** Luchador's sacrifice: disables the active boss for the rest of this round. */
+    public void disableBossForRound() { luchadorDisable = true; }
+
+    /** Whether {@code card} is debuffed by the active (non-disabled) boss; consulted by the scoring engine. */
+    public boolean bossDebuffs(DeckCard card) {
+        BossBlind eff = effectiveBoss();
+        if (eff == null) return false;
+        if (eff.debuffsUntilJokerSold()) return !verdantSold;   // Verdant Leaf: all cards until a joker is sold
+        return eff.debuffs(card);
+    }
+
+    /** Whether the boss ability fired on the hand currently scoring (read by Matador). */
+    public boolean bossTriggeredThisPlay()  { return bossTriggered; }
+    public void setBossTriggered(boolean v) { bossTriggered = v; }
+
+    /** Mr. Bones: if owned, prevents a blind loss (two charges, then self-destructs). True if the loss was prevented. */
+    public boolean tryPreventLoss() {
+        for (JokerCard j : jokers) if (j.getSpec().getName().equals("Mr. Bones")) {
+            j.addCounter(1);
+            if (j.getCounter() >= 2) destroyJoker(j);
+            return true;
+        }
+        return false;
     }
 
     /** Fires {@code trigger} on every non-debuffed joker, in board order. Iterates a snapshot so an effect may add or remove jokers. */
@@ -331,8 +384,11 @@ public final class Run {
     /** Settles and ends the active round against {@code blind}, returning its competition result. */
     public BlindResult endRound(Blind blind) {
         if (round == null) throw new IllegalStateException("no active round");
+        if (blind == Blind.BOSS && round.getOutcome() == RoundOutcome.WON)
+            fire(Trigger.ON_BOSS_DEFEATED);   // Rocket payout / Campfire reset, before cash-out
         BlindResult result = SETTLEMENT.settle(this, round, blind);
         round = null;
+        activeBoss = null;
         return result;
     }
 

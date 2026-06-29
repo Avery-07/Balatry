@@ -13,5 +13,6 @@ public enum Trigger {
     ON_BOUGHT,
     ON_SOLD,
     ON_SPEND,
-    ON_EARN
+    ON_EARN,
+    ON_BOSS_DEFEATED
 }

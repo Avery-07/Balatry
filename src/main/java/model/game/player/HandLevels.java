@@ -22,6 +22,13 @@ public final class HandLevels {
         return next;
     }
 
+    /** Lowers {@code type} by one level (never below 1) and returns the new level. Used by the boss The Arm. */
+    public int levelDown(HandType type) {
+        int next = Math.max(1, levelOf(type) - 1);
+        levels.put(type, next);
+        return next;
+    }
+
     /** Chips {@code type} contributes as the hand's base, at its current level. */
     public long chipsFor(HandType type) {
         return type.getBaseChips() + (long) (levelOf(type) - 1) * type.getChipsPerLevel();

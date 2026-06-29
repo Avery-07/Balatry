@@ -23,21 +23,23 @@ public final class TriggerTests {
     private static int failures = 0;
 
     public static void main(String[] args) {
-        // ON_SOLD fires on the surviving jokers when a joker is sold
+        // ON_SOLD fires on the joker being sold (so it can react to its own sale, e.g. Luchador), not on bystanders
         Run soldJoker = new Run(0L);
-        JokerCard probeA = probe(Trigger.ON_SOLD, +1);
+        JokerCard bystander = probe(Trigger.ON_SOLD, +1);   // index 0: a different joker, must NOT react
+        soldJoker.getJokers().add(bystander);
+        JokerCard probeA = probe(Trigger.ON_SOLD, +1);      // index 1: the one we sell
         soldJoker.getJokers().add(probeA);
-        soldJoker.getJokers().add(plainJoker());          // the one we sell (index 1)
         soldJoker.sellJoker(1);
-        checkInt("ON_SOLD fires on joker sale", probeA.getCounter(), 1);
+        checkInt("ON_SOLD fires on the sold joker", probeA.getCounter(), 1);
+        checkInt("ON_SOLD does not fire on bystanders", bystander.getCounter(), 0);
 
-        // ON_SOLD also fires when a consumable is sold
+        // selling a consumable does not fire ON_SOLD on jokers under the own-sale semantics
         Run soldCons = new Run(0L);
         JokerCard probeB = probe(Trigger.ON_SOLD, +1);
         soldCons.getJokers().add(probeB);
         soldCons.getConsumables().add(Planets.MERCURY.make());
         soldCons.sellConsumable(0);
-        checkInt("ON_SOLD fires on consumable sale", probeB.getCounter(), 1);
+        checkInt("consumable sale does not fire ON_SOLD on jokers", probeB.getCounter(), 0);
 
         // ON_SHOP_START fires on open, not before
         Run shopStart = new Run(0L);
