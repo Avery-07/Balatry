@@ -34,6 +34,8 @@ public enum RngSource {
     SHOP_PACKS         (22),       // structural: which booster packs fill the shop's pack row
     SHOP_VOUCHERS      (23),       // structural: which vouchers fill the shop's voucher row
 
+    RELIC_EFFECT       (24),       // a relic's emergent roll (e.g. Pyre's random consumable pick)
+
     MISC               (99);       // anything not yet promoted to its own source
 
     private final int code;

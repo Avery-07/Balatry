@@ -3,7 +3,7 @@ package model.modifiers;
 public enum Enhancement {
     BONUS, // If card is played: adds 30 chips
     MULT, // If card is played: adds 5 mult
-    WILD, // Card counts as any suit
+    WILD, // Card counts as any suit and can not be debuffed ever
     GLASS, // If card is played : multiplies mult by 2, 1/4 chance to break
     STEEL, // If card is held in hand : multiplies mult by 1.5
     STONE, // If card is held in hand : + 50 chips

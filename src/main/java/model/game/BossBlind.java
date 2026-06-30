@@ -114,4 +114,13 @@ public enum BossBlind {
         BossBlind[] pool = (ante % 8 == 0) ? FINISHERS : REGULARS;
         return pool[rng.nextInt(pool.length)];
     }
+
+    /** Selects a boss for {@code ante}, never returning {@code exclude} (Metabole's reroll lands on a different boss). */
+    public static BossBlind select(RandomGenerator rng, int ante, BossBlind exclude) {
+        BossBlind[] pool = (ante % 8 == 0) ? FINISHERS : REGULARS;
+        if (exclude == null || pool.length <= 1) return pool[rng.nextInt(pool.length)];
+        BossBlind pick;
+        do { pick = pool[rng.nextInt(pool.length)]; } while (pick == exclude);
+        return pick;
+    }
 }

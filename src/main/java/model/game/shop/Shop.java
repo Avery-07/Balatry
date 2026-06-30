@@ -133,7 +133,10 @@ public final class Shop {
     private void fill() {
         for (int i = 0; i < slots.size(); i++) {
             long salt = Rng.combine(shopIndex, rerolls, i);
-            slots.set(i, pool.roll(run.getRng().streamFor(RngSource.SHOP_CONTENTS, salt)));
+            Card item = pool.roll(run.getRng().streamFor(RngSource.SHOP_CONTENTS, salt));
+            if (i == 0 && item != null && run.isFirstShopSlotDebuffed())
+                item.apply(model.modifiers.Sticker.DEBUFFED);   // Limos: this seat's first slot is debuffed this visit
+            slots.set(i, item);
         }
     }
 

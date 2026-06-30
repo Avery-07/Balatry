@@ -1,7 +1,11 @@
 package model.game;
 
 import model.cards.Decks;
+import model.cards.consumables.ConsumableSpec;
 import model.cards.jokers.JokerCard;
+import model.cards.relics.RelicCard;
+import model.cards.relics.RelicContext;
+import model.cards.relics.RelicTarget;
 import model.game.player.BlindResult;
 import model.game.player.Player;
 import model.game.player.PlayerId;
@@ -37,6 +41,8 @@ public final class Match {
     private Sin activeSin;                         // null until started
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
+    private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
+    private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
 
     private Match(long seed, SinSelector sinSelector) {
         this.seed = seed;
@@ -154,9 +160,19 @@ public final class Match {
 
     /** Deals every seat into the current blind on its own seed. */
     private void dealBlind() {
-        currentBoss = (blind == Blind.BOSS) ? BossBlind.select(rng.streamFor(RngSource.BOSS_BLIND, ante), ante) : null;   // table-level: same boss for every seat
+        currentBoss = (blind == Blind.BOSS) ? selectBoss() : null;   // table-level: same boss for every seat
         long target = getCurrentTarget();
         for (Player p : players.values()) p.run().beginRound(target, currentBoss);
+    }
+
+    /** This ante's boss, rerolled to a different one if a Metabole armed the reroll for this ante. */
+    private BossBlind selectBoss() {
+        BossBlind boss = BossBlind.select(rng.streamFor(RngSource.BOSS_BLIND, ante), ante);
+        if (ante >= rerollBossFromAnte) {
+            boss = BossBlind.select(rng.streamFor(RngSource.BOSS_BLIND, Rng.combine(ante, 1L)), ante, boss);
+            rerollBossFromAnte = Integer.MAX_VALUE;
+        }
+        return boss;
     }
 
     // --- cross-player operations ---
@@ -171,7 +187,41 @@ public final class Match {
         jb.set(indexB, cardA);
     }
 
-    // Greed's shared shop will hang here as a single table-level Shop instance. Seam until the Shop type exists.
+    /**
+     * Spends {@code casterId}'s held relic at {@code relicIndex}, resolving its effect against {@code target}.
+     * A hostile effect (one aimed at another seat) is recorded for Anger and, if that seat has an armed Aegis,
+     * negated by consuming the shield. The relic is removed from the caster's relic area either way.
+     */
+    public void useRelic(PlayerId casterId, int relicIndex, RelicTarget target) {
+        if (phase == MatchPhase.LOBBY || phase == MatchPhase.FINISHED)
+            throw new IllegalStateException("relics cannot be used in phase " + phase);
+        Run caster = getRun(casterId);
+        RelicCard relic = caster.getRelics().get(relicIndex);
+
+        PlayerId targetId = target.opponent();
+        Run targetRun = (targetId == null) ? null : getRun(targetId);
+        boolean hostile = targetRun != null && !targetId.equals(casterId);
+
+        boolean negated = false;
+        if (hostile) {
+            targetRun.getStats().recordTargeted();              // Anger: the targeting attempt counts
+            negated = targetRun.getAfflictions().consumeAegis(); // Aegis: absorb the next hostile effect this ante
+        }
+        if (!negated)
+            relic.getSpec().getEffect().resolve(
+                    new RelicContext(this, caster, casterId, targetRun, targetId, target));
+
+        caster.getRelics().remove(relicIndex);
+    }
+
+    /** Records {@code spec} as the table's most recently used consumable (read by Mimesis). */
+    public void recordConsumableUsed(ConsumableSpec spec) { lastConsumableUsed = spec; }
+
+    /** The last consumable any seat used, or {@code null} if none yet (Mimesis copies it). */
+    public ConsumableSpec getLastConsumableUsed() { return lastConsumableUsed; }
+
+    /** Metabole: arms a reroll of the shared boss blind for the next ante. */
+    public void rerollNextBoss() { rerollBossFromAnte = Math.min(rerollBossFromAnte, ante + 1); }
 
     private void require(MatchPhase expected, String op) {
         if (phase != expected)

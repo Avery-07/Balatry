@@ -5,6 +5,8 @@ import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
 import model.cards.consumables.ConsumableSpec;
+import model.cards.relics.RelicCard;
+import model.cards.relics.RelicSpec;
 import model.cards.consumables.ConsumableType;
 import model.cards.consumables.Tarots;
 import model.cards.vouchers.Voucher;
@@ -40,13 +42,16 @@ public final class Run {
     private PlayerId playerId;    // null for standalone / headless runs
     private final List<JokerCard> jokers = new ArrayList<>();
     private final List<ConsumableCard> consumables = new ArrayList<>();
+    private final List<RelicCard> relics = new ArrayList<>();   // held, single-use multiplayer cards
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
+    private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private int handSize = 8;
     private int baseHands = 4;
     private int baseDiscards = 3;
     private int interestCap = 5;      // max $ of interest per round (raised by To the Moon / Seed Money)
     private int jokerSlots = 5;       // capacity for slot-consuming jokers (NEGATIVE jokers are free)
     private int consumableSlots = 2;  // capacity for slot-consuming consumables (NEGATIVE are free)
+    private int relicSlots = 2;        // capacity for slot-consuming relics (NEGATIVE are free)
     private int shopSlots = 3;        // card slots offered per shop
     private int packSlots = 3;        // booster-pack slots offered per shop
     private int voucherSlots = 2;     // voucher slots offered per shop (one redeemable per ante)
@@ -151,6 +156,24 @@ public final class Run {
     /** Removes {@code joker} (by identity) from the board; used by destructive spectrals (Ankh, Hex). */
     public void destroyJoker(JokerCard joker) { jokers.removeIf(j -> j == joker); }
 
+    /** This seat's held relics. */
+    public List<RelicCard> getRelics() { return relics; }
+
+    /** Relic-imposed debuffs and shields placed on this seat by relics (Anathema, Limos, Aegis, ...). */
+    public Afflictions getAfflictions() { return afflictions; }
+
+    /** Whether {@code card} is debuffed by an active rank/suit relic this round; consulted by the scoring engine. */
+    public boolean relicDebuffs(DeckCard card) { return afflictions.debuffs(card); }
+
+    /** Whether the first slot of the open shop is debuffed by Limos; read by the shop while filling. */
+    public boolean isFirstShopSlotDebuffed() { return afflictions.isFirstSlotDebuffed(); }
+
+    /** Adds a fresh card for {@code spec} to the relic area, if there is room (NEGATIVE relics are free). */
+    public void createRelic(RelicSpec spec) {
+        RelicCard card = new RelicCard(spec);
+        if (canAddRelic(card)) relics.add(card);
+    }
+
     /** Adds {@code card} to the deck and, if a round is active, to the current hand (Familiar, Cryptid, ...). */
     public void addCardToHand(DeckCard card) {
         deck.add(card);
@@ -189,6 +212,7 @@ public final class Run {
     public boolean canAcquire(Card card) {
         if (card instanceof JokerCard joker)        return canAddJoker(joker);
         if (card instanceof ConsumableCard consumable) return canAddConsumable(consumable);
+        if (card instanceof RelicCard relic)        return canAddRelic(relic);
         return true;
     }
 
@@ -196,6 +220,7 @@ public final class Run {
     public void acquire(Card card) {
         if (card instanceof JokerCard joker)              jokers.add(joker);
         else if (card instanceof ConsumableCard consumable) consumables.add(consumable);
+        else if (card instanceof RelicCard relic)         relics.add(relic);
         else if (card instanceof DeckCard deckCard)       { deck.add(deckCard); stats.recordCardAdded(); }
         else throw new IllegalArgumentException("cannot acquire " + card.getClass().getSimpleName());
     }
@@ -214,12 +239,23 @@ public final class Run {
         return n;
     }
 
+    /** Relics occupying a slot (NEGATIVE relics are free). */
+    public int usedRelicSlots() {
+        int n = 0;
+        for (RelicCard r : relics) if (r.getEdition() != Edition.NEGATIVE) n++;
+        return n;
+    }
+
     public boolean canAddJoker(JokerCard joker) {
         return joker.getEdition() == Edition.NEGATIVE || usedJokerSlots() < jokerSlots;
     }
 
     public boolean canAddConsumable(ConsumableCard consumable) {
         return consumable.getEdition() == Edition.NEGATIVE || usedConsumableSlots() < consumableSlots;
+    }
+
+    public boolean canAddRelic(RelicCard relic) {
+        return relic.getEdition() == Edition.NEGATIVE || usedRelicSlots() < relicSlots;
     }
 
     /** Sells the joker at {@code index}, banking its sell value and freeing its slot. */
@@ -243,6 +279,15 @@ public final class Run {
         return value;
     }
 
+    /** Sells the relic at {@code index}, banking its sell value and freeing its slot. */
+    public int sellRelic(int index) {
+        RelicCard relic = relics.remove(index);
+        int value = relic.getSellValue();
+        addMoney(value);
+        stats.recordCardSold();
+        return value;
+    }
+
     /** Uses the consumable at {@code index} with no selected targets. */
     public void useConsumable(int index) { useConsumable(index, List.of()); }
 
@@ -255,6 +300,7 @@ public final class Run {
         consumable.consume(this);
         consumableTargets = List.of();
         stats.recordConsumableUsed(spec);
+        if (match != null) match.recordConsumableUsed(spec);   // Mimesis: the table's last-used consumable
         if (spec.getType() != ConsumableType.SPECTRAL && spec != Tarots.THE_FOOL.spec())
             lastTarotOrPlanet = spec;     // The Fool later recreates the last Tarot/Planet used
     }
@@ -263,6 +309,8 @@ public final class Run {
     public void setJokerSlots(int n)   { jokerSlots = n; }
     public int getConsumableSlots()    { return consumableSlots; }
     public void setConsumableSlots(int n) { consumableSlots = n; }
+    public int getRelicSlots()         { return relicSlots; }
+    public void setRelicSlots(int n)   { relicSlots = n; }
     public int getShopSlots()          { return shopSlots; }
     public void setShopSlots(int n)    { shopSlots = n; }
     public int getPackSlots()          { return packSlots; }
@@ -292,7 +340,7 @@ public final class Run {
     }
 
     /** Resets this run's per-ante allowances; call at the start of each ante. */
-    public void beginAnte() { stats.beginAnte(); }
+    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -319,6 +367,7 @@ public final class Run {
         verdantSold = false;
         bossTriggered = false;
         stats.beginRound();             // fresh round-scoped tallies before any round-start joker reads them
+        afflictions.beginRound(jokers); // promote pending relic debuffs (rank/suit/joker) for this round
         fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
         BossBlind eff = effectiveBoss();   // Chicot disables effects at build time; Luchador can only disable later in the round
@@ -387,6 +436,7 @@ public final class Run {
         if (blind == Blind.BOSS && round.getOutcome() == RoundOutcome.WON)
             fire(Trigger.ON_BOSS_DEFEATED);   // Rocket payout / Campfire reset, before cash-out
         BlindResult result = SETTLEMENT.settle(this, round, blind);
+        afflictions.endRound();   // clear round-scoped relic debuffs; strip any joker sticker this seat's afflictions added
         round = null;
         activeBoss = null;
         return result;
@@ -397,6 +447,7 @@ public final class Run {
 
     /** Opens this run's shop for the SHOP phase, with seed-mirrored card, pack, and voucher rows. */
     public Shop openShop() {
+        afflictions.beginShop();   // promote a pending Limos debuff before the shop fills its first slot
         shop = new Shop(this, stats.nextShopIndex(),
                 shopSlots, CatalogShopPool.INSTANCE,
                 packSlots, CatalogPackPool.INSTANCE,
@@ -408,6 +459,7 @@ public final class Run {
     /** Closes the active shop. */
     public void closeShop() {
         fire(Trigger.ON_SHOP_END);
+        afflictions.endShop();   // a Limos debuff lasts only for this shop visit
         shop = null;
     }
 

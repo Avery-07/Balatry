@@ -143,7 +143,7 @@ public final class ShopTests {
             Card c = CatalogShopPool.INSTANCE.roll(pool);
             boolean kindOk = c instanceof JokerCard
                     || (c instanceof ConsumableCard cc
-                        && (cc.getSpec().getType() == ConsumableType.TAROT || cc.getSpec().getType() == ConsumableType.PLANET));
+                    && (cc.getSpec().getType() == ConsumableType.TAROT || cc.getSpec().getType() == ConsumableType.PLANET));
             cardRowOk &= kindOk && !(c instanceof DeckCard);
             priced &= c.getShopValue() >= 0;
         }
@@ -179,7 +179,9 @@ public final class ShopTests {
         List<Card> spectral = new BoosterPack(PackKind.SPECTRAL, PackSize.NORMAL).open(pr, new Random(4));
         check("Spectral Normal: 2 spectrals", spectral.size() == 2
                 && spectral.stream().allMatch(c -> c instanceof ConsumableCard cc && cc.getSpec().getType() == ConsumableType.SPECTRAL));
-        check("Myth pack opens empty (unbuilt)", new BoosterPack(PackKind.MYTH, PackSize.NORMAL).open(pr, new Random(4)).isEmpty());
+        List<Card> myth = new BoosterPack(PackKind.MYTH, PackSize.NORMAL).open(pr, new Random(4));
+        check("Myth Normal: 3 relics", myth.size() == 3
+                && myth.stream().allMatch(c -> c instanceof model.cards.relics.RelicCard));
 
         // Sampler bonus widens the option set
         pr.setPackOptionBonus(1);
