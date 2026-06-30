@@ -35,6 +35,7 @@ public enum RngSource {
     SHOP_VOUCHERS      (23),       // structural: which vouchers fill the shop's voucher row
 
     RELIC_EFFECT       (24),       // a relic's emergent roll (e.g. Pyre's random consumable pick)
+    BOSS_EFFECT        (25),       // a boss blind's emergent roll (e.g. The Quartz's per-card debuff)
 
     MISC               (99);       // anything not yet promoted to its own source
 

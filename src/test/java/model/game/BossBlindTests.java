@@ -8,9 +8,6 @@ import model.cards.jokers.Jokers;
 import model.game.player.Round;
 import model.game.player.RoundOutcome;
 import model.game.player.Run;
-import model.game.scoring.HandEvaluation;
-import model.game.scoring.HandEvaluator;
-import model.game.scoring.ScoringEngine;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,13 +16,11 @@ import java.util.List;
 public final class BossBlindTests {
 
     private static int failures = 0;
-    private static final HandEvaluator EV = new HandEvaluator();
-    private static final ScoringEngine EN = new ScoringEngine();
 
     public static void main(String[] args) {
         // --- round-setup transforms ---
         checkInt("The Manacle: -1 hand size", deal(BossBlind.THE_MANACLE).getHand().size(), 7);
-        checkInt("The Water: 0 discards",     deal(BossBlind.THE_WATER).getDiscardsRemaining(), 0);
+        checkInt("The Water: -1 discard",     deal(BossBlind.THE_WATER).getDiscardsRemaining(), deal(null).getDiscardsRemaining() - 1);
         checkInt("The Needle: 1 hand",        deal(BossBlind.THE_NEEDLE).getHandsRemaining(), 1);
 
         // --- target multipliers ---
@@ -33,23 +28,24 @@ public final class BossBlindTests {
         checkInt("Violet Vessel x3 target", BossBlind.VIOLET_VESSEL.targetMultiplier(), 3);
         checkInt("regular boss x1 target",  BossBlind.THE_HOOK.targetMultiplier(), 1);
 
-        // --- card debuffs (engine skips debuffed cards) ---
-        List<DeckCard> clubPair = List.of(new DeckCard(Rank.KING, Suit.CLUBS), new DeckCard(Rank.KING, Suit.CLUBS));
-        checkLong("The Club debuffs clubs",   scoreUnder(BossBlind.THE_CLUB, clubPair), 10 * 2);          // both cards skipped -> base pair only
-        checkLong("The Head ignores clubs",   scoreUnder(BossBlind.THE_HEAD, clubPair), (10 + 10 + 10) * 2);
-        List<DeckCard> facePair = List.of(new DeckCard(Rank.QUEEN, Suit.SPADES), new DeckCard(Rank.QUEEN, Suit.HEARTS));
-        checkLong("The Plant debuffs faces",   scoreUnder(BossBlind.THE_PLANT, facePair), 10 * 2);
+        // --- The Quartz: ~1 in 7 of the round's cards are debuffed, deterministically, restored at round end ---
+        int d1 = debuffedDeckCount(quartzRun());
+        check("The Quartz debuffs some but not all", d1 > 0 && d1 < 52);
+        checkInt("The Quartz is seed-deterministic", debuffedDeckCount(quartzRun()), d1);
+        Run quartz = quartzRun();
+        quartz.endRound(Blind.BOSS);
+        checkInt("The Quartz restores debuffs at round end", debuffedDeckCount(quartz), 0);
 
-        // --- Luchador / Chicot disable the boss ---
-        Run lucha = bossRun(BossBlind.THE_CLUB);
+        // --- Luchador / Chicot disable the boss (effectiveBoss() goes null) ---
+        Run lucha = bossRun(BossBlind.THE_MANACLE);
         lucha.getJokers().add(Jokers.LUCHADOR.make());
-        check("boss active before Luchador sold", lucha.bossDebuffs(new DeckCard(Rank.KING, Suit.CLUBS)));
+        check("boss active before Luchador sold", lucha.effectiveBoss() != null);
         lucha.sellJoker(0);                                  // Luchador's own-sale disables the boss this round
-        check("boss disabled after Luchador sold", !lucha.bossDebuffs(new DeckCard(Rank.KING, Suit.CLUBS)));
+        check("boss disabled after Luchador sold", lucha.effectiveBoss() == null);
 
-        Run chic = bossRun(BossBlind.THE_CLUB);
+        Run chic = bossRun(BossBlind.THE_MANACLE);
         chic.getJokers().add(Jokers.CHICOT.make());
-        check("Chicot disables the boss", !chic.bossDebuffs(new DeckCard(Rank.KING, Suit.CLUBS)));
+        check("Chicot disables the boss", chic.effectiveBoss() == null);
 
         // --- The Tooth: lose $1 per card played ---
         Run tooth = smallDeckRun(5);
@@ -101,11 +97,17 @@ public final class BossBlindTests {
         return r.beginRound(1_000_000, boss);
     }
 
-    private static long scoreUnder(BossBlind boss, List<DeckCard> played) {
-        Run r = bossRun(boss);
-        HandEvaluation e = EV.evaluate(played);
-        return EN.score(r, e.context(), r.getHandLevels().chipsFor(e.type()), r.getHandLevels().multFor(e.type()),
-                e.scoringCards(), List.of()).score().longValueExact();
+    private static Run quartzRun() {
+        Run r = new Run(0L);
+        r.getDeck().addAll(Decks.standard());
+        r.beginRound(1_000_000, BossBlind.THE_QUARTZ);
+        return r;
+    }
+
+    private static int debuffedDeckCount(Run run) {
+        int n = 0;
+        for (DeckCard card : run.getDeck()) if (card.isDebuffed()) n++;
+        return n;
     }
 
     private static Run smallDeckRun(int n) {

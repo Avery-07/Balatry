@@ -7,6 +7,7 @@ import model.cards.jokers.JokerCard;
 import model.cards.consumables.ConsumableSpec;
 import model.cards.relics.RelicCard;
 import model.cards.relics.RelicSpec;
+import model.modifiers.Sticker;
 import model.cards.consumables.ConsumableType;
 import model.cards.consumables.Tarots;
 import model.cards.vouchers.Voucher;
@@ -44,6 +45,7 @@ public final class Run {
     private final List<ConsumableCard> consumables = new ArrayList<>();
     private final List<RelicCard> relics = new ArrayList<>();   // held, single-use multiplayer cards
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
+    private final List<DeckCard> bossDebuffedCards = new ArrayList<>();   // cards The Quartz debuffed this round, restored at round end
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private int handSize = 8;
     private int baseHands = 4;
@@ -371,10 +373,25 @@ public final class Run {
         fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
         BossBlind eff = effectiveBoss();   // Chicot disables effects at build time; Luchador can only disable later in the round
-        int hands    = (eff != null && eff.oneHandOnly())    ? 1 : baseHands;
-        int discards = (eff != null && eff.clearsDiscards()) ? 0 : baseDiscards;
+        int hands    = (eff != null && eff.oneHandOnly()) ? 1 : baseHands;
+        int discards = Math.max(0, baseDiscards + (eff != null ? eff.discardDelta() : 0));   // The Water: -1
         int hsize    = Math.max(1, handSize + (eff != null ? eff.handSizeDelta() : 0));
-        return round = new Round(this, target, hsize, hands, discards, shuffle);
+        round = new Round(this, target, hsize, hands, discards, shuffle);
+        if (eff != null && eff.randomDebuffOneIn() > 0) applyQuartzDebuff(eff.randomDebuffOneIn());   // The Quartz
+        return round;
+    }
+
+    /** The Quartz: debuffs roughly 1-in-{@code oneIn} of this round's cards, tracked so they are restored at round end. */
+    private void applyQuartzDebuff(int oneIn) {
+        RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
+        List<DeckCard> cards = new ArrayList<>(round.getHand());
+        cards.addAll(round.getDrawPile());                 // hand + draw pile == this round's full deck (same instances)
+        for (DeckCard card : cards) {
+            if (!card.isDebuffed() && r.nextInt(oneIn) == 0) {
+                card.apply(Sticker.DEBUFFED);
+                bossDebuffedCards.add(card);
+            }
+        }
     }
 
     public BossBlind getActiveBoss() { return activeBoss; }
@@ -437,6 +454,8 @@ public final class Run {
             fire(Trigger.ON_BOSS_DEFEATED);   // Rocket payout / Campfire reset, before cash-out
         BlindResult result = SETTLEMENT.settle(this, round, blind);
         afflictions.endRound();   // clear round-scoped relic debuffs; strip any joker sticker this seat's afflictions added
+        for (DeckCard card : bossDebuffedCards) card.remove(Sticker.DEBUFFED);   // The Quartz: restore debuffed deck cards
+        bossDebuffedCards.clear();
         round = null;
         activeBoss = null;
         return result;
