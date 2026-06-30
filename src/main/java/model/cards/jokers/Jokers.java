@@ -421,7 +421,7 @@ public enum Jokers {
     GOLDEN_TICKET("Golden Ticket", Rarity.COMMON, 5, b -> b
             .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getEnhancement() == Enhancement.GOLD) run.addMoney(3); })
             .on(Trigger.ON_HELD_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getSeal() == Seal.GOLD_SEAL) run.addMoney(2); })),
-    MR_BONES("Mr. Bones", Rarity.UNCOMMON, 5, b -> b),
+    MR_BONES("Mr. Bones", Rarity.UNCOMMON, 5, b -> b.trait(JokerTrait.PREVENTS_LOSS)),
     ACROBAT("Acrobat", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> { if (run.getRound() != null && run.getRound().getHandsRemaining() == 1) run.getScoring().multiplyMult(x("3")); })),
     SOCK_AND_BUSKIN("Sock and Buskin", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
@@ -564,7 +564,7 @@ public enum Jokers {
             (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.KING || c.getRank() == Rank.QUEEN)) run.getScoring().multiplyMult(x("2")); })),
     YORICK("Yorick", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().multiplyMult(onePlus("1", run.getStats().getCardsDiscarded() / 23)))),
-    CHICOT("Chicot", Rarity.LEGENDARY, 20, b -> b),
+    CHICOT("Chicot", Rarity.LEGENDARY, 20, b -> b.trait(JokerTrait.DISABLES_BOSS)),
     PERKEO("Perkeo", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_SHOP_END,
             (run, self) -> {
                 List<ConsumableCard> cs = run.getConsumables();

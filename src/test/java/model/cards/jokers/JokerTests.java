@@ -11,6 +11,7 @@ import model.game.scoring.Trigger;
 import model.game.shop.Shop;
 import model.game.shop.ShopPool;
 import model.modifiers.Enhancement;
+import model.modifiers.Sticker;
 
 import java.util.List;
 
@@ -30,6 +31,7 @@ public final class JokerTests {
         scoringDeltas();
         slotAndRoundStartHooks();
         retriggerAndEconomy();
+        specialTraits();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -167,6 +169,32 @@ public final class JokerTests {
         long bc = run.getHandLevels().chipsFor(e.type());
         long bm = run.getHandLevels().multFor(e.type());
         return ENGINE.score(run, e.context(), bc, bm, e.scoringCards(), held).score().longValueExact();
+    }
+
+    /** Chicot (DISABLES_BOSS) and Mr. Bones (PREVENTS_LOSS): present-and-not-debuffed activates; debuffed is inert. */
+    private static void specialTraits() {
+        // Chicot disables the boss while owned; a debuffed Chicot must not (debuffed = no effect).
+        Run withChicot = new Run(0L);
+        withChicot.getJokers().add(Jokers.CHICOT.make());
+        check("Chicot owned -> bossDisabled", withChicot.bossDisabled());
+        withChicot.getJokers().get(0).apply(Sticker.DEBUFFED);
+        check("Chicot debuffed -> boss NOT disabled", !withChicot.bossDisabled());
+
+        // A run with no boss-disabling joker is unaffected.
+        check("no Chicot -> boss not disabled", !new Run(0L).bossDisabled());
+
+        // Mr. Bones prevents a loss while owned; charges twice then self-destructs; a debuffed Bones is inert.
+        Run withBones = new Run(0L);
+        withBones.getJokers().add(Jokers.MR_BONES.make());
+        check("Mr. Bones 1st save", withBones.tryPreventLoss());
+        check("Mr. Bones survives first save", withBones.getJokers().size() == 1);
+        check("Mr. Bones 2nd save", withBones.tryPreventLoss());
+        check("Mr. Bones self-destructs after 2nd", withBones.getJokers().isEmpty());
+
+        Run debuffedBones = new Run(0L);
+        debuffedBones.getJokers().add(Jokers.MR_BONES.make());
+        debuffedBones.getJokers().get(0).apply(Sticker.DEBUFFED);
+        check("Mr. Bones debuffed -> no save", !debuffedBones.tryPreventLoss());
     }
 
     private static long scoreWith(List<DeckCard> cards, Jokers joker) {

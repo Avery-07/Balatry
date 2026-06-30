@@ -16,12 +16,15 @@ import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.player.Run;
 import model.game.shop.Shop;
+import model.game.sins.SinChoiceProvider;
+import model.game.sins.SinModifier;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Aggregate root for one competitive game. Owns the shared, authoritative state
@@ -34,35 +37,45 @@ public final class Match {
     private final Rng rng;                       // table-level randomness
     private final Map<PlayerId, Player> players; // insertion-ordered by seat
     private final SinSelector sinSelector;
+    private final Function<Sin, SinModifier> sinResolver;   // Sin -> behaviour (injectable for tests)
+    private final SinChoiceProvider sinChoiceProvider;      // resolves sin player-choices (Pride's multiplier, ...)
 
     private MatchPhase phase = MatchPhase.LOBBY;
     private int ante = 0;                         // 0 until started
     private Blind blind = Blind.SMALL;
     private Sin activeSin;                         // null until started
+    private SinModifier sinModifier = SinModifier.NONE;   // behaviour for activeSin; refreshed when the sin changes
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
     private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
 
-    private Match(long seed, SinSelector sinSelector) {
+    private Match(long seed, MatchConfig config) {
         this.seed = seed;
         this.rng = new DeterministicRng(seed);
-        this.sinSelector = sinSelector;
+        this.sinSelector = config.sinSelector();
+        this.sinResolver = config.sinResolver();
+        this.sinChoiceProvider = config.sinChoiceProvider();
         this.players = new LinkedHashMap<>();
     }
 
-    /** Creates a seated match (in {@link MatchPhase#LOBBY}) with the default sin policy. */
+    /** Creates a seated match (in {@link MatchPhase#LOBBY}) with default policies. */
     public static Match create(long seed, List<String> playerNames) {
-        return create(seed, playerNames, SinSelector.SEEDED_UNIFORM);
+        return create(seed, playerNames, MatchConfig.defaults());
+    }
+
+    /** Creates a seated match with a chosen sin policy and otherwise-default policies. */
+    public static Match create(long seed, List<String> playerNames, SinSelector sinSelector) {
+        return create(seed, playerNames, MatchConfig.defaults().withSinSelector(sinSelector));
     }
 
     /** Creates a seated match; each player's {@link Run} is built from {@code seed}. Seats follow name order. */
-    public static Match create(long seed, List<String> playerNames, SinSelector sinSelector) {
+    public static Match create(long seed, List<String> playerNames, MatchConfig config) {
         if (playerNames == null || playerNames.size() < 2 || playerNames.size() > 4)
             throw new IllegalArgumentException("a match needs 2-4 players, got "
                     + (playerNames == null ? 0 : playerNames.size()));
 
-        Match match = new Match(seed, sinSelector);
+        Match match = new Match(seed, config);
         int seat = 0;
         for (String name : playerNames) {
             PlayerId id = new PlayerId(seat++);
@@ -119,6 +132,7 @@ public final class Match {
         activeSin = sinSelector.selectFor(ante, rng);
         phase = MatchPhase.BLIND;
         for (Player p : players.values()) p.run().beginAnte();
+        refreshSinForAnte();
         dealBlind();
     }
 
@@ -131,7 +145,11 @@ public final class Match {
                 throw new IllegalStateException("seat " + p.id() + " has not finished the blind");
         }
         Map<PlayerId, BlindResult> results = new LinkedHashMap<>();
-        for (Player p : players.values()) results.put(p.id(), p.run().endRound(blind));
+        for (Player p : players.values()) {
+            BlindResult result = p.run().endRound(blind);
+            sinModifier.onRoundSettled(p.run(), result);
+            results.put(p.id(), result);
+        }
         lastResults = results;
         for (Player p : players.values()) p.run().openShop();   // seed-mirrored shop per seat
         phase = MatchPhase.SHOP;
@@ -149,6 +167,7 @@ public final class Match {
                 blind = Blind.SMALL;
                 activeSin = sinSelector.selectFor(ante, rng);
                 for (Player p : players.values()) p.run().beginAnte();
+                refreshSinForAnte();
             }
         }
         phase = MatchPhase.BLIND;
@@ -162,8 +181,23 @@ public final class Match {
     private void dealBlind() {
         currentBoss = (blind == Blind.BOSS) ? selectBoss() : null;   // table-level: same boss for every seat
         long target = getCurrentTarget();
-        for (Player p : players.values()) p.run().beginRound(target, currentBoss);
+        for (Player p : players.values()) {
+            p.run().beginRound(target, currentBoss);
+            sinModifier.onRoundBegin(p.run());
+        }
     }
+
+    /** Refreshes the active sin's behaviour after the sin changes and runs its once-per-ante table setup. */
+    private void refreshSinForAnte() {
+        sinModifier = sinResolver.apply(activeSin);
+        sinModifier.onAnteBegin(this);
+    }
+
+    /** The sin behaviour active this ante ({@link SinModifier#NONE} before {@link #start}). */
+    public SinModifier getSinModifier() { return sinModifier; }
+
+    /** The provider that resolves sin player-choices (e.g. Pride's multiplier); injected via {@link MatchConfig}. */
+    public SinChoiceProvider getSinChoiceProvider() { return sinChoiceProvider; }
 
     /** This ante's boss, rerolled to a different one if a Metabole armed the reroll for this ante. */
     private BossBlind selectBoss() {

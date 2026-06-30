@@ -7,6 +7,7 @@ import model.game.player.BlindResult;
 import model.game.player.PlayerId;
 import model.game.player.Run;
 import model.game.player.RoundOutcome;
+import model.game.sins.SinModifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,8 +80,42 @@ public final class MatchTests {
         match.finish();
         check("finished", match.getPhase() == MatchPhase.FINISHED);
 
+        sinDispatchOrdering();
+
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
+    }
+
+    /** The active sin's lifecycle hooks fire once per ante (onAnteBegin) and once per seat per deal/settle. */
+    private static void sinDispatchOrdering() {
+        Spy spy = new Spy();
+        // Inject a resolver that returns the spy for whatever sin is selected, so dispatch is observed deterministically.
+        Match match = Match.create(123L, List.of("A", "B"),
+                MatchConfig.defaults().withSinResolver(sin -> spy));
+
+        check("default resolver yields NONE before start",
+                Match.create(1L, List.of("A", "B")).getSinModifier() == SinModifier.NONE);
+
+        match.start();                                  // ante 1 SMALL: 1 anteBegin, 2 roundBegins
+        checkInt("onAnteBegin after start", spy.anteBegins, 1);
+        checkInt("onRoundBegin after start", spy.roundBegins, 2);
+        check("active modifier is the injected spy", match.getSinModifier() == spy);
+
+        advance(match);                                 // settle SMALL (+2), deal BIG  (+2)
+        advance(match);                                 // settle BIG   (+2), deal BOSS (+2)
+        advance(match);                                 // settle BOSS  (+2), roll to ante 2 SMALL: +1 anteBegin, deal +2
+
+        checkInt("onAnteBegin total over 2 antes", spy.anteBegins, 2);
+        checkInt("onRoundBegin total (4 deals x2 seats)", spy.roundBegins, 8);
+        checkInt("onRoundSettled total (3 settles x2 seats)", spy.settles, 6);
+    }
+
+    /** Counts each lifecycle dispatch so the test can assert the seam fires at the right points. */
+    private static final class Spy implements SinModifier {
+        int anteBegins, roundBegins, settles;
+        @Override public void onAnteBegin(Match m)                 { anteBegins++; }
+        @Override public void onRoundBegin(Run r)                  { roundBegins++; }
+        @Override public void onRoundSettled(Run r, BlindResult b) { settles++; }
     }
 
     /** Exhausts a run's hands with one-card plays so its round becomes terminal. */

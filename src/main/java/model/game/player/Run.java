@@ -4,6 +4,8 @@ import model.cards.Card;
 import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
+import model.cards.jokers.JokerTrait;
+import model.game.sins.SinState;
 import model.cards.consumables.ConsumableSpec;
 import model.cards.relics.RelicCard;
 import model.cards.relics.RelicSpec;
@@ -47,6 +49,7 @@ public final class Run {
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
     private final List<DeckCard> bossDebuffedCards = new ArrayList<>();   // cards The Quartz debuffed this round, restored at round end
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
+    private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
     private int handSize = 8;
     private int baseHands = 4;
     private int baseDiscards = 3;
@@ -163,6 +166,9 @@ public final class Run {
 
     /** Relic-imposed debuffs and shields placed on this seat by relics (Anathema, Limos, Aegis, ...). */
     public Afflictions getAfflictions() { return afflictions; }
+
+    /** Per-player, round-scoped state for the active sin (Pride's chosen multiplier, ...). */
+    public SinState getSinState() { return sinState; }
 
     /** Whether {@code card} is debuffed by an active rank/suit relic this round; consulted by the scoring engine. */
     public boolean relicDebuffs(DeckCard card) { return afflictions.debuffs(card); }
@@ -369,6 +375,7 @@ public final class Run {
         verdantSold = false;
         bossTriggered = false;
         stats.beginRound();             // fresh round-scoped tallies before any round-start joker reads them
+        sinState.beginRound();          // reset per-player sin state before the active sin sets it via onRoundBegin
         afflictions.beginRound(jokers); // promote pending relic debuffs (rank/suit/joker) for this round
         fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
@@ -402,7 +409,7 @@ public final class Run {
     /** Whether the active boss is disabled for this player. */
     public boolean bossDisabled() {
         if (luchadorDisable) return true;
-        for (JokerCard j : jokers) if (j.getSpec().getName().equals("Chicot")) return true;
+        for (JokerCard j : jokers) if (j.hasActiveTrait(JokerTrait.DISABLES_BOSS)) return true;   // Chicot (inert while debuffed)
         return false;
     }
 
@@ -423,7 +430,7 @@ public final class Run {
 
     /** Mr. Bones: if owned, prevents a blind loss (two charges, then self-destructs). True if the loss was prevented. */
     public boolean tryPreventLoss() {
-        for (JokerCard j : jokers) if (j.getSpec().getName().equals("Mr. Bones")) {
+        for (JokerCard j : jokers) if (j.hasActiveTrait(JokerTrait.PREVENTS_LOSS)) {   // inert while debuffed
             j.addCounter(1);
             if (j.getCounter() >= 2) destroyJoker(j);
             return true;
