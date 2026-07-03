@@ -113,6 +113,9 @@ public final class ShopTests {
         checkInt("deck grew by 1", r6.getDeck().size(), 1);
         checkInt("money 5 -> 4", r6.getMoney(), 4);
 
+        // --- purchase lifecycle: pricing grants act before validation, ON_BOUGHT fires only on completion ---
+        purchaseLifecycleChecks();
+
         // --- Match opens a shop per seat at the barrier and closes it on leaving ---
         Match match = Match.create(50L, List.of("A", "B"));
         match.start();
@@ -228,6 +231,57 @@ public final class ShopTests {
         checkInt("Grabber via shop: +1 hand", sr.getBaseHands(), handsBefore + 1);
         checkInt("Grabber charged $10", sr.getMoney(), moneyBefore - 10);
         check("voucher slot cleared", vshop.getVoucher(0) == null);
+    }
+
+    /**
+     * The purchase lifecycle around {@code Shop.charge}: Loyalty Card's 4th purchase is free (granted at pricing
+     * time, counted at completion), a failed buy leaves no side effects (no counter advance, no burned grant),
+     * and ON_BOUGHT never fires for a failed buy.
+     */
+    private static void purchaseLifecycleChecks() {
+        // Loyalty Card: purchases 1-3 paid, 4th free, counter advances only on completed buys.
+        Run loyal = new Run(30L); loyal.addMoney(100);
+        JokerCard loyalty = model.cards.jokers.Jokers.LOYALTY_CARD.make();
+        loyal.getJokers().add(loyalty);
+        Shop ls = new Shop(loyal, 0, 4, JOKER_POOL);
+        int m0 = loyal.getMoney();
+        ls.buy(0); ls.buy(1); ls.buy(2);
+        checkInt("first 3 purchases paid", loyal.getMoney(), m0 - 12);
+        checkInt("Loyalty counted 3 purchases", loyalty.getCounter(), 3);
+        ls.buy(3);
+        checkInt("4th purchase free", loyal.getMoney(), m0 - 12);
+        checkInt("Loyalty counted the free purchase too", loyalty.getCounter(), 4);
+
+        // A failed buy is side-effect free: the counter does not advance...
+        Run broke = new Run(31L); broke.addMoney(2);   // joker costs 4
+        JokerCard loyalty2 = model.cards.jokers.Jokers.LOYALTY_CARD.make();
+        loyalty2.setCounter(2);                        // 2 completed purchases so far
+        broke.getJokers().add(loyalty2);
+        Shop bs2 = new Shop(broke, 0, 2, JOKER_POOL);
+        checkThrows("unaffordable buy throws", () -> bs2.buy(0));
+        checkInt("failed buy does not advance Loyalty", loyalty2.getCounter(), 2);
+        // ...and the free grant is not burned: the 3rd completed purchase is still paid, the 4th still free.
+        broke.addMoney(10);
+        int m1 = broke.getMoney();
+        bs2.buy(0);                                    // 3rd completed purchase: paid
+        checkInt("3rd purchase still paid after a failed attempt", broke.getMoney(), m1 - 4);
+        bs2.buy(1);                                    // 4th completed purchase: free
+        checkInt("free 4th purchase survives a failed attempt", broke.getMoney(), m1 - 4);
+
+        // ON_BOUGHT fires only when a purchase completes.
+        Run probeRun = new Run(32L);
+        JokerCard boughtProbe = new JokerCard(
+                JokerSpec.named("BoughtProbe", Rarity.COMMON)
+                        .on(model.game.scoring.Trigger.ON_BOUGHT,
+                                (run, self) -> self.setCounter(self.getCounter() + 1))
+                        .build(), 0);
+        probeRun.getJokers().add(boughtProbe);
+        Shop ps = new Shop(probeRun, 0, 2, JOKER_POOL);
+        checkThrows("broke probe buy throws", () -> ps.buy(0));
+        checkInt("no ON_BOUGHT for a failed buy", boughtProbe.getCounter(), 0);
+        probeRun.addMoney(10);
+        ps.buy(0);
+        checkInt("ON_BOUGHT fires once per completed buy", boughtProbe.getCounter(), 1);
     }
 
     private static void exhaust(Match match, PlayerId id) {

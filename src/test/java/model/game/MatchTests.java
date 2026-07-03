@@ -3,11 +3,15 @@ package model.game;
 import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
 import model.cards.DeckCard.Suit;
+import model.cards.jokers.JokerCard;
+import model.cards.jokers.JokerSpec;
+import model.cards.jokers.Rarity;
 import model.game.player.BlindResult;
 import model.game.player.PlayerId;
 import model.game.player.Run;
 import model.game.player.RoundOutcome;
 import model.game.sins.SinModifier;
+import model.modifiers.Edition;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +85,8 @@ public final class MatchTests {
         check("finished", match.getPhase() == MatchPhase.FINISHED);
 
         sinDispatchOrdering();
+        swapGuards();
+        endOfMatch();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -108,6 +114,73 @@ public final class MatchTests {
         checkInt("onAnteBegin total over 2 antes", spy.anteBegins, 2);
         checkInt("onRoundBegin total (4 deals x2 seats)", spy.roundBegins, 8);
         checkInt("onRoundSettled total (3 settles x2 seats)", spy.settles, 6);
+    }
+
+    /** swapJokers guards: phase + sin gating, self-swap, index validation, slot accounting, and the happy path. */
+    private static void swapGuards() {
+        Match envy = Match.create(77L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.ENVY));
+        PlayerId a = envy.getSeats().get(0);
+        PlayerId b = envy.getSeats().get(1);
+        JokerCard ja = stubJoker();
+        JokerCard jb = stubJoker();
+        envy.getRun(a).getJokers().add(ja);
+        envy.getRun(b).getJokers().add(jb);
+
+        envy.start();
+        checkThrows("swap blocked outside SHOP", () -> envy.swapJokers(a, 0, b, 0));
+
+        for (PlayerId id : envy.getSeats()) exhaust(envy.getRun(id));
+        envy.toShop();
+        checkThrows("swap rejects a self-swap", () -> envy.swapJokers(a, 0, a, 0));
+        checkThrows("swap rejects a bad index", () -> envy.swapJokers(a, 3, b, 0));
+
+        envy.swapJokers(a, 0, b, 0);
+        check("swap exchanged the jokers", envy.getRun(a).getJokers().get(0) == jb
+                && envy.getRun(b).getJokers().get(0) == ja);
+
+        // Slot accounting: B is full (5 slot-consumers) plus one NEGATIVE joker; trading the NEGATIVE
+        // away for A's slot-consuming joker would put B at 6/5 used slots, so the swap must be rejected.
+        for (int i = 0; i < 4; i++) envy.getRun(b).getJokers().add(stubJoker());   // B: 5 consumers
+        JokerCard negative = stubJoker();
+        negative.apply(Edition.NEGATIVE);
+        envy.getRun(b).getJokers().add(negative);                                  // B: index 5, slot-free
+        checkThrows("swap blocked by slot accounting", () -> envy.swapJokers(a, 0, b, 5));
+
+        // Sin gating: the same operation under a non-Envy sin is rejected even in SHOP.
+        Match pride = Match.create(78L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
+        PlayerId pa = pride.getSeats().get(0);
+        PlayerId pb = pride.getSeats().get(1);
+        pride.getRun(pa).getJokers().add(stubJoker());
+        pride.getRun(pb).getJokers().add(stubJoker());
+        pride.start();
+        for (PlayerId id : pride.getSeats()) exhaust(pride.getRun(id));
+        pride.toShop();
+        checkThrows("swap blocked under a non-Envy sin", () -> pride.swapJokers(pa, 0, pb, 0));
+    }
+
+    /** End of match: the final ante's boss settles straight to FINISHED — no post-match shop, no further advance. */
+    private static void endOfMatch() {
+        check("default match length is 7 antes", Match.create(1L, List.of("A", "B")).getAnteCount() == 7);
+
+        Match match = Match.create(99L, List.of("A", "B"), MatchConfig.defaults().withAnteCount(1));
+        checkInt("configured length is 1 ante", match.getAnteCount(), 1);
+        match.start();
+        advance(match);   // settle SMALL, deal BIG
+        advance(match);   // settle BIG, deal BOSS
+        for (PlayerId id : match.getSeats()) exhaust(match.getRun(id));
+        match.toShop();   // final boss settles: the match ends here
+        check("FINISHED after the final boss", match.getPhase() == MatchPhase.FINISHED);
+        check("final results recorded", match.getResults().size() == 2);
+        boolean noShops = true;
+        for (PlayerId id : match.getSeats()) noShops &= match.getRun(id).getShop() == null;
+        check("no post-match shop opened", noShops);
+        checkThrows("nextBlind blocked after the match", match::nextBlind);
+    }
+
+    private static JokerCard stubJoker() {
+        return new JokerCard(JokerSpec.named("Stub", Rarity.COMMON).build(), 4);
     }
 
     /** Counts each lifecycle dispatch so the test can assert the seam fires at the right points. */

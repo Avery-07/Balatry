@@ -138,7 +138,7 @@ public final class Run {
     /** Dollars of the most recent {@link #spend} made while in debt; read by ON_SPEND effects. */
     public int getLastInDebtSpend() { return lastInDebtSpend; }
 
-    /** Transient per-purchase flags, driven by {@link Shop#buy} around the ON_BOUGHT dispatch. */
+    /** Transient per-purchase flags, driven by {@link Shop#buy} around the ON_PURCHASE_PRICING dispatch. */
     public void beginPurchase()     { purchaseFree = false; }
     public void makePurchaseFree()  { purchaseFree = true; }
     public boolean isPurchaseFree() { return purchaseFree; }

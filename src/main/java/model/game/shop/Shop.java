@@ -34,7 +34,7 @@ public final class Shop {
 
     /** Full three-row shop. */
     public Shop(Run run, int shopIndex, int slotCount, ShopPool pool,
-         int packCount, PackPool packPool, int voucherCount, VoucherPool voucherPool) {
+                int packCount, PackPool packPool, int voucherCount, VoucherPool voucherPool) {
         this.run = run;
         this.shopIndex = shopIndex;
         this.pool = pool;
@@ -115,14 +115,19 @@ public final class Shop {
 
     // --- internals ---
 
-    /** Charges {@code price}, honoring a free-purchase grant and firing ON_BOUGHT, with an affordability gate. */
+    /**
+     * Charges {@code price} in three steps: price (ON_PURCHASE_PRICING may grant a free purchase), validate
+     * affordability, then pay and fire ON_BOUGHT. The ordering guarantees a failed purchase has no side effects:
+     * pricing effects must be pure grants, and counting/reacting effects (ON_BOUGHT) only ever see completed buys.
+     */
     private void charge(int price) {
         run.beginPurchase();
-        run.fire(Trigger.ON_BOUGHT);
+        run.fire(Trigger.ON_PURCHASE_PRICING);
         int effective = run.isPurchaseFree() ? 0 : price;
         if (run.getMoney() - effective < run.minBalance())
             throw new IllegalStateException("cannot afford " + effective + " (have " + run.getMoney() + ", floor " + run.minBalance() + ")");
         run.spend(effective);
+        run.fire(Trigger.ON_BOUGHT);
     }
 
     /** Applies the run's shop discount to a price. */

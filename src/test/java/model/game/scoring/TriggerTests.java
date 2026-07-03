@@ -86,6 +86,26 @@ public final class TriggerTests {
         checkInt("ON_HAND_DISCARDED fires with discarded-card context", probeF.getCounter(), 2);
         checkInt("discard context cleared after the broadcast", discard.getLastDiscarded().size(), 0);
 
+        // The scoring engine iterates a snapshot of the board (matching Run.fire), so an effect may create or
+        // destroy jokers mid-scoring without a ConcurrentModificationException.
+        Run mutator = new Run(9L);
+        JokerCard spawner = new JokerCard(
+                JokerSpec.named("Spawner", Rarity.COMMON)
+                        .on(Trigger.ON_HAND_PLAYED,
+                                (run, self) -> { if (self.getCounter() == 0) { self.setCounter(1); run.createJoker(plainJoker()); } })
+                        .build(), 0);
+        mutator.getJokers().add(spawner);
+        for (int i = 0; i < 8; i++) mutator.getDeck().add(new DeckCard(Rank.values()[i], Suit.HEARTS));
+        Round mutRound = mutator.beginRound(1);
+        boolean scoredCleanly = true;
+        try {
+            mutRound.play(mutRound.getHand().subList(0, 1));
+        } catch (RuntimeException e) {
+            scoredCleanly = false;
+        }
+        check("joker created mid-scoring does not break the walk", scoredCleanly);
+        checkInt("spawned joker landed on the board", mutator.getJokers().size(), 2);
+
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
     }
@@ -97,6 +117,11 @@ public final class TriggerTests {
 
     private static JokerCard plainJoker() {
         return new JokerCard(JokerSpec.named("Plain", Rarity.COMMON).build(), 0);
+    }
+
+    private static void check(String label, boolean ok) {
+        System.out.printf("%-52s %s%n", label, ok ? "PASS" : "FAIL");
+        if (!ok) failures++;
     }
 
     private static void checkInt(String label, int actual, int expected) {

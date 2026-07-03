@@ -51,7 +51,8 @@ public final class ScoringEngine {
         }
 
         // Phase C — independent jokers + joker editions, then held-consumable editions.
-        for (JokerCard joker : run.getJokers()) {
+        // Snapshot, matching Run.fire: an effect may add or remove jokers while the board is being walked.
+        for (JokerCard joker : List.copyOf(run.getJokers())) {
             if (joker.isDebuffed()) continue;
             joker.trigger(Trigger.ON_HAND_PLAYED, run);
             s.applyEdition(joker.getEdition());
@@ -66,9 +67,9 @@ public final class ScoringEngine {
         return new ScoringResult(score, destroyed);
     }
 
-    /** Fires the given trigger on every non-debuffed joker, in order. */
+    /** Fires the given trigger on every non-debuffed joker, in order. Iterates a snapshot, matching {@link Run#fire}. */
     private void fireJokers(Run run, Trigger trigger) {
-        for (JokerCard joker : run.getJokers()) {
+        for (JokerCard joker : List.copyOf(run.getJokers())) {
             if (!joker.isDebuffed()) joker.trigger(trigger, run);
         }
     }

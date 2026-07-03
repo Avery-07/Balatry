@@ -18,6 +18,7 @@ import model.game.player.Run;
 import model.game.shop.Shop;
 import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
+import model.modifiers.Edition;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,6 +40,7 @@ public final class Match {
     private final SinSelector sinSelector;
     private final Function<Sin, SinModifier> sinResolver;   // Sin -> behaviour (injectable for tests)
     private final SinChoiceProvider sinChoiceProvider;      // resolves sin player-choices (Pride's multiplier, ...)
+    private final int anteCount;                            // match length; the ante-anteCount boss is the final blind
 
     private MatchPhase phase = MatchPhase.LOBBY;
     private int ante = 0;                         // 0 until started
@@ -56,6 +58,7 @@ public final class Match {
         this.sinSelector = config.sinSelector();
         this.sinResolver = config.sinResolver();
         this.sinChoiceProvider = config.sinChoiceProvider();
+        this.anteCount = config.anteCount();
         this.players = new LinkedHashMap<>();
     }
 
@@ -93,6 +96,7 @@ public final class Match {
     public Rng getRng()             { return rng; }          // table-level draws (shared shop, boss blind, sin)
     public MatchPhase getPhase()    { return phase; }
     public int getAnte()            { return ante; }
+    public int getAnteCount()       { return anteCount; }
     public Blind getBlind()         { return blind; }
     public Sin getActiveSin()       { return activeSin; }
 
@@ -136,7 +140,11 @@ public final class Match {
         dealBlind();
     }
 
-    /** BLIND -> SHOP: settles every seat's finished round and records the results. */
+    /**
+     * BLIND -> SHOP: settles every seat's finished round and records the results. After the final ante's boss
+     * (ante == anteCount) the match instead transitions straight to FINISHED — the results are still settled and
+     * recorded, but no post-match shop opens.
+     */
     public void toShop() {
         require(MatchPhase.BLIND, "toShop");
         for (Player p : players.values()) {                         // barrier: everyone must be done
@@ -151,6 +159,10 @@ public final class Match {
             results.put(p.id(), result);
         }
         lastResults = results;
+        if (blind == Blind.BOSS && ante >= anteCount) {   // final boss settled: the match is over
+            phase = MatchPhase.FINISHED;
+            return;
+        }
         for (Player p : players.values()) p.run().openShop();   // seed-mirrored shop per seat
         phase = MatchPhase.SHOP;
     }
@@ -211,14 +223,45 @@ public final class Match {
 
     // --- cross-player operations ---
 
-    /** Envy: exchange one joker between two seats. */
+    /**
+     * Envy: exchange one joker between two seats. Only legal in the SHOP phase (the between-rounds window where
+     * Envy's swap happens) while Envy is the active sin, and only if neither seat ends up over its joker slots
+     * (a swap is 1:1, but exchanging a NEGATIVE joker for a slot-consuming one is asymmetric).
+     *
+     * <p>Open design questions, deliberately not decided here: the consent mechanic, and whether Eternal or
+     * Pinned stickers should block a swap (a swap is neither a sale nor a destruction, so today they do not).
+     */
     public void swapJokers(PlayerId a, int indexA, PlayerId b, int indexB) {
-        List<JokerCard> ja = getRun(a).getJokers();
-        List<JokerCard> jb = getRun(b).getJokers();
-        JokerCard cardA = ja.get(indexA);
-        JokerCard cardB = jb.get(indexB);
-        ja.set(indexA, cardB);
-        jb.set(indexB, cardA);
+        require(MatchPhase.SHOP, "swapJokers");
+        if (activeSin != Sin.ENVY)
+            throw new IllegalStateException("joker swaps are an Envy mechanic; active sin is " + activeSin);
+        if (a.equals(b)) throw new IllegalArgumentException("cannot swap a seat with itself");
+
+        Run runA = getRun(a);
+        Run runB = getRun(b);
+        JokerCard cardA = boardCard(runA.getJokers(), indexA, a);
+        JokerCard cardB = boardCard(runB.getJokers(), indexB, b);
+        checkSlotRoom(runA, a, cardA, cardB);
+        checkSlotRoom(runB, b, cardB, cardA);
+
+        runA.getJokers().set(indexA, cardB);
+        runB.getJokers().set(indexB, cardA);
+    }
+
+    /** The joker at {@code index} on {@code seat}'s board, with a clear error for a bad index. */
+    private static JokerCard boardCard(List<JokerCard> board, int index, PlayerId seat) {
+        if (index < 0 || index >= board.size())
+            throw new IllegalArgumentException("seat " + seat + " has no joker at index " + index
+                    + " (board size " + board.size() + ")");
+        return board.get(index);
+    }
+
+    /** Rejects the swap if replacing {@code outgoing} with {@code incoming} would put {@code seat} over its joker slots. */
+    private static void checkSlotRoom(Run run, PlayerId seat, JokerCard outgoing, JokerCard incoming) {
+        int outgoingSlot = outgoing.getEdition() == Edition.NEGATIVE ? 0 : 1;
+        int incomingSlot = incoming.getEdition() == Edition.NEGATIVE ? 0 : 1;
+        if (run.usedJokerSlots() - outgoingSlot + incomingSlot > run.getJokerSlots())
+            throw new IllegalStateException("seat " + seat + " has no joker slot for the incoming joker");
     }
 
     /**
