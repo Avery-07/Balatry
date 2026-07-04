@@ -50,8 +50,9 @@ public final class MatchTests {
         // Barrier rejects an early toShop while rounds are unfinished.
         checkThrows("toShop blocked mid-blind", match::toShop);
 
-        // Winner clears with a Flush Five; loser exhausts hands and fails.
+        // Winner clears with a Flush Five and finishes early; loser exhausts hands and fails.
         match.getRun(winner).getRound().play(handOf(match.getRun(winner), 5));
+        match.getRun(winner).getRound().finish();
         check("winner WON", match.getRun(winner).getRound().getOutcome() == RoundOutcome.WON);
         exhaust(match.getRun(loser));
 

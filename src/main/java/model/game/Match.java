@@ -20,6 +20,9 @@ import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
 import model.modifiers.Edition;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -40,6 +43,8 @@ public final class Match {
     private final SinSelector sinSelector;
     private final Function<Sin, SinModifier> sinResolver;   // Sin -> behaviour (injectable for tests)
     private final SinChoiceProvider sinChoiceProvider;      // resolves sin player-choices (Pride's multiplier, ...)
+    private final PointsPolicy pointsPolicy;                // converts settled results into competition points
+    private Standings standings;                            // cumulative points; built in create() once seats exist
     private final int anteCount;                            // match length; the ante-anteCount boss is the final blind
 
     private MatchPhase phase = MatchPhase.LOBBY;
@@ -58,6 +63,7 @@ public final class Match {
         this.sinSelector = config.sinSelector();
         this.sinResolver = config.sinResolver();
         this.sinChoiceProvider = config.sinChoiceProvider();
+        this.pointsPolicy = config.pointsPolicy();
         this.anteCount = config.anteCount();
         this.players = new LinkedHashMap<>();
     }
@@ -87,6 +93,7 @@ public final class Match {
             run.joinMatch(match, id);
             match.players.put(id, new Player(id, name, run));
         }
+        match.standings = new Standings(match.players.keySet());
         return match;
     }
 
@@ -111,6 +118,9 @@ public final class Match {
 
     /** The most recent blind's results by seat, empty before the first cash-out. */
     public Map<PlayerId, BlindResult> getResults() { return Map.copyOf(lastResults); }
+
+    /** The cumulative competition standings (points, last award, ranking). */
+    public Standings getStandings() { return standings; }
 
     /** This seat's most recent blind result, or {@code null} if none yet. */
     public BlindResult getResult(PlayerId id) { return lastResults.get(id); }
@@ -159,12 +169,30 @@ public final class Match {
             results.put(p.id(), result);
         }
         lastResults = results;
+        awardPoints(results);
         if (blind == Blind.BOSS && ante >= anteCount) {   // final boss settled: the match is over
             phase = MatchPhase.FINISHED;
             return;
         }
         for (Player p : players.values()) p.run().openShop();   // seed-mirrored shop per seat
         phase = MatchPhase.SHOP;
+    }
+
+    /**
+     * Converts one settled blind's results into standings points: the policy computes the base award, then each
+     * seat's Pride point multiplier is applied on top (a met Pride wager mints points above the round's nominal
+     * pot). Runs after {@code onRoundSettled} so sin state (Pride's threshold) is resolved first.
+     */
+    private void awardPoints(Map<PlayerId, BlindResult> results) {
+        Map<PlayerId, Long> base = pointsPolicy.award(ante, blind, results);
+        Map<PlayerId, Long> adjusted = new LinkedHashMap<>();
+        for (Map.Entry<PlayerId, Long> e : base.entrySet()) {
+            BigDecimal factor = getRun(e.getKey()).getSinState().pridePointMultiplier();
+            long points = BigDecimal.valueOf(e.getValue()).multiply(factor)
+                    .setScale(0, RoundingMode.HALF_UP).longValueExact();
+            adjusted.put(e.getKey(), points);
+        }
+        standings.record(adjusted);
     }
 
     /** SHOP -> next BLIND, advancing the blind (and ante + sin when a boss is cleared), then dealing in. */

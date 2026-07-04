@@ -14,7 +14,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/** One player's play against a single blind: draw pile, hand, remaining hands/discards, banked score, and outcome. */
+/**
+ * One player's play against a single blind: draw pile, hand, remaining hands/discards, banked score, and outcome.
+ * Meeting the target does not end the round (chips fund the points share); the round resolves when hands run out
+ * or the player calls {@link #finish()}.
+ */
 public final class Round {
 
     private static final int MAX_SELECTION = 5;
@@ -83,11 +87,32 @@ public final class Round {
 
         if (boss != null) applyBossAfterPlay(boss, type, cards.size());
 
-        updateOutcome();
-        if (outcome == RoundOutcome.IN_PROGRESS) redraw();   // no redraw once the blind is cleared
+        // Meeting the target no longer ends the round: chips fund the points share, so play continues while
+        // hands remain. The round resolves when hands run out, or earlier via a voluntary finish().
+        if (handsRemaining == 0) resolve();
+        else redraw();
 
         return new PlayResult(type, result.score(), score, result.destroyed());
     }
+
+    /**
+     * Voluntarily ends the round, resolving the outcome from the banked score. The tradeoff this enables:
+     * a player who has met the target can stop early to bank remaining hands as cash-out money, or keep
+     * playing them for a bigger chip share. Finishing below the target concedes (Mr. Bones may still save it).
+     */
+    public void finish() {
+        requireInProgress();
+        resolve();
+    }
+
+    /** Resolves the terminal outcome from the banked score; Mr. Bones may turn a miss into a save. */
+    private void resolve() {
+        if (score.compareTo(BigDecimal.valueOf(target)) >= 0) outcome = RoundOutcome.WON;
+        else outcome = run.tryPreventLoss() ? RoundOutcome.WON : RoundOutcome.LOST;   // Mr. Bones
+    }
+
+    /** Whether the banked score has reached the target (the round itself stays open while hands remain). */
+    public boolean isTargetMet() { return score.compareTo(BigDecimal.valueOf(target)) >= 0; }
 
     /** Discards 1-5 cards from the hand and redraws; costs one discard, never ends the round. */
     public void discard(List<DeckCard> cards) {
@@ -100,11 +125,6 @@ public final class Round {
         run.getStats().recordDiscard(cards);
         run.fireDiscard(cards);   // jokers (Faceless, Mail-In Rebate, ...) react to the discarded cards
         redraw();
-    }
-
-    private void updateOutcome() {
-        if (score.compareTo(BigDecimal.valueOf(target)) >= 0) outcome = RoundOutcome.WON;
-        else if (handsRemaining == 0)                          outcome = run.tryPreventLoss() ? RoundOutcome.WON : RoundOutcome.LOST;   // Mr. Bones
     }
 
     private void draw() {

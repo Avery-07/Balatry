@@ -37,11 +37,37 @@ public final class RoundTests {
         checkInt("discards now 2", round.getDiscardsRemaining(), 2);
         checkInt("hand still 8", round.getHand().size(), 8);
 
-        // --- win: a reachable target flips to WON ---
+        // --- meeting the target no longer ends the round: play continues, finish() resolves ---
         Run winRun = standardRun(42L);
         Round winnable = winRun.beginRound(1L);
         winnable.play(new ArrayList<>(winnable.getHand().subList(0, 5)));
-        check("low target -> WON", winnable.getOutcome() == RoundOutcome.WON);
+        check("target met but round still open", winnable.getOutcome() == RoundOutcome.IN_PROGRESS);
+        check("isTargetMet reports the cross", winnable.isTargetMet());
+        checkInt("redraw continues past the target", winnable.getHand().size(), 8);
+
+        // keep playing for more chips...
+        var scoreAfterOne = winnable.getScore();
+        winnable.play(new ArrayList<>(winnable.getHand().subList(0, 5)));
+        check("chips keep banking past the target", winnable.getScore().compareTo(scoreAfterOne) > 0);
+
+        // ...then stop voluntarily, banking the remaining hands
+        winnable.finish();
+        check("finish() resolves to WON", winnable.getOutcome() == RoundOutcome.WON);
+        checkInt("remaining hands banked at finish", winnable.getHandsRemaining(), 2);
+        checkThrows("no play after finish", () -> winnable.play(new ArrayList<>(winnable.getHand().subList(0, 1))));
+
+        // --- exhausting all hands above the target also resolves to WON ---
+        Run fullRun = standardRun(43L);
+        Round playedOut = fullRun.beginRound(1L);
+        for (int i = 0; i < 4; i++) playedOut.play(new ArrayList<>(playedOut.getHand().subList(0, 5)));
+        check("hands exhausted above target -> WON", playedOut.getOutcome() == RoundOutcome.WON);
+
+        // --- finishing below the target concedes ---
+        Run concedeRun = standardRun(44L);
+        Round conceded = concedeRun.beginRound(1_000_000_000L);
+        conceded.play(new ArrayList<>(conceded.getHand().subList(0, 1)));
+        conceded.finish();
+        check("finish below target -> LOST", conceded.getOutcome() == RoundOutcome.LOST);
 
         // --- loss: exhaust all 4 hands under an unreachable target ---
         Run loseRun = standardRun(7L);

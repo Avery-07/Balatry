@@ -72,8 +72,9 @@ public final class BossBlindTests {
         // --- ON_BOSS_DEFEATED escalates Rocket ---
         Run rocket = smallDeckRun(5);
         rocket.getJokers().add(Jokers.ROCKET.make());
-        Round rr = rocket.beginRound(1, BossBlind.THE_HOOK);   // target 1 -> any play clears it
+        Round rr = rocket.beginRound(1, BossBlind.THE_HOOK);   // target 1 -> any play meets it
         rr.play(pick(rr, 1));
+        rr.finish();                                           // rounds no longer auto-end at the target
         check("boss round won", rr.getOutcome() == RoundOutcome.WON);
         rocket.endRound(Blind.BOSS);
         checkInt("Rocket counts the boss defeated", rocket.getJokers().get(0).getCounter(), 1);

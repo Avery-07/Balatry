@@ -47,6 +47,7 @@ public final class SettlementTests {
         List<DeckCard> nonGold = new ArrayList<>();
         for (DeckCard c : goldRound.getHand()) if (c != goldCard && nonGold.size() < 5) nonGold.add(c);
         goldRound.play(nonGold);                          // gold stays in hand
+        goldRound.finish();
         check("gold still in hand", goldRound.getHand().contains(goldCard));
         BlindResult gr = gold.endRound(Blind.SMALL);
         checkInt("reward 3 + hands 3 + gold 3", gr.moneyEarned(), 9);
@@ -81,6 +82,7 @@ public final class SettlementTests {
 
     private static void win(Round round) {
         round.play(new ArrayList<>(round.getHand().subList(0, 5)));
+        round.finish();   // rounds no longer auto-end at the target
     }
 
     private static Run standardRun(long seed) {

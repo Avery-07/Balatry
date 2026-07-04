@@ -202,6 +202,7 @@ public final class RelicTests {
             Run run = match.getRun(id);
             int n = Math.min(5, run.getRound().getHand().size());
             run.getRound().play(new java.util.ArrayList<>(run.getRound().getHand().subList(0, n)));
+            run.getRound().finish();   // rounds no longer auto-end at the target
         }
     }
 
