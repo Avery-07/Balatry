@@ -79,6 +79,72 @@ public final class BossBlindTests {
         rocket.endRound(Blind.BOSS);
         checkInt("Rocket counts the boss defeated", rocket.getJokers().get(0).getCounter(), 1);
 
+        // --- The Pillar: cards played in this ante's earlier (non-boss) blinds are debuffed at the boss ---
+        Run pillar = smallDeckRun(8);
+        Round earlier = pillar.beginRound(1_000_000, null);        // a small/big blind
+        List<DeckCard> playedEarlier = pick(earlier, 2);
+        earlier.play(playedEarlier);
+        DeckCard unplayed = earlier.getHand().get(0);
+        earlier.finish();
+        pillar.endRound(Blind.SMALL);
+        pillar.beginRound(1_000_000, BossBlind.THE_PILLAR);
+        check("The Pillar debuffs an ante-played card", pillar.bossDebuffs(playedEarlier.get(0)));
+        check("The Pillar spares an unplayed card", !pillar.bossDebuffs(unplayed));
+        pillar.getRound().play(new ArrayList<>(List.of(unplayed)));   // a play AT the boss is not an "earlier blind"
+        check("boss-round plays don't self-debuff", !pillar.bossDebuffs(unplayed));
+        pillar.beginAnte();
+        check("The Pillar's history clears at the ante", !pillar.bossDebuffs(playedEarlier.get(0)));
+
+        // --- Crimson Heart: a different random joker is disabled each hand; re-enabled at round end ---
+        Run crimson = smallDeckRun(8);
+        crimson.getJokers().add(Jokers.JOKER.make());
+        crimson.getJokers().add(Jokers.GREEDY_JOKER.make());
+        Round cr = crimson.beginRound(1_000_000, BossBlind.CRIMSON_HEART);
+        check("one joker disabled at the deal", crimson.getCrimsonDisabledJoker() != null
+                && crimson.getCrimsonDisabledJoker().isDebuffed());
+        var firstDisabled = crimson.getCrimsonDisabledJoker();
+        cr.play(pick(cr, 1));
+        check("a different joker is disabled next hand", crimson.getCrimsonDisabledJoker() != null
+                && crimson.getCrimsonDisabledJoker() != firstDisabled);
+        checkInt("exactly one joker disabled at a time",
+                (crimson.getJokers().get(0).isDebuffed() ? 1 : 0) + (crimson.getJokers().get(1).isDebuffed() ? 1 : 0), 1);
+        cr.finish();
+        crimson.endRound(Blind.BOSS);
+        check("Crimson Heart re-enables at round end",
+                !crimson.getJokers().get(0).isDebuffed() && !crimson.getJokers().get(1).isDebuffed());
+
+        // --- Cerulean Bell: one card is forced into every play and discard, re-picked when it leaves ---
+        Run bell = smallDeckRun(12);
+        Round br2 = bell.beginRound(1_000_000, BossBlind.CERULEAN_BELL);
+        DeckCard forced = br2.getForcedCard();
+        check("a forced card exists at the deal", forced != null && br2.getHand().contains(forced));
+        List<DeckCard> without = new ArrayList<>();
+        for (DeckCard c : br2.getHand()) if (c != forced && without.size() < 2) without.add(c);
+        check("a play without the forced card is rejected", throwsOnPlay(br2, without));
+        List<DeckCard> with = new ArrayList<>(without.subList(0, 1));
+        with.add(forced);
+        br2.play(with);
+        check("a forced card exists for the next hand too",
+                br2.getForcedCard() != null && br2.getHand().contains(br2.getForcedCard()));
+        boolean discardRejected = false;
+        List<DeckCard> without2 = new ArrayList<>();
+        for (DeckCard c : br2.getHand()) if (c != br2.getForcedCard() && without2.size() < 1) without2.add(c);
+        try { br2.discard(without2); } catch (IllegalStateException e) { discardRejected = true; }
+        check("a discard without the forced card is rejected", discardRejected);
+
+        // --- Amber Acorn: the joker board order is randomized at the deal (same cards, seed-deterministic) ---
+        Run acorn = new Run(3L);
+        for (int i = 0; i < 8; i++) acorn.getDeck().add(new DeckCard(Rank.TWO, Suit.SPADES));
+        var j1 = Jokers.JOKER.make();
+        var j2 = Jokers.GREEDY_JOKER.make();
+        var j3 = Jokers.LUSTY_JOKER.make();
+        acorn.getJokers().add(j1); acorn.getJokers().add(j2); acorn.getJokers().add(j3);
+        acorn.beginRound(1_000_000, BossBlind.AMBER_ACORN);
+        check("Amber Acorn keeps the same jokers", acorn.getJokers().containsAll(List.of(j1, j2, j3))
+                && acorn.getJokers().size() == 3);
+        check("Amber Acorn changed the order", !(acorn.getJokers().get(0) == j1
+                && acorn.getJokers().get(1) == j2 && acorn.getJokers().get(2) == j3));
+
         System.out.println(failures == 0 ? "ALL PASS" : failures + " FAILURE(S)");
         if (failures > 0) System.exit(1);
     }
