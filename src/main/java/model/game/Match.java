@@ -9,6 +9,7 @@ import model.cards.relics.RelicTarget;
 import model.game.bosses.BossBehavior;
 import model.game.bosses.BossBehaviors;
 import model.game.player.BlindResult;
+import model.game.player.Board;
 import model.game.player.Player;
 import model.game.player.PlayerId;
 import model.game.player.Round;
@@ -20,7 +21,6 @@ import model.game.player.Run;
 import model.game.shop.Shop;
 import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
-import model.modifiers.Edition;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -96,7 +96,7 @@ public final class Match {
         for (String name : playerNames) {
             PlayerId id = new PlayerId(seat++);
             Run run = new Run(seed);          // same seed -> identical luck per action
-            run.getDeck().addAll(Decks.standard());
+            run.resetDeck(Decks.standard());
             run.joinMatch(match, id);
             match.players.put(id, new Player(id, name, run));
         }
@@ -285,31 +285,26 @@ public final class Match {
             throw new IllegalStateException("joker swaps are an Envy mechanic; active sin is " + activeSin);
         if (a.equals(b)) throw new IllegalArgumentException("cannot swap a seat with itself");
 
-        Run runA = getRun(a);
-        Run runB = getRun(b);
-        JokerCard cardA = boardCard(runA.getJokers(), indexA, a);
-        JokerCard cardB = boardCard(runB.getJokers(), indexB, b);
-        checkSlotRoom(runA, a, cardA, cardB);
-        checkSlotRoom(runB, b, cardB, cardA);
+        Board boardA = getRun(a).board();
+        Board boardB = getRun(b).board();
+        JokerCard cardA = boardCard(boardA, indexA, a);
+        JokerCard cardB = boardCard(boardB, indexB, b);
+        // Validate both sides before mutating either, so a rejected swap leaves both boards untouched.
+        if (!boardA.canReplaceAt(indexA, cardB))
+            throw new IllegalStateException("seat " + a + " has no joker slot for the incoming joker");
+        if (!boardB.canReplaceAt(indexB, cardA))
+            throw new IllegalStateException("seat " + b + " has no joker slot for the incoming joker");
 
-        runA.getJokers().set(indexA, cardB);
-        runB.getJokers().set(indexB, cardA);
+        boardA.replaceAt(indexA, cardB);
+        boardB.replaceAt(indexB, cardA);
     }
 
     /** The joker at {@code index} on {@code seat}'s board, with a clear error for a bad index. */
-    private static JokerCard boardCard(List<JokerCard> board, int index, PlayerId seat) {
+    private static JokerCard boardCard(Board board, int index, PlayerId seat) {
         if (index < 0 || index >= board.size())
             throw new IllegalArgumentException("seat " + seat + " has no joker at index " + index
                     + " (board size " + board.size() + ")");
         return board.get(index);
-    }
-
-    /** Rejects the swap if replacing {@code outgoing} with {@code incoming} would put {@code seat} over its joker slots. */
-    private static void checkSlotRoom(Run run, PlayerId seat, JokerCard outgoing, JokerCard incoming) {
-        int outgoingSlot = outgoing.getEdition() == Edition.NEGATIVE ? 0 : 1;
-        int incomingSlot = incoming.getEdition() == Edition.NEGATIVE ? 0 : 1;
-        if (run.usedJokerSlots() - outgoingSlot + incomingSlot > run.getJokerSlots())
-            throw new IllegalStateException("seat " + seat + " has no joker slot for the incoming joker");
     }
 
     /**
@@ -336,7 +331,7 @@ public final class Match {
             relic.getSpec().getEffect().resolve(
                     new RelicContext(this, caster, casterId, targetRun, targetId, target));
 
-        caster.getRelics().remove(relicIndex);
+        caster.consumeRelic(relicIndex);
     }
 
     /** Records {@code spec} as the table's most recently used consumable (read by Mimesis). */

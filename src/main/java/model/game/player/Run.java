@@ -29,8 +29,7 @@ import model.game.shop.Shop;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collections;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
@@ -46,21 +45,17 @@ public final class Run {
     private final HandLevels handLevels = new HandLevels();
     private Match match;          // null for standalone / headless runs
     private PlayerId playerId;    // null for standalone / headless runs
-    private final List<JokerCard> jokers = new ArrayList<>();
+    private final Board board = new Board(this);   // the joker inventory and its invariants (slots, Eternal, sale)
     private final List<ConsumableCard> consumables = new ArrayList<>();
     private final List<RelicCard> relics = new ArrayList<>();   // held, single-use multiplayer cards
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
-    private final List<DeckCard> bossDebuffedCards = new ArrayList<>();   // cards The Quartz debuffed this round, restored at round end
-    private final Set<DeckCard> antePlayedCards = new HashSet<>();   // The Pillar: cards played in this ante's non-boss blinds (identity set)
-    private JokerCard crimsonJoker;            // Crimson Heart: the joker currently disabled, or null
-    private boolean crimsonStickerAdded;       // whether the DEBUFFED sticker on crimsonJoker came from here
+    private final BossState bossState = new BossState();     // boss-imposed state (Quartz, Pillar, Crimson Heart, flags)
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
     private int handSize = 8;
     private int baseHands = 4;
     private int baseDiscards = 3;
     private int interestCap = 5;      // max $ of interest per round (raised by To the Moon / Seed Money)
-    private int jokerSlots = 5;       // capacity for slot-consuming jokers (NEGATIVE jokers are free)
     private int consumableSlots = 2;  // capacity for slot-consuming consumables (NEGATIVE are free)
     private int relicSlots = 2;        // capacity for slot-consuming relics (NEGATIVE are free)
     private int shopSlots = 3;        // card slots offered per shop
@@ -77,10 +72,6 @@ public final class Run {
     private List<Card> consumableTargets = List.of();       // transient: the active consumable's selected cards
     private List<DeckCard> lastDiscarded = List.of();       // transient: cards of the discard currently being broadcast
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
-    private BossBlind activeBoss;          // the boss for the current blind, or null (small/big blinds, headless rounds)
-    private boolean luchadorDisable;       // per-round: Luchador was sold, disabling the boss for this player
-    private boolean verdantSold;           // per-round: a joker was sold (lifts Verdant Leaf's all-cards debuff)
-    private boolean bossTriggered;         // per-play: the boss ability fired this hand (read by Matador)
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
     public Run(long seed) { this(new DeterministicRng(seed)); }
@@ -130,7 +121,7 @@ public final class Run {
     /** Lowest balance this run may reach: $0 minus every owned joker's debt allowance (e.g. Credit Card). */
     public int minBalance() {
         int floor = 0;
-        for (JokerCard j : jokers) if (!j.isDebuffed()) floor -= j.getSpec().getDebtAllowance();
+        for (JokerCard j : board.view()) if (!j.isDebuffed()) floor -= j.getSpec().getDebtAllowance();
         return floor;
     }
 
@@ -148,9 +139,16 @@ public final class Run {
     public void beginPurchase()     { purchaseFree = false; }
     public void makePurchaseFree()  { purchaseFree = true; }
     public boolean isPurchaseFree() { return purchaseFree; }
-    public List<JokerCard> getJokers()        { return jokers; }
-    public List<ConsumableCard> getConsumables() { return consumables; }
-    public List<DeckCard> getDeck()           { return deck; }
+    /** The joker board — all joker mutation goes through it; this view is unmodifiable. */
+    public Board board() { return board; }
+    /** Unmodifiable view of the joker board, in order (see {@link Board#view()}). */
+    public List<JokerCard> getJokers()        { return board.view(); }
+    /** Unmodifiable view of the consumable area; mutation goes through create/add/sell/useConsumable. */
+    public List<ConsumableCard> getConsumables() { return Collections.unmodifiableList(consumables); }
+    /** Unmodifiable view of the full deck; mutation goes through addCardToHand/addCardToDeck/destroyDeckCards/resetDeck. */
+    public List<DeckCard> getDeck()           { return Collections.unmodifiableList(deck); }
+    /** Boss-imposed state on this seat (active boss, Quartz/Pillar/Crimson Heart bookkeeping). */
+    public BossState getBossState() { return bossState; }
     public void levelUpHand(HandType h)       { handLevels.levelUp(h); }
 
     /** Adds a fresh card for {@code spec} to the consumable area, if there is room (NEGATIVE cards are free). */
@@ -160,15 +158,27 @@ public final class Run {
     }
 
     /** Adds {@code joker} to the board, if there is room (NEGATIVE jokers are free). */
-    public void createJoker(JokerCard joker) {
-        if (canAddJoker(joker)) jokers.add(joker);
+    public void createJoker(JokerCard joker) { board.add(joker); }
+
+    /** Destroys {@code joker} (by identity); Eternal jokers survive (Ankh, Hex, Madness, Ceremonial Dagger). */
+    public boolean destroyJoker(JokerCard joker) { return board.destroy(joker); }
+
+    /** Adds an existing relic card to the area, if there is room (NEGATIVE relics are free). */
+    public void addRelic(RelicCard relic) {
+        if (canAddRelic(relic)) relics.add(relic);
     }
 
-    /** Removes {@code joker} (by identity) from the board; used by destructive spectrals (Ankh, Hex). */
-    public void destroyJoker(JokerCard joker) { jokers.removeIf(j -> j == joker); }
+    /** Destroys {@code consumable} (by identity); Eternal consumables survive, mirroring the joker rule. */
+    public boolean destroyConsumable(ConsumableCard consumable) {
+        if (consumable == null || consumable.hasSticker(Sticker.ETERNAL)) return false;
+        return consumables.removeIf(c -> c == consumable);
+    }
 
-    /** This seat's held relics. */
-    public List<RelicCard> getRelics() { return relics; }
+    /** Unmodifiable view of this seat's held relics; mutation goes through create/sell/consumeRelic. */
+    public List<RelicCard> getRelics() { return Collections.unmodifiableList(relics); }
+
+    /** Removes the cast relic at {@code index} after its effect resolves (called by Match.useRelic). */
+    public RelicCard consumeRelic(int index) { return relics.remove(index); }
 
     /** Relic-imposed debuffs and shields placed on this seat by relics (Anathema, Limos, Aegis, ...). */
     public Afflictions getAfflictions() { return afflictions; }
@@ -186,6 +196,23 @@ public final class Run {
     public void createRelic(RelicSpec spec) {
         RelicCard card = new RelicCard(spec);
         if (canAddRelic(card)) relics.add(card);
+    }
+
+    /** Adds {@code card} to the deck only (Marble Joker); it enters play at the next shuffle. */
+    public void addCardToDeck(DeckCard card) {
+        deck.add(card);
+        stats.recordCardAdded();
+    }
+
+    /** Adds an existing consumable card to the area, if there is room (8 Ball's editioned tarots, pack picks). */
+    public void addConsumable(ConsumableCard card) {
+        if (canAddConsumable(card)) consumables.add(card);
+    }
+
+    /** Setup/test API: replaces the deck wholesale, bypassing gameplay bookkeeping (no cards-added stat). */
+    public void resetDeck(List<DeckCard> cards) {
+        deck.clear();
+        deck.addAll(cards);
     }
 
     /** Adds {@code card} to the deck and, if a round is active, to the current hand (Familiar, Cryptid, ...). */
@@ -232,7 +259,7 @@ public final class Run {
 
     /** Routes {@code card} into the matching inventory; callers should check {@link #canAcquire} first. */
     public void acquire(Card card) {
-        if (card instanceof JokerCard joker)              jokers.add(joker);
+        if (card instanceof JokerCard joker)              board.add(joker);
         else if (card instanceof ConsumableCard consumable) consumables.add(consumable);
         else if (card instanceof RelicCard relic)         relics.add(relic);
         else if (card instanceof DeckCard deckCard)       { deck.add(deckCard); stats.recordCardAdded(); }
@@ -240,11 +267,7 @@ public final class Run {
     }
 
     /** Jokers occupying a slot (NEGATIVE jokers are free). */
-    public int usedJokerSlots() {
-        int n = 0;
-        for (JokerCard j : jokers) if (j.getEdition() != Edition.NEGATIVE) n++;
-        return n;
-    }
+    public int usedJokerSlots() { return board.usedSlots(); }
 
     /** Consumables occupying a slot (NEGATIVE consumables are free). */
     public int usedConsumableSlots() {
@@ -260,9 +283,7 @@ public final class Run {
         return n;
     }
 
-    public boolean canAddJoker(JokerCard joker) {
-        return joker.getEdition() == Edition.NEGATIVE || usedJokerSlots() < jokerSlots;
-    }
+    public boolean canAddJoker(JokerCard joker) { return board.hasRoomFor(joker); }
 
     public boolean canAddConsumable(ConsumableCard consumable) {
         return consumable.getEdition() == Edition.NEGATIVE || usedConsumableSlots() < consumableSlots;
@@ -272,17 +293,8 @@ public final class Run {
         return relic.getEdition() == Edition.NEGATIVE || usedRelicSlots() < relicSlots;
     }
 
-    /** Sells the joker at {@code index}, banking its sell value and freeing its slot. */
-    public int sellJoker(int index) {
-        JokerCard joker = jokers.get(index);
-        joker.trigger(Trigger.ON_SOLD, this);   // the joker reacts to its own sale (e.g. Luchador) while still on the board
-        jokers.remove(index);
-        int value = joker.getSellValue();
-        addMoney(value);
-        stats.recordCardSold();
-        verdantSold = true;                      // Verdant Leaf: selling a joker lifts its all-cards debuff this round
-        return value;
-    }
+    /** Sells the joker at {@code index}; Eternal jokers cannot be sold (see {@link Board#sell}). */
+    public int sellJoker(int index) { return board.sell(index); }
 
     /** Sells the consumable at {@code index}, banking its sell value and freeing its slot. */
     public int sellConsumable(int index) {
@@ -319,8 +331,8 @@ public final class Run {
             lastTarotOrPlanet = spec;     // The Fool later recreates the last Tarot/Planet used
     }
 
-    public int getJokerSlots()         { return jokerSlots; }
-    public void setJokerSlots(int n)   { jokerSlots = n; }
+    public int getJokerSlots()         { return board.getSlots(); }
+    public void setJokerSlots(int n)   { board.setSlots(n); }
     public int getConsumableSlots()    { return consumableSlots; }
     public void setConsumableSlots(int n) { consumableSlots = n; }
     public int getRelicSlots()         { return relicSlots; }
@@ -354,7 +366,7 @@ public final class Run {
     }
 
     /** Resets this run's per-ante allowances; call at the start of each ante. */
-    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); antePlayedCards.clear(); }
+    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); bossState.beginAnte(); }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -376,13 +388,10 @@ public final class Run {
 
     /** Starts a round against {@code boss} (null on small/big blinds); applies the boss's hand/discard/hand-size changes. */
     public Round beginRound(long target, BossBlind boss) {
-        activeBoss = boss;
-        luchadorDisable = false;
-        verdantSold = false;
-        bossTriggered = false;
+        bossState.beginRound(boss);
         stats.beginRound();             // fresh round-scoped tallies before any round-start joker reads them
         sinState.beginRound();          // reset per-player sin state before the active sin sets it via onRoundBegin
-        afflictions.beginRound(jokers); // promote pending relic debuffs (rank/suit/joker) for this round
+        afflictions.beginRound(board.view()); // promote pending relic debuffs (rank/suit/joker) for this round
         fire(Trigger.ON_ROUND_START);   // jokers react to blind selection before the deal, so deck/joker mutations land in this round
         RandomGenerator shuffle = rng.streamFor(RngSource.DECK_SHUFFLE, shuffleIndex++);
         BossBlind eff = effectiveBoss();   // Chicot disables effects at build time; Luchador can only disable later in the round
@@ -404,25 +413,19 @@ public final class Run {
         for (DeckCard card : cards) {
             if (!card.isDebuffed() && r.nextInt(oneIn) == 0) {
                 card.apply(Sticker.DEBUFFED);
-                bossDebuffedCards.add(card);
+                bossState.noteQuartzDebuffed(card);
             }
         }
     }
 
     /** The Pillar: records {@code cards} as played this ante; only non-boss blinds count ("earlier blinds"). */
     void recordAntePlayed(List<DeckCard> cards) {
-        if (activeBoss == null) antePlayedCards.addAll(cards);
+        bossState.recordAntePlayed(cards);
     }
 
-    /** Amber Acorn: randomizes the joker board order (Fisher-Yates on the boss-effect stream). */
+    /** Amber Acorn: randomizes the joker board order on the boss-effect stream. */
     private void shuffleJokerBoard() {
-        RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
-        for (int i = jokers.size() - 1; i > 0; i--) {
-            int j = r.nextInt(i + 1);
-            JokerCard tmp = jokers.get(i);
-            jokers.set(i, jokers.get(j));
-            jokers.set(j, tmp);
-        }
+        board.shuffle(rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT)));
     }
 
     /**
@@ -431,38 +434,27 @@ public final class Run {
      * board clears the disable and picks nothing. Only a sticker this run added is stripped.
      */
     void rollCrimsonHeart() {
-        JokerCard previous = crimsonJoker;
-        clearCrimsonHeart();
+        JokerCard previous = bossState.clearCrimsonHeart();
         BossBlind eff = effectiveBoss();
-        if (eff == null || !eff.disablesJokerPerHand() || jokers.isEmpty()) return;
+        if (eff == null || !eff.disablesJokerPerHand() || board.isEmpty()) return;
         RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
-        JokerCard pick = jokers.get(r.nextInt(jokers.size()));
-        while (jokers.size() > 1 && pick == previous) pick = jokers.get(r.nextInt(jokers.size()));   // "a different joker each hand"
-        if (!pick.isDebuffed()) {   // a genuinely debuffed joker stays debuffed; we just don't own its sticker
-            pick.apply(Sticker.DEBUFFED);
-            crimsonJoker = pick;
-            crimsonStickerAdded = true;
-        }
-    }
-
-    private void clearCrimsonHeart() {
-        if (crimsonStickerAdded && crimsonJoker != null) crimsonJoker.remove(Sticker.DEBUFFED);
-        crimsonJoker = null;
-        crimsonStickerAdded = false;
+        JokerCard pick = board.get(r.nextInt(board.size()));
+        while (board.size() > 1 && pick == previous) pick = board.get(r.nextInt(board.size()));   // "a different joker each hand"
+        bossState.disableJoker(pick);
     }
 
     /** Crimson Heart's currently disabled joker, or null. */
-    public JokerCard getCrimsonDisabledJoker() { return crimsonJoker; }
+    public JokerCard getCrimsonDisabledJoker() { return bossState.getCrimsonDisabledJoker(); }
 
     /** A fresh boss-effect stream draw (occurrence-salted); package tools for in-round boss randomness. */
     RandomGenerator bossEffectStream() {
         return rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
     }
 
-    public BossBlind getActiveBoss() { return activeBoss; }
+    public BossBlind getActiveBoss() { return bossState.getActiveBoss(); }
 
     /** The active boss after per-player disabling (owns Chicot, or sold Luchador this round), or null. */
-    public BossBlind effectiveBoss() { return bossDisabled() ? null : activeBoss; }
+    public BossBlind effectiveBoss() { return bossDisabled() ? null : bossState.getActiveBoss(); }
 
     /** The Commons' shared discard pool this seat draws from, or {@code null} when no boss imposes one. */
     public SharedDiscardPool sharedDiscardPool() {
@@ -471,30 +463,30 @@ public final class Run {
 
     /** Whether the active boss is disabled for this player. */
     public boolean bossDisabled() {
-        if (luchadorDisable) return true;
-        for (JokerCard j : jokers) if (j.hasActiveTrait(JokerTrait.DISABLES_BOSS)) return true;   // Chicot (inert while debuffed)
+        if (bossState.isLuchadorDisabled()) return true;
+        for (JokerCard j : board.view()) if (j.hasActiveTrait(JokerTrait.DISABLES_BOSS)) return true;   // Chicot (inert while debuffed)
         return false;
     }
 
     /** Luchador's sacrifice: disables the active boss for the rest of this round. */
-    public void disableBossForRound() { luchadorDisable = true; }
+    public void disableBossForRound() { bossState.disableForRound(); }
 
     /** Whether {@code card} is debuffed by the active (non-disabled) boss; consulted by the scoring engine. */
     public boolean bossDebuffs(DeckCard card) {
         BossBlind eff = effectiveBoss();
         if (eff == null) return false;
-        if (eff.debuffsUntilJokerSold()) return !verdantSold;   // Verdant Leaf: all cards until a joker is sold
-        if (eff.debuffsAntePlayed() && antePlayedCards.contains(card)) return true;   // The Pillar
+        if (eff.debuffsUntilJokerSold()) return !bossState.jokerSoldThisRound();   // Verdant Leaf: all cards until a joker is sold
+        if (eff.debuffsAntePlayed() && bossState.wasPlayedThisAnte(card)) return true;   // The Pillar
         return eff.debuffs(card);
     }
 
     /** Whether the boss ability fired on the hand currently scoring (read by Matador). */
-    public boolean bossTriggeredThisPlay()  { return bossTriggered; }
-    public void setBossTriggered(boolean v) { bossTriggered = v; }
+    public boolean bossTriggeredThisPlay()  { return bossState.isBossTriggered(); }
+    public void setBossTriggered(boolean v) { bossState.setBossTriggered(v); }
 
     /** Mr. Bones: if owned, prevents a blind loss (two charges, then self-destructs). True if the loss was prevented. */
     public boolean tryPreventLoss() {
-        for (JokerCard j : jokers) if (j.hasActiveTrait(JokerTrait.PREVENTS_LOSS)) {   // inert while debuffed
+        for (JokerCard j : board.view()) if (j.hasActiveTrait(JokerTrait.PREVENTS_LOSS)) {   // inert while debuffed
             j.addCounter(1);
             if (j.getCounter() >= 2) destroyJoker(j);
             return true;
@@ -504,7 +496,7 @@ public final class Run {
 
     /** Fires {@code trigger} on every non-debuffed joker, in board order. Iterates a snapshot so an effect may add or remove jokers. */
     public void fire(Trigger trigger) {
-        for (JokerCard joker : List.copyOf(jokers))
+        for (JokerCard joker : List.copyOf(board.view()))
             if (!joker.isDebuffed()) joker.trigger(trigger, this);
     }
 
@@ -525,11 +517,8 @@ public final class Run {
             fire(Trigger.ON_BOSS_DEFEATED);   // Rocket payout / Campfire reset, before cash-out
         BlindResult result = SETTLEMENT.settle(this, round, blind);
         afflictions.endRound();   // clear round-scoped relic debuffs; strip any joker sticker this seat's afflictions added
-        for (DeckCard card : bossDebuffedCards) card.remove(Sticker.DEBUFFED);   // The Quartz: restore debuffed deck cards
-        bossDebuffedCards.clear();
-        clearCrimsonHeart();                                                      // Crimson Heart: re-enable the disabled joker
+        bossState.endRound();     // restore Quartz debuffs, re-enable Crimson Heart's joker, drop the boss
         round = null;
-        activeBoss = null;
         return result;
     }
 

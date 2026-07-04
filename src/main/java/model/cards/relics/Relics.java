@@ -34,7 +34,7 @@ public enum Relics {
     /** Destroys a random consumable from a selected opponent. */
     PYRE("Pyre", RelicKind.OPPONENT, ctx -> {
         List<ConsumableCard> cs = ctx.target().getConsumables();
-        if (!cs.isEmpty()) cs.remove(ctx.random().nextInt(cs.size()));
+        if (!cs.isEmpty()) ctx.target().destroyConsumable(cs.get(ctx.random().nextInt(cs.size())));
     }),
 
     /** Debuffs the first slot of a selected player's next shop. */

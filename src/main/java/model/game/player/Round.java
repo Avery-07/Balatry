@@ -90,7 +90,7 @@ public final class Round {
         if (result.score().compareTo(bestHandScore) > 0) bestHandScore = result.score();
         hand.removeAll(cards);
         hand.removeAll(result.destroyed());
-        run.getDeck().removeAll(result.destroyed());   // glass breaks are permanent
+        run.destroyDeckCards(result.destroyed());   // glass breaks are permanent (hand removal above is idempotent)
         lastPlayedType = type;
         handsRemaining--;
 

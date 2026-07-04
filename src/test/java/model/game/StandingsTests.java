@@ -151,8 +151,8 @@ public final class StandingsTests {
 
     /** Replaces the seat's deck with aces of spades so every 5-card play is an identical Flush Five. */
     private static void stackFlushFives(Run run) {
-        run.getDeck().clear();
-        for (int i = 0; i < 8; i++) run.getDeck().add(new DeckCard(Rank.ACE, Suit.SPADES));
+        run.resetDeck(java.util.List.of());
+        for (int i = 0; i < 8; i++) run.addCardToDeck(new DeckCard(Rank.ACE, Suit.SPADES));
     }
 
     /** Plays one clearing hand and finishes the seat's round voluntarily. */

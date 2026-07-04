@@ -106,7 +106,7 @@ public final class RoundTests {
         Run run = new Run(seed);
         for (Suit suit : Suit.values())
             for (Rank rank : Rank.values())
-                run.getDeck().add(new DeckCard(rank, suit));
+                run.addCardToDeck(new DeckCard(rank, suit));
         return run;
     }
 

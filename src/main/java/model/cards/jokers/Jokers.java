@@ -93,10 +93,8 @@ public enum Jokers {
                 int i = jokers.indexOf(self);
                 if (i >= 0 && i + 1 < jokers.size()) {
                     JokerCard right = jokers.get(i + 1);
-                    if (!right.hasSticker(Sticker.ETERNAL)) {
+                    if (run.destroyJoker(right))   // Eternal enforcement lives in Board.destroy
                         self.setCounter(self.getCounter() + 3 * right.getSellValue());
-                        jokers.remove(i + 1);
-                    }
                 }
             })
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
@@ -116,13 +114,15 @@ public enum Jokers {
                     Seal[] seals = Seal.values();
                     stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt, seals.length)]);
                 }
-                run.getDeck().add(stone);
+                run.addCardToDeck(stone);
             })),
-    LOYALTY_CARD("Loyalty Card", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_BOUGHT,
-            (run, self) -> {
-                self.setCounter(self.getCounter() + 1);
-                if (self.getCounter() % 4 == 0) run.makePurchaseFree();
-            })),
+    LOYALTY_CARD("Loyalty Card", Rarity.UNCOMMON, 5, b -> b
+            // counter = completed purchases since acquisition; the grant is a pure read at pricing time,
+            // so a failed buy neither advances the count nor burns the free purchase.
+            .on(Trigger.ON_PURCHASE_PRICING,
+                    (run, self) -> { if ((self.getCounter() + 1) % 4 == 0) run.makePurchaseFree(); })
+            .on(Trigger.ON_BOUGHT,
+                    (run, self) -> self.setCounter(self.getCounter() + 1))),
 
     // Jokers 026-030  (skipped : 030 Chaos the Clown)
     EIGHT_BALL("8 Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
@@ -697,6 +697,6 @@ public enum Jokers {
     private static void createEditioned(model.game.player.Run run, ConsumableCard card) {
         RandomGenerator g = gen(run, RngSource.CARD_EDITION);
         card.apply(switch (g.nextInt(3)) { case 0 -> Edition.FOIL; case 1 -> Edition.HOLOGRAPHIC; default -> Edition.POLYCHROME; });
-        if (run.canAddConsumable(card)) run.getConsumables().add(card);
+        run.addConsumable(card);
     }
 }

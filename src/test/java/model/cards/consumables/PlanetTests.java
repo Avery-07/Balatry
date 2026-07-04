@@ -23,7 +23,7 @@ public final class PlanetTests {
 
         // --- planets level their hand type via useConsumable ---
         Run pr = new Run(1L);
-        pr.getConsumables().add(Planets.MERCURY.make());
+        pr.addConsumable(Planets.MERCURY.make());
         checkInt("pair level before", pr.getHandLevels().levelOf(HandType.PAIR), 1);
         pr.useConsumable(0);
         checkInt("pair level after Mercury", pr.getHandLevels().levelOf(HandType.PAIR), 2);

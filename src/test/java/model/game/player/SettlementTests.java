@@ -39,10 +39,10 @@ public final class SettlementTests {
 
         // --- Gold card held at end of round pays $3 ---
         Run gold = new Run(3L);
-        for (int i = 0; i < 7; i++) gold.getDeck().add(new DeckCard(Rank.TWO, Suit.SPADES));
+        for (int i = 0; i < 7; i++) gold.addCardToDeck(new DeckCard(Rank.TWO, Suit.SPADES));
         DeckCard goldCard = new DeckCard(Rank.ACE, Suit.HEARTS);
         goldCard.apply(Enhancement.GOLD);
-        gold.getDeck().add(goldCard);                     // 8-card deck, fully dealt
+        gold.addCardToDeck(goldCard);                     // 8-card deck, fully dealt
         Round goldRound = gold.beginRound(1L);
         List<DeckCard> nonGold = new ArrayList<>();
         for (DeckCard c : goldRound.getHand()) if (c != goldCard && nonGold.size() < 5) nonGold.add(c);
@@ -57,7 +57,7 @@ public final class SettlementTests {
         rental.addMoney(20);
         JokerCard rented = new JokerCard(JokerSpec.named("Test", Rarity.COMMON).build(), 4);
         rented.apply(Sticker.RENTAL);
-        rental.getJokers().add(rented);
+        rental.board().add(rented);
         win(rental.beginRound(1L));
         BlindResult rr = rental.endRound(Blind.SMALL);
         checkInt("3+3+4-3 rental", rr.moneyEarned(), 7);
@@ -89,7 +89,7 @@ public final class SettlementTests {
         Run run = new Run(seed);
         for (Suit suit : Suit.values())
             for (Rank rank : Rank.values())
-                run.getDeck().add(new DeckCard(rank, suit));
+                run.addCardToDeck(new DeckCard(rank, suit));
         return run;
     }
 

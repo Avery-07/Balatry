@@ -6,6 +6,7 @@ import model.cards.DeckCard.Suit;
 import model.cards.jokers.Jokers;
 import model.game.player.BlindResult;
 import model.game.player.PlayerId;
+import model.game.player.RoundOutcome;
 import model.game.player.Run;
 import model.game.scoring.HandType;
 
@@ -39,7 +40,7 @@ public final class BossBehaviorTests {
         Match match = bossMatch(11L, BossBlind.THE_HIVEMIND);
         PlayerId a = match.getSeats().get(0);
         PlayerId b = match.getSeats().get(1);
-        match.getRun(b).getJokers().add(Jokers.CHICOT.make());   // seat B disables bosses
+        match.getRun(b).board().add(Jokers.CHICOT.make());   // seat B disables bosses
 
         driveToBoss(match);   // small + big played as Flush Fives -> most played across the table
 
@@ -85,9 +86,9 @@ public final class BossBehaviorTests {
         var shared_a = Jokers.JOKER.make();
         var shared_b = Jokers.JOKER.make();
         var unique = Jokers.GREEDY_JOKER.make();
-        match.getRun(a).getJokers().add(shared_a);
-        match.getRun(a).getJokers().add(unique);
-        match.getRun(b).getJokers().add(shared_b);
+        match.getRun(a).board().add(shared_a);
+        match.getRun(a).board().add(unique);
+        match.getRun(b).board().add(shared_b);
 
         driveToBoss(match);
         check("shared joker debuffed on seat A", shared_a.isDebuffed());
@@ -102,8 +103,8 @@ public final class BossBehaviorTests {
         Match none = bossMatch(34L, BossBlind.THE_BANDWAGON);
         var onlyA = Jokers.JOKER.make();
         var onlyB = Jokers.GREEDY_JOKER.make();
-        none.getRun(none.getSeats().get(0)).getJokers().add(onlyA);
-        none.getRun(none.getSeats().get(1)).getJokers().add(onlyB);
+        none.getRun(none.getSeats().get(0)).board().add(onlyA);
+        none.getRun(none.getSeats().get(1)).board().add(onlyB);
         driveToBoss(none);
         check("no shared joker -> nothing debuffed", !onlyA.isDebuffed() && !onlyB.isDebuffed());
     }
@@ -166,8 +167,8 @@ public final class BossBehaviorTests {
                 .withBossSelector((ante, rng, exclude) -> boss));
         for (PlayerId id : match.getSeats()) {
             Run run = match.getRun(id);
-            run.getDeck().clear();
-            for (int i = 0; i < 16; i++) run.getDeck().add(new DeckCard(Rank.ACE, Suit.SPADES));
+            run.resetDeck(java.util.List.of());
+            for (int i = 0; i < 16; i++) run.addCardToDeck(new DeckCard(Rank.ACE, Suit.SPADES));
         }
         return match;
     }

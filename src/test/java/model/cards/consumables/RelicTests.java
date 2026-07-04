@@ -58,7 +58,7 @@ public final class RelicTests {
 
         // Katadesmos (board position 0): the targeted Joker (+4 Mult) is debuffed for the round -> joker inert -> 60.
         Run kat = new Run(0L);
-        kat.getJokers().add(Jokers.JOKER.make());
+        kat.board().add(Jokers.JOKER.make());
         kat.getAfflictions().armJokerDebuff(0);
         kat.beginRound(1_000_000);
         check("Katadesmos debuffs the joker mid-round", kat.getJokers().get(0).isDebuffed());
@@ -78,7 +78,7 @@ public final class RelicTests {
         PlayerId a = harpax.getSeats().get(0), b = harpax.getSeats().get(1);
         harpax.getRun(a).addMoney(3);
         harpax.getRun(b).addMoney(20);
-        harpax.getRun(a).getRelics().add(Relics.HARPAX.make());
+        harpax.getRun(a).addRelic(Relics.HARPAX.make());
         harpax.useRelic(a, 0, RelicTarget.on(b));
         checkInt("Harpax: caster gains the cut", harpax.getRun(a).getMoney(), 8);
         checkInt("Harpax: target loses the cut", harpax.getRun(b).getMoney(), 15);
@@ -86,9 +86,9 @@ public final class RelicTests {
         // Pyre: destroys one of the target's consumables.
         Match pyre = started(2L);
         PlayerId pa = pyre.getSeats().get(0), pb = pyre.getSeats().get(1);
-        pyre.getRun(pb).getConsumables().add(Planets.MERCURY.make());
-        pyre.getRun(pb).getConsumables().add(Planets.VENUS.make());
-        pyre.getRun(pa).getRelics().add(Relics.PYRE.make());
+        pyre.getRun(pb).addConsumable(Planets.MERCURY.make());
+        pyre.getRun(pb).addConsumable(Planets.VENUS.make());
+        pyre.getRun(pa).addRelic(Relics.PYRE.make());
         pyre.useRelic(pa, 0, RelicTarget.on(pb));
         checkInt("Pyre destroys one consumable", pyre.getRun(pb).getConsumables().size(), 1);
 
@@ -96,16 +96,16 @@ public final class RelicTests {
         Match kata = started(3L);
         PlayerId ka = kata.getSeats().get(0), kb = kata.getSeats().get(1);
         kata.getRun(kb).getHandLevels().levelUp(HandType.PAIR);   // -> level 2
-        kata.getRun(ka).getRelics().add(Relics.KATABASIS.make());
+        kata.getRun(ka).addRelic(Relics.KATABASIS.make());
         kata.useRelic(ka, 0, RelicTarget.hand(kb, HandType.PAIR));
         checkInt("Katabasis levels the hand down", kata.getRun(kb).getHandLevels().levelOf(HandType.PAIR), 1);
 
         // Mimesis: copies the last consumable any seat used.
         Match mim = started(4L);
         PlayerId ma = mim.getSeats().get(0), mb = mim.getSeats().get(1);
-        mim.getRun(ma).getConsumables().add(Planets.MERCURY.make());
+        mim.getRun(ma).addConsumable(Planets.MERCURY.make());
         mim.getRun(ma).useConsumable(0);                          // table now remembers Mercury
-        mim.getRun(mb).getRelics().add(Relics.MIMESIS.make());
+        mim.getRun(mb).addRelic(Relics.MIMESIS.make());
         mim.useRelic(mb, 0, RelicTarget.none());
         check("Mimesis copies the table's last consumable",
                 mim.getRun(mb).getConsumables().size() == 1
@@ -118,13 +118,13 @@ public final class RelicTests {
         Match m = started(5L);
         PlayerId atk = m.getSeats().get(0), def = m.getSeats().get(1);
         m.getRun(def).addMoney(20);
-        m.getRun(def).getRelics().add(Relics.AEGIS.make());
+        m.getRun(def).addRelic(Relics.AEGIS.make());
         m.useRelic(def, 0, RelicTarget.none());                  // defender arms its own shield (self, not a targeting)
         check("Aegis armed", m.getRun(def).getAfflictions().isAegisArmed());
         checkInt("arming Aegis is not a targeting", m.getRun(def).getStats().getTimesTargeted(), 0);
 
-        m.getRun(atk).getRelics().add(Relics.HARPAX.make());
-        m.getRun(atk).getRelics().add(Relics.HARPAX.make());
+        m.getRun(atk).addRelic(Relics.HARPAX.make());
+        m.getRun(atk).addRelic(Relics.HARPAX.make());
         m.useRelic(atk, 0, RelicTarget.on(def));                 // first hit -> absorbed
         checkInt("Aegis negates the hit: target intact", m.getRun(def).getMoney(), 20);
         checkInt("Aegis negates the hit: caster unchanged", m.getRun(atk).getMoney(), 0);
@@ -173,7 +173,7 @@ public final class RelicTests {
         match.toShop();
         if (useMetabole) {
             PlayerId caster = match.getSeats().get(0);
-            match.getRun(caster).getRelics().add(Relics.METABOLE.make());
+            match.getRun(caster).addRelic(Relics.METABOLE.make());
             match.useRelic(caster, 0, RelicTarget.none());   // arms a reroll for ante 2 (ante==1 here)
         }
         match.nextBlind();
@@ -189,9 +189,9 @@ public final class RelicTests {
      * 3- or 5-card window is a same-rank hand, never an accidental flush) and every hand type leveled far up.
      */
     private static void stackToWin(Run run) {
-        run.getDeck().clear();
+        run.resetDeck(java.util.List.of());
         Suit[] suits = Suit.values();
-        for (int i = 0; i < 8; i++) run.getDeck().add(new DeckCard(Rank.ACE, suits[i % suits.length]));
+        for (int i = 0; i < 8; i++) run.addCardToDeck(new DeckCard(Rank.ACE, suits[i % suits.length]));
         for (HandType type : HandType.values())
             for (int i = 0; i < 100; i++) run.getHandLevels().levelUp(type);
     }
