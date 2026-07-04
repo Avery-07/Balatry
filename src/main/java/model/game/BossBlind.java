@@ -14,8 +14,8 @@ import java.util.random.RandomGenerator;
  * layer reads: a chip-target multiplier, hand/discard/hand-size changes, a per-card debuff predicate, a random
  * per-card debuff fraction, base chip/mult halving, play restrictions, and play-time hooks.
  *
- * <p>Effects that are purely visual in a model layer (cards drawn face down) or that need state not yet tracked
- * (per-ante play history, per-hand joker disabling) are present in the roster but inert, noted at their constant.
+ * <p>Effects that are purely informational in a model layer (cards drawn face down: The House, The Wheel,
+ * The Fish, The Mark, and Amber Acorn's flip) are present in the roster but inert, resolved client-side.
  * Cross-player effects (see {@link #isCrossPlayer}) are live, resolved by the {@code model.game.bosses} behaviours.
  *
  * <p>A boss may be disabled for a player by Chicot (owned) or Luchador (sold this round); the round/scoring layer
@@ -36,7 +36,7 @@ public enum BossBlind {
     THE_EYE      ("The Eye",       b -> b.noRepeatType()),
     THE_MOUTH    ("The Mouth",     b -> b.singleType()),
     THE_SERPENT  ("The Serpent",   b -> b.fixedDraw(3)),
-    THE_PILLAR   ("The Pillar",    b -> b),                         // debuff cards played earlier this ante — needs ante-scoped play history
+    THE_PILLAR   ("The Pillar",    b -> b.debuffAntePlayed()),      // cards played in this ante's earlier blinds are debuffed
     THE_NEEDLE   ("The Needle",    b -> b.singleHand()),
     THE_TOOTH    ("The Tooth",     b -> b.toothLoss().playTriggered()),
     THE_FLINT    ("The Flint",     b -> b.halveBase()),
@@ -53,11 +53,11 @@ public enum BossBlind {
     THE_SHAVE    ("The Shave",     b -> b.crossPlayer().dropGlobalHighest()),  // only the single highest hand across all players is excluded
 
     // Finishers (base game: every 8th ante). Included for completeness; with antes 1-7 they are not selected.
-    AMBER_ACORN  ("Amber Acorn",   b -> b.finisher()),              // flips/shuffles jokers — cosmetic/information effect
+    AMBER_ACORN  ("Amber Acorn",   b -> b.finisher().shuffleJokers()),   // board order randomized at the deal (the flip is informational)
     VERDANT_LEAF ("Verdant Leaf",  b -> b.finisher().debuffUntilJokerSold()),
     VIOLET_VESSEL("Violet Vessel", b -> b.finisher().target(3)),    // 6× base chips (3× a normal boss)
-    CRIMSON_HEART("Crimson Heart", b -> b.finisher()),              // disables a random joker each hand — needs per-hand joker disabling
-    CERULEAN_BELL("Cerulean Bell", b -> b.finisher());             // forces one card to stay selected — a UI constraint
+    CRIMSON_HEART("Crimson Heart", b -> b.finisher().disableJokerPerHand()),   // a different random joker is disabled each hand
+    CERULEAN_BELL("Cerulean Bell", b -> b.finisher().forceCardSelection());    // one card is forced into every play and discard
 
     private final String displayName;
     private int targetMultiplier = 1;
@@ -70,6 +70,7 @@ public enum BossBlind {
     private boolean mustPlayFive, noRepeatType, singleType;
     private boolean toothLoss, oxZero, debuffUntilSold, playTriggered, finisher;
     private boolean crossPlayer, dropsOwnHighest, dropsGlobalHighest;
+    private boolean debuffAntePlayed, jokerPerHand, forcedSelection, shuffleJokers;
     private Predicate<DeckCard> debuff = c -> false;
 
     BossBlind(String displayName, UnaryOperator<BossBlind> define) {
@@ -98,6 +99,10 @@ public enum BossBlind {
     private BossBlind crossPlayer()                 { this.crossPlayer = true; return this; }
     private BossBlind dropOwnHighest()              { this.dropsOwnHighest = true; return this; }
     private BossBlind dropGlobalHighest()           { this.dropsGlobalHighest = true; return this; }
+    private BossBlind debuffAntePlayed()            { this.debuffAntePlayed = true; return this; }
+    private BossBlind disableJokerPerHand()         { this.jokerPerHand = true; return this; }
+    private BossBlind forceCardSelection()          { this.forcedSelection = true; return this; }
+    private BossBlind shuffleJokers()               { this.shuffleJokers = true; return this; }
     private BossBlind debuff(Predicate<DeckCard> p) { this.debuff = p; return this; }
 
     // --- accessors ---
@@ -132,6 +137,18 @@ public enum BossBlind {
 
     /** The Shave: only the single highest-scoring hand across all players is excluded (cross-player Mirage). */
     public boolean dropsGlobalHighestHand()  { return dropsGlobalHighest; }
+
+    /** The Pillar: cards played in this ante's earlier (non-boss) blinds are debuffed; consulted via Run#bossDebuffs. */
+    public boolean debuffsAntePlayed()       { return debuffAntePlayed; }
+
+    /** Crimson Heart: a different random joker is disabled each hand (rolled at the deal and after every play). */
+    public boolean disablesJokerPerHand()    { return jokerPerHand; }
+
+    /** Cerulean Bell: one random card in hand is forced into every play and discard, re-picked when it leaves. */
+    public boolean forcesCardSelection()     { return forcedSelection; }
+
+    /** Amber Acorn: the joker board order is randomized at the deal (adjacency effects feel it). */
+    public boolean shufflesJokers()          { return shuffleJokers; }
 
     /** Whether {@code card} is debuffed by this boss (suit/face bosses); the engine then skips it while scoring. */
     public boolean debuffs(DeckCard card) { return debuff.test(card); }

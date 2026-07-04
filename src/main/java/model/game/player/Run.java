@@ -29,6 +29,8 @@ import model.game.shop.Shop;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
@@ -49,6 +51,9 @@ public final class Run {
     private final List<RelicCard> relics = new ArrayList<>();   // held, single-use multiplayer cards
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
     private final List<DeckCard> bossDebuffedCards = new ArrayList<>();   // cards The Quartz debuffed this round, restored at round end
+    private final Set<DeckCard> antePlayedCards = new HashSet<>();   // The Pillar: cards played in this ante's non-boss blinds (identity set)
+    private JokerCard crimsonJoker;            // Crimson Heart: the joker currently disabled, or null
+    private boolean crimsonStickerAdded;       // whether the DEBUFFED sticker on crimsonJoker came from here
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
     private int handSize = 8;
@@ -349,7 +354,7 @@ public final class Run {
     }
 
     /** Resets this run's per-ante allowances; call at the start of each ante. */
-    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); }
+    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); antePlayedCards.clear(); }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -386,6 +391,8 @@ public final class Run {
         int hsize    = Math.max(1, handSize + (eff != null ? eff.handSizeDelta() : 0));
         round = new Round(this, target, hsize, hands, discards, shuffle);
         if (eff != null && eff.randomDebuffOneIn() > 0) applyQuartzDebuff(eff.randomDebuffOneIn());   // The Quartz
+        if (eff != null && eff.shufflesJokers()) shuffleJokerBoard();                                 // Amber Acorn
+        rollCrimsonHeart();                                                                           // Crimson Heart: first hand's disabled joker
         return round;
     }
 
@@ -400,6 +407,56 @@ public final class Run {
                 bossDebuffedCards.add(card);
             }
         }
+    }
+
+    /** The Pillar: records {@code cards} as played this ante; only non-boss blinds count ("earlier blinds"). */
+    void recordAntePlayed(List<DeckCard> cards) {
+        if (activeBoss == null) antePlayedCards.addAll(cards);
+    }
+
+    /** Amber Acorn: randomizes the joker board order (Fisher-Yates on the boss-effect stream). */
+    private void shuffleJokerBoard() {
+        RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
+        for (int i = jokers.size() - 1; i > 0; i--) {
+            int j = r.nextInt(i + 1);
+            JokerCard tmp = jokers.get(i);
+            jokers.set(i, jokers.get(j));
+            jokers.set(j, tmp);
+        }
+    }
+
+    /**
+     * Crimson Heart: re-picks the disabled joker for the coming hand — a different one than last hand when the
+     * board allows it. Called at the deal and after every play; a disabled boss (Luchador mid-round) or an empty
+     * board clears the disable and picks nothing. Only a sticker this run added is stripped.
+     */
+    void rollCrimsonHeart() {
+        JokerCard previous = crimsonJoker;
+        clearCrimsonHeart();
+        BossBlind eff = effectiveBoss();
+        if (eff == null || !eff.disablesJokerPerHand() || jokers.isEmpty()) return;
+        RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
+        JokerCard pick = jokers.get(r.nextInt(jokers.size()));
+        while (jokers.size() > 1 && pick == previous) pick = jokers.get(r.nextInt(jokers.size()));   // "a different joker each hand"
+        if (!pick.isDebuffed()) {   // a genuinely debuffed joker stays debuffed; we just don't own its sticker
+            pick.apply(Sticker.DEBUFFED);
+            crimsonJoker = pick;
+            crimsonStickerAdded = true;
+        }
+    }
+
+    private void clearCrimsonHeart() {
+        if (crimsonStickerAdded && crimsonJoker != null) crimsonJoker.remove(Sticker.DEBUFFED);
+        crimsonJoker = null;
+        crimsonStickerAdded = false;
+    }
+
+    /** Crimson Heart's currently disabled joker, or null. */
+    public JokerCard getCrimsonDisabledJoker() { return crimsonJoker; }
+
+    /** A fresh boss-effect stream draw (occurrence-salted); package tools for in-round boss randomness. */
+    RandomGenerator bossEffectStream() {
+        return rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
     }
 
     public BossBlind getActiveBoss() { return activeBoss; }
@@ -427,6 +484,7 @@ public final class Run {
         BossBlind eff = effectiveBoss();
         if (eff == null) return false;
         if (eff.debuffsUntilJokerSold()) return !verdantSold;   // Verdant Leaf: all cards until a joker is sold
+        if (eff.debuffsAntePlayed() && antePlayedCards.contains(card)) return true;   // The Pillar
         return eff.debuffs(card);
     }
 
@@ -469,6 +527,7 @@ public final class Run {
         afflictions.endRound();   // clear round-scoped relic debuffs; strip any joker sticker this seat's afflictions added
         for (DeckCard card : bossDebuffedCards) card.remove(Sticker.DEBUFFED);   // The Quartz: restore debuffed deck cards
         bossDebuffedCards.clear();
+        clearCrimsonHeart();                                                      // Crimson Heart: re-enable the disabled joker
         round = null;
         activeBoss = null;
         return result;

@@ -39,6 +39,7 @@ public final class Round {
     private HandType firstTypeThisRound;   // for The Mouth (only this type playable this round)
     private HandType debuffedHandType;     // The Hivemind: this type scores no base chips/mult; set by the boss resolver
     private BigDecimal bestHandScore = BigDecimal.ZERO;   // highest single-hand score this round (Mirage/Shave exclusions)
+    private DeckCard forcedCard;           // Cerulean Bell: must be included in every play and discard; null when inactive
 
     Round(Run run, long target, int handSize, int hands, int discards, RandomGenerator shuffle) {
         this.run = run;
@@ -49,6 +50,7 @@ public final class Round {
         drawPile.addAll(run.getDeck());
         shuffle(drawPile, shuffle);
         draw();
+        refreshForcedCard();   // Cerulean Bell: the deal's forced card
     }
 
     /** Plays 1-5 cards from the hand: evaluates, scores, banks, removes them, redraws, and updates the outcome. */
@@ -81,6 +83,8 @@ public final class Round {
 
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
 
+        run.recordAntePlayed(cards);   // The Pillar: this ante's played cards (non-boss blinds only; see Run)
+
         if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());
         score = score.add(result.score());
         if (result.score().compareTo(bestHandScore) > 0) bestHandScore = result.score();
@@ -95,7 +99,10 @@ public final class Round {
         // Meeting the target no longer ends the round: chips fund the points share, so play continues while
         // hands remain. The round resolves when hands run out, or earlier via a voluntary finish().
         if (handsRemaining == 0) resolve();
-        else redraw();
+        else {
+            redraw();
+            run.rollCrimsonHeart();   // Crimson Heart: a different joker is disabled for the next hand
+        }
 
         return new PlayResult(type, result.score(), score, result.destroyed());
     }
@@ -153,6 +160,19 @@ public final class Round {
         } else {
             draw();
         }
+        refreshForcedCard();   // Cerulean Bell: re-pick if the forced card left the hand
+    }
+
+    /**
+     * Cerulean Bell: keeps one random hand card forced into every play and discard. Re-picked (on the
+     * boss-effect stream) whenever the current forced card is no longer in hand; cleared when the boss is
+     * absent or disabled, so a mid-round Luchador lifts the constraint.
+     */
+    private void refreshForcedCard() {
+        BossBlind boss = run.effectiveBoss();
+        if (boss == null || !boss.forcesCardSelection()) { forcedCard = null; return; }
+        if (forcedCard != null && containsIdentity(hand, forcedCard)) return;
+        forcedCard = hand.isEmpty() ? null : hand.get(run.bossEffectStream().nextInt(hand.size()));
     }
 
     /** Boss play restrictions (The Psychic / The Eye / The Mouth); throws if the play is not allowed. */
@@ -173,7 +193,7 @@ public final class Round {
             run.addMoney(-cardsPlayed);                    // The Tooth
         int n = boss.afterPlayDiscard();                   // The Hook
         if (n > 0) {
-            RandomGenerator r = run.getRng().streamFor(RngSource.MISC, run.nextSalt(RngSource.MISC));
+            RandomGenerator r = run.getRng().streamFor(RngSource.BOSS_EFFECT, run.nextSalt(RngSource.BOSS_EFFECT));
             for (int i = 0; i < n && !hand.isEmpty(); i++) hand.remove(r.nextInt(hand.size()));
         }
     }
@@ -187,6 +207,8 @@ public final class Round {
         for (int i = 0; i < cards.size(); i++)
             for (int j = i + 1; j < cards.size(); j++)
                 if (cards.get(i) == cards.get(j)) throw new IllegalArgumentException("a card appears twice in the selection");
+        if (forcedCard != null && !containsIdentity(cards, forcedCard) && run.effectiveBoss() != null)
+            throw new IllegalStateException("the forced card must be part of every play and discard (Cerulean Bell)");
     }
 
     private void requireInProgress() {
@@ -231,6 +253,9 @@ public final class Round {
 
     /** The Hivemind: debuffs {@code type} for this round. Called by the Match-level boss resolver at the deal. */
     public void setDebuffedHandType(HandType type) { this.debuffedHandType = type; }
+
+    /** Cerulean Bell: the card every play and discard must include, or null when the constraint is inactive. */
+    public DeckCard getForcedCard() { return forcedCard; }
     public RoundOutcome getOutcome()  { return outcome; }
 
     /** The most recently played hand type, or {@code null} if none yet (used by Blue Seal at cash-out). */
