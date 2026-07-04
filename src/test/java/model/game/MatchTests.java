@@ -35,8 +35,8 @@ public final class MatchTests {
 
         // Stack the winner's deck so a single Flush Five clears ante-1 small (300).
         Run winRun = match.getRun(winner);
-        winRun.getDeck().clear();
-        for (int i = 0; i < 8; i++) winRun.getDeck().add(new DeckCard(Rank.ACE, Suit.SPADES));
+        winRun.resetDeck(java.util.List.of());
+        for (int i = 0; i < 8; i++) winRun.addCardToDeck(new DeckCard(Rank.ACE, Suit.SPADES));
 
         match.start();
         check("phase BLIND after start", match.getPhase() == MatchPhase.BLIND);
@@ -125,8 +125,8 @@ public final class MatchTests {
         PlayerId b = envy.getSeats().get(1);
         JokerCard ja = stubJoker();
         JokerCard jb = stubJoker();
-        envy.getRun(a).getJokers().add(ja);
-        envy.getRun(b).getJokers().add(jb);
+        envy.getRun(a).board().add(ja);
+        envy.getRun(b).board().add(jb);
 
         envy.start();
         checkThrows("swap blocked outside SHOP", () -> envy.swapJokers(a, 0, b, 0));
@@ -142,10 +142,10 @@ public final class MatchTests {
 
         // Slot accounting: B is full (5 slot-consumers) plus one NEGATIVE joker; trading the NEGATIVE
         // away for A's slot-consuming joker would put B at 6/5 used slots, so the swap must be rejected.
-        for (int i = 0; i < 4; i++) envy.getRun(b).getJokers().add(stubJoker());   // B: 5 consumers
+        for (int i = 0; i < 4; i++) envy.getRun(b).board().add(stubJoker());   // B: 5 consumers
         JokerCard negative = stubJoker();
         negative.apply(Edition.NEGATIVE);
-        envy.getRun(b).getJokers().add(negative);                                  // B: index 5, slot-free
+        envy.getRun(b).board().add(negative);                                  // B: index 5, slot-free
         checkThrows("swap blocked by slot accounting", () -> envy.swapJokers(a, 0, b, 5));
 
         // Sin gating: the same operation under a non-Envy sin is rejected even in SHOP.
@@ -153,8 +153,8 @@ public final class MatchTests {
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
         PlayerId pa = pride.getSeats().get(0);
         PlayerId pb = pride.getSeats().get(1);
-        pride.getRun(pa).getJokers().add(stubJoker());
-        pride.getRun(pb).getJokers().add(stubJoker());
+        pride.getRun(pa).board().add(stubJoker());
+        pride.getRun(pb).board().add(stubJoker());
         pride.start();
         for (PlayerId id : pride.getSeats()) exhaust(pride.getRun(id));
         pride.toShop();

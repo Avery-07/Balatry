@@ -33,6 +33,8 @@ public final class JokerTests {
         retriggerAndEconomy();
         specialTraits();
 
+        boardInvariants();
+
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
     }
@@ -73,35 +75,35 @@ public final class JokerTests {
     /** Jokers that read the slot count or fire on ON_ROUND_START. */
     private static void slotAndRoundStartHooks() {
         // Joker Stencil: lone in 5 slots -> 4 empty + itself = X5. Pair of kings (30 chips x 2 mult) -> 30 x (2*5) = 300.
-        Run a = new Run(0L); a.getJokers().add(Jokers.JOKER_STENCIL.make());
+        Run a = new Run(0L); a.board().add(Jokers.JOKER_STENCIL.make());
         checkScore("Stencil X5 lone", score(a, kings()), 300);
         // With the board full (5 used), only its own slot counts -> X1 -> 60.
         Run full = new Run(0L);
-        full.getJokers().add(Jokers.JOKER_STENCIL.make());
-        for (int i = 0; i < 4; i++) full.getJokers().add(Jokers.JOKER.make());
+        full.board().add(Jokers.JOKER_STENCIL.make());
+        for (int i = 0; i < 4; i++) full.board().add(Jokers.JOKER.make());
         // (Joker also adds +4 mult x4 = +16; isolate Stencil by checking it's not X-ing: 30 x (2+16) x1 = 540.)
         checkScore("Stencil X1 on full board", score(full, kings()), 540);
 
         // Mystic Summit: +15 mult only when discards == 0.
-        Run zero = new Run(0L); zero.setBaseDiscards(0); zero.getJokers().add(Jokers.MYSTIC_SUMMIT.make());
+        Run zero = new Run(0L); zero.setBaseDiscards(0); zero.board().add(Jokers.MYSTIC_SUMMIT.make());
         zero.beginRound(1_000_000);   // round present, 0 discards, target high enough not to auto-win
         checkScore("Mystic +15 at 0 discards", score(zero, kings()), 510);   // 30 x (2+15)
-        Run some = new Run(0L); some.setBaseDiscards(3); some.getJokers().add(Jokers.MYSTIC_SUMMIT.make());
+        Run some = new Run(0L); some.setBaseDiscards(3); some.board().add(Jokers.MYSTIC_SUMMIT.make());
         some.beginRound(1_000_000);
         checkScore("Mystic inert with discards", score(some, kings()), 60);
 
         // Ceremonial Dagger: at round start, eats the joker to its right and banks 3x its sell value.
         Run d = new Run(0L);
-        d.getJokers().add(Jokers.CEREMONIAL_DAGGER.make());   // cost 6 -> sell 3
+        d.board().add(Jokers.CEREMONIAL_DAGGER.make());   // cost 6 -> sell 3
         JokerCard victim = Jokers.JOKER.make();                // cost 2 -> sell 1
-        d.getJokers().add(victim);
+        d.board().add(victim);
         d.beginRound(300);
         JokerCard dagger = d.getJokers().get(0);
         check("dagger ate its neighbour", d.getJokers().size() == 1);
         checkInt("dagger banked 3x sell (3*1)", dagger.getCounter(), 3);
 
         // Marble Joker: at round start, adds a Stone card to the deck.
-        Run m = new Run(0L); m.getJokers().add(Jokers.MARBLE_JOKER.make());
+        Run m = new Run(0L); m.board().add(Jokers.MARBLE_JOKER.make());
         int before = m.getDeck().size();
         m.beginRound(300);
         int after = m.getDeck().size();
@@ -116,7 +118,7 @@ public final class JokerTests {
         DeckCard steel = new DeckCard(Rank.FOUR, Suit.CLUBS); steel.apply(Enhancement.STEEL);
         Run noMime = new Run(0L);
         checkScore("held steel once (X1.5)", score(noMime, kings(), List.of(steel)), 90);   // 30 x (2*1.5)
-        Run mime = new Run(0L); mime.getJokers().add(Jokers.MIME.make());
+        Run mime = new Run(0L); mime.board().add(Jokers.MIME.make());
         checkScore("Mime retriggers held steel", score(mime, kings(), List.of(steel)), 135); // 30 x (2*1.5*1.5)
 
         // --- Joker retrigger primitive: a Blueprint-like joker re-fires the joker to its right immediately. ---
@@ -126,16 +128,16 @@ public final class JokerTests {
                     int i = js.indexOf(self);
                     if (i + 1 < js.size()) run.getScoring().retriggerJoker(js.get(i + 1));
                 }).build();
-        Run plain = new Run(0L); plain.getJokers().add(Jokers.JOKER.make());          // +4 mult once
+        Run plain = new Run(0L); plain.board().add(Jokers.JOKER.make());          // +4 mult once
         checkScore("lone +4 joker", score(plain, kings(), List.of()), 180);            // 30 x (2+4)
         Run bp = new Run(0L);
-        bp.getJokers().add(new JokerCard(blueprint, 10));
-        bp.getJokers().add(Jokers.JOKER.make());                                       // +4 mult, fired twice
+        bp.board().add(new JokerCard(blueprint, 10));
+        bp.board().add(Jokers.JOKER.make());                                       // +4 mult, fired twice
         checkScore("retriggered +4 joker", score(bp, kings(), List.of()), 300);        // 30 x (2+4+4)
 
         // --- Loyalty Card: every 4th purchase is free. ---
         Run shopper = new Run(0L);
-        shopper.getJokers().add(Jokers.LOYALTY_CARD.make());
+        shopper.board().add(Jokers.LOYALTY_CARD.make());
         shopper.addMoney(100 - shopper.getMoney());
         ShopPool dollarCards = stream -> { DeckCard d = new DeckCard(Rank.ACE, Suit.SPADES); d.setShopValue(1); return d; };
         Shop shop = new Shop(shopper, 0, 4, dollarCards);
@@ -148,7 +150,7 @@ public final class JokerTests {
         // --- Credit Card: debt floor, +1 Mult per in-debt dollar, reset at $0+. ---
         Run debt = new Run(0L);
         checkInt("no floor without Credit Card", debt.minBalance(), 0);
-        debt.getJokers().add(Jokers.CREDIT_CARD.make());
+        debt.board().add(Jokers.CREDIT_CARD.make());
         checkInt("Credit Card lowers floor to -20", debt.minBalance(), -20);
         debt.addMoney(5 - debt.getMoney());     // set balance to 5
         debt.spend(10);                          // 5 of those dollars spent while in debt
@@ -175,7 +177,7 @@ public final class JokerTests {
     private static void specialTraits() {
         // Chicot disables the boss while owned; a debuffed Chicot must not (debuffed = no effect).
         Run withChicot = new Run(0L);
-        withChicot.getJokers().add(Jokers.CHICOT.make());
+        withChicot.board().add(Jokers.CHICOT.make());
         check("Chicot owned -> bossDisabled", withChicot.bossDisabled());
         withChicot.getJokers().get(0).apply(Sticker.DEBUFFED);
         check("Chicot debuffed -> boss NOT disabled", !withChicot.bossDisabled());
@@ -185,21 +187,21 @@ public final class JokerTests {
 
         // Mr. Bones prevents a loss while owned; charges twice then self-destructs; a debuffed Bones is inert.
         Run withBones = new Run(0L);
-        withBones.getJokers().add(Jokers.MR_BONES.make());
+        withBones.board().add(Jokers.MR_BONES.make());
         check("Mr. Bones 1st save", withBones.tryPreventLoss());
         check("Mr. Bones survives first save", withBones.getJokers().size() == 1);
         check("Mr. Bones 2nd save", withBones.tryPreventLoss());
         check("Mr. Bones self-destructs after 2nd", withBones.getJokers().isEmpty());
 
         Run debuffedBones = new Run(0L);
-        debuffedBones.getJokers().add(Jokers.MR_BONES.make());
+        debuffedBones.board().add(Jokers.MR_BONES.make());
         debuffedBones.getJokers().get(0).apply(Sticker.DEBUFFED);
         check("Mr. Bones debuffed -> no save", !debuffedBones.tryPreventLoss());
     }
 
     private static long scoreWith(List<DeckCard> cards, Jokers joker) {
         Run run = new Run(0L);
-        run.getJokers().add(joker.make());
+        run.board().add(joker.make());
         return score(run, cards);
     }
 
@@ -213,6 +215,34 @@ public final class JokerTests {
 
     private static void checkInt(String label, int actual, int expected) {
         check(label + " (" + actual + ")", actual == expected);
+    }
+
+    /** The Board's invariants: the slot limit, Eternal on sell/destroy, and atomic swap validation. */
+    private static void boardInvariants() {
+        model.game.player.Run run = new model.game.player.Run(7L);
+        var board = run.board();
+
+        // Slot limit: adds fizzle once full; NEGATIVE jokers are free.
+        for (int i = 0; i < 5; i++) check("slot " + i + " accepted", board.add(Jokers.JOKER.make()));
+        check("6th slot-consuming joker fizzles", !board.add(Jokers.JOKER.make()));
+        JokerCard negative = Jokers.JOKER.make();
+        negative.apply(model.modifiers.Edition.NEGATIVE);
+        check("NEGATIVE joker lands on a full board", board.add(negative));
+
+        // Eternal: sell rejects loudly, destroy skips silently.
+        JokerCard eternal = board.get(0);
+        eternal.apply(model.modifiers.Sticker.ETERNAL);
+        boolean sellRejected = false;
+        try { run.sellJoker(0); } catch (IllegalStateException e) { sellRejected = true; }
+        check("selling an Eternal joker is rejected", sellRejected);
+        check("destroying an Eternal joker fails silently", !run.destroyJoker(eternal));
+        check("the Eternal joker is still on the board", board.view().contains(eternal));
+        check("a normal joker still destroys", run.destroyJoker(board.get(1)));
+
+        // The view is unmodifiable: the old free-for-all is closed.
+        boolean viewSealed = false;
+        try { run.getJokers().add(Jokers.JOKER.make()); } catch (UnsupportedOperationException e) { viewSealed = true; }
+        check("getJokers() view rejects mutation", viewSealed);
     }
 
     private static void check(String label, boolean ok) {

@@ -54,7 +54,7 @@ public final class SpectralTests {
         Run cr = new Run(1L);
         DeckCard src = card(Rank.ACE, Suit.SPADES);
         src.apply(Seal.BLUE_SEAL);
-        cr.getConsumables().add(Spectrals.CRYPTID.make());
+        cr.addConsumable(Spectrals.CRYPTID.make());
         cr.useConsumable(0, List.of(src));
         long copies = cr.getDeck().stream().filter(c -> c.getRank() == Rank.ACE && c.getSeal() == Seal.BLUE_SEAL).count();
         check("Cryptid -> 2 copies added to deck", copies == 2);
@@ -62,15 +62,15 @@ public final class SpectralTests {
         // --- Aura: first selected card gets one of the four editions ---
         Run aura = new Run(2L);
         DeckCard at = card(Rank.SEVEN, Suit.SPADES);
-        aura.getConsumables().add(Spectrals.AURA.make());
+        aura.addConsumable(Spectrals.AURA.make());
         aura.useConsumable(0, List.of(at));
         check("Aura -> card gains an edition", at.getEdition() != null);
 
         // widened selection channel: Aura can now target a non-deck card (a joker)
         Run auraJoker = new Run(21L);
         JokerCard auraTarget = joker();
-        auraJoker.getJokers().add(auraTarget);
-        auraJoker.getConsumables().add(Spectrals.AURA.make());
+        auraJoker.board().add(auraTarget);
+        auraJoker.addConsumable(Spectrals.AURA.make());
         auraJoker.useConsumable(0, List.of(auraTarget));
         check("Aura -> can edition a joker target", auraTarget.getEdition() != null);
 
@@ -78,7 +78,7 @@ public final class SpectralTests {
         Run ex = new Run(3L);
         DeckCard sticky = card(Rank.TEN, Suit.HEARTS);
         sticky.apply(Sticker.ETERNAL);
-        ex.getConsumables().add(Spectrals.EXORCISM.make());
+        ex.addConsumable(Spectrals.EXORCISM.make());
         ex.useConsumable(0, List.of(sticky));
         check("Exorcism -> sticker removed", !sticky.hasSticker(Sticker.ETERNAL));
 
@@ -86,42 +86,42 @@ public final class SpectralTests {
         Run exJ = new Run(31L);
         JokerCard stickyJoker = joker();
         stickyJoker.apply(Sticker.PERISHABLE);
-        exJ.getJokers().add(stickyJoker);
-        exJ.getConsumables().add(Spectrals.EXORCISM.make());
+        exJ.board().add(stickyJoker);
+        exJ.addConsumable(Spectrals.EXORCISM.make());
         exJ.useConsumable(0, List.of(stickyJoker));
         check("Exorcism -> sticker removed from joker", !stickyJoker.hasSticker(Sticker.PERISHABLE));
 
         // --- Wraith: creates a joker and divides money by 3 (new) ---
         Run wr = new Run(4L); wr.addMoney(30);
-        wr.getConsumables().add(Spectrals.WRAITH.make());
+        wr.addConsumable(Spectrals.WRAITH.make());
         wr.useConsumable(0);
         checkInt("Wraith -> money divided by 3", wr.getMoney(), 10);
         checkInt("Wraith -> made a joker", wr.getJokers().size(), 1);
 
         // --- Ectoplasm: negative to a joker, -1 hand size ---
         Run ec = new Run(5L);
-        ec.getJokers().add(joker());
+        ec.board().add(joker());
         int handBefore = ec.getHandSize();
-        ec.getConsumables().add(Spectrals.ECTOPLASM.make());
+        ec.addConsumable(Spectrals.ECTOPLASM.make());
         ec.useConsumable(0);
         check("Ectoplasm -> joker negative", ec.getJokers().get(0).getEdition() == Edition.NEGATIVE);
         checkInt("Ectoplasm -> -1 hand size", ec.getHandSize(), handBefore - 1);
 
         // --- Immolate: +$20 ---
         Run im = new Run(6L);
-        im.getConsumables().add(Spectrals.IMMOLATE.make());
+        im.addConsumable(Spectrals.IMMOLATE.make());
         im.useConsumable(0);
         checkInt("Immolate -> +$20", im.getMoney(), 20);
 
         // --- The Soul: creates a (legendary, falling back) joker ---
         Run soul = new Run(7L);
-        soul.getConsumables().add(Spectrals.THE_SOUL.make());
+        soul.addConsumable(Spectrals.THE_SOUL.make());
         soul.useConsumable(0);
         checkInt("The Soul -> made a joker", soul.getJokers().size(), 1);
 
         // --- Black Hole: every hand levels up by 1 ---
         Run bh = new Run(8L);
-        bh.getConsumables().add(Spectrals.BLACK_HOLE.make());
+        bh.addConsumable(Spectrals.BLACK_HOLE.make());
         bh.useConsumable(0);
         check("Black Hole -> Pair L2", bh.getHandLevels().levelOf(HandType.PAIR) == 2);
         check("Black Hole -> Flush L2", bh.getHandLevels().levelOf(HandType.FLUSH) == 2);
@@ -129,33 +129,33 @@ public final class SpectralTests {
         // --- Black Hole: the most-played hand gains a second level (+2 total) ---
         Run bh2 = new Run(81L);
         bh2.getStats().recordHandPlayed(HandType.FLUSH);   // Flush is now the most-played hand
-        bh2.getConsumables().add(Spectrals.BLACK_HOLE.make());
+        bh2.addConsumable(Spectrals.BLACK_HOLE.make());
         bh2.useConsumable(0);
         check("Black Hole -> most-played Flush L3", bh2.getHandLevels().levelOf(HandType.FLUSH) == 3);
         check("Black Hole -> other hand Pair L2", bh2.getHandLevels().levelOf(HandType.PAIR) == 2);
 
         // --- Ankh: copies a joker and destroys one; with one joker, count holds and the copy is not negative ---
         Run ankh = new Run(9L);
-        ankh.getJokers().add(joker());
-        ankh.getConsumables().add(Spectrals.ANKH.make());
+        ankh.board().add(joker());
+        ankh.addConsumable(Spectrals.ANKH.make());
         ankh.useConsumable(0);
         checkInt("Ankh -> still one joker", ankh.getJokers().size(), 1);
         check("Ankh -> copy is not negative", ankh.getJokers().get(0).getEdition() == null);
 
         // --- Hex: polychrome to a joker, destroys the other ---
         Run hex = new Run(10L);
-        hex.getJokers().add(joker());
-        hex.getJokers().add(joker());
-        hex.getConsumables().add(Spectrals.HEX.make());
+        hex.board().add(joker());
+        hex.board().add(joker());
+        hex.addConsumable(Spectrals.HEX.make());
         hex.useConsumable(0);
         checkInt("Hex -> one joker remains", hex.getJokers().size(), 1);
         check("Hex -> survivor is polychrome", hex.getJokers().get(0).getEdition() == Edition.POLYCHROME);
 
         // --- Familiar: destroys 3 held, adds 3 enhanced face cards (in a round) ---
         Run fam = new Run(11L);
-        for (int i = 0; i < 8; i++) fam.getDeck().add(card(Rank.TWO, Suit.SPADES));   // plain, unenhanced
+        for (int i = 0; i < 8; i++) fam.addCardToDeck(card(Rank.TWO, Suit.SPADES));   // plain, unenhanced
         fam.beginRound(300);
-        fam.getConsumables().add(Spectrals.FAMILIAR.make());
+        fam.addConsumable(Spectrals.FAMILIAR.make());
         fam.useConsumable(0);
         List<DeckCard> enhanced = fam.getDeck().stream().filter(c -> c.getEnhancement() != null).toList();
         check("Familiar -> 3 enhanced cards added", enhanced.size() == 3);
@@ -167,7 +167,7 @@ public final class SpectralTests {
 
     private static void use(Spectrals spectral, List<DeckCard> targets) {
         Run run = new Run(0L);
-        run.getConsumables().add(spectral.make());
+        run.addConsumable(spectral.make());
         run.useConsumable(0, targets);
     }
 

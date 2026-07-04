@@ -81,7 +81,7 @@ public final class TarotTests {
 
         Run hm = new Run(1L);
         DeckCard d1 = card(Rank.TWO, Suit.SPADES), d2 = card(Rank.THREE, Suit.SPADES), keep = card(Rank.FOUR, Suit.SPADES);
-        hm.getDeck().add(d1); hm.getDeck().add(d2); hm.getDeck().add(keep);
+        hm.addCardToDeck(d1); hm.addCardToDeck(d2); hm.addCardToDeck(keep);
         use(hm, Tarots.THE_HANGED_MAN, List.of(d1, d2));
         check("Hanged Man -> 2 cards destroyed from deck", hm.getDeck().size() == 1 && hm.getDeck().contains(keep));
 
@@ -109,8 +109,8 @@ public final class TarotTests {
         check("Hermit -> gain capped at $20 (50 -> 70)", hermitCap.getMoney() == 70);
 
         Run temp = new Run(1L);
-        temp.getJokers().add(new JokerCard(stub(), 10));   // sell value 5
-        temp.getJokers().add(new JokerCard(stub(), 10));   // sell value 5
+        temp.board().add(new JokerCard(stub(), 10));   // sell value 5
+        temp.board().add(new JokerCard(stub(), 10));   // sell value 5
         use(temp, Tarots.TEMPERANCE, List.of());
         check("Temperance -> sum of joker sell values ($10)", temp.getMoney() == 10);
     }
@@ -133,7 +133,7 @@ public final class TarotTests {
 
         // The Fool recreates the last Tarot/Planet used this run (here: Mercury)
         Run fool = new Run(1L);
-        fool.getConsumables().add(Planets.MERCURY.make());
+        fool.addConsumable(Planets.MERCURY.make());
         fool.useConsumable(0);   // levels Pair, records Mercury as last Tarot/Planet
         use(fool, Tarots.THE_FOOL, List.of());
         check("Fool -> recreates last planet (Mercury)", fool.getConsumables().size() == 1
@@ -149,14 +149,14 @@ public final class TarotTests {
         // The Star: with one candidate (a joker) and the roll forced, that joker goes Negative
         Run star = new Run(new ScriptedRng(true));
         JokerCard starTarget = new JokerCard(stub(), 4);
-        star.getJokers().add(starTarget);
+        star.board().add(starTarget);
         use(star, Tarots.THE_STAR, List.of());
         check("Star (hit) -> a card becomes Negative", starTarget.getEdition() == Edition.NEGATIVE);
 
         // The Moon: held card gains a shiny edition (single held card via hand size 1)
         Run moon = new Run(new ScriptedRng(true));
         moon.setHandSize(1);
-        moon.getDeck().add(card(Rank.SEVEN, Suit.SPADES));
+        moon.addCardToDeck(card(Rank.SEVEN, Suit.SPADES));
         moon.beginRound(300);
         use(moon, Tarots.THE_MOON, List.of());
         check("Moon (hit) -> held card gains a shiny edition", isShiny(moon.getHeld().get(0).getEdition()));
@@ -164,7 +164,7 @@ public final class TarotTests {
         // The Sun: a joker gains a shiny edition
         Run sun = new Run(new ScriptedRng(true));
         JokerCard sunTarget = new JokerCard(stub(), 4);
-        sun.getJokers().add(sunTarget);
+        sun.board().add(sunTarget);
         use(sun, Tarots.THE_SUN, List.of());
         check("Sun (hit) -> joker gains a shiny edition", isShiny(sunTarget.getEdition()));
     }
@@ -172,7 +172,7 @@ public final class TarotTests {
     // --- helpers ---
 
     private static void use(Run run, Tarots tarot, List<DeckCard> targets) {
-        run.getConsumables().add(tarot.make());
+        run.addConsumable(tarot.make());
         run.useConsumable(run.getConsumables().size() - 1, targets);
     }
 

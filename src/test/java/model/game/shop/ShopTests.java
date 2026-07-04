@@ -242,7 +242,7 @@ public final class ShopTests {
         // Loyalty Card: purchases 1-3 paid, 4th free, counter advances only on completed buys.
         Run loyal = new Run(30L); loyal.addMoney(100);
         JokerCard loyalty = model.cards.jokers.Jokers.LOYALTY_CARD.make();
-        loyal.getJokers().add(loyalty);
+        loyal.board().add(loyalty);
         Shop ls = new Shop(loyal, 0, 4, JOKER_POOL);
         int m0 = loyal.getMoney();
         ls.buy(0); ls.buy(1); ls.buy(2);
@@ -256,7 +256,7 @@ public final class ShopTests {
         Run broke = new Run(31L); broke.addMoney(2);   // joker costs 4
         JokerCard loyalty2 = model.cards.jokers.Jokers.LOYALTY_CARD.make();
         loyalty2.setCounter(2);                        // 2 completed purchases so far
-        broke.getJokers().add(loyalty2);
+        broke.board().add(loyalty2);
         Shop bs2 = new Shop(broke, 0, 2, JOKER_POOL);
         checkThrows("unaffordable buy throws", () -> bs2.buy(0));
         checkInt("failed buy does not advance Loyalty", loyalty2.getCounter(), 2);
@@ -275,7 +275,7 @@ public final class ShopTests {
                         .on(model.game.scoring.Trigger.ON_BOUGHT,
                                 (run, self) -> self.setCounter(self.getCounter() + 1))
                         .build(), 0);
-        probeRun.getJokers().add(boughtProbe);
+        probeRun.board().add(boughtProbe);
         Shop ps = new Shop(probeRun, 0, 2, JOKER_POOL);
         checkThrows("broke probe buy throws", () -> ps.buy(0));
         checkInt("no ON_BOUGHT for a failed buy", boughtProbe.getCounter(), 0);

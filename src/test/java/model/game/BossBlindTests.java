@@ -38,13 +38,13 @@ public final class BossBlindTests {
 
         // --- Luchador / Chicot disable the boss (effectiveBoss() goes null) ---
         Run lucha = bossRun(BossBlind.THE_MANACLE);
-        lucha.getJokers().add(Jokers.LUCHADOR.make());
+        lucha.board().add(Jokers.LUCHADOR.make());
         check("boss active before Luchador sold", lucha.effectiveBoss() != null);
         lucha.sellJoker(0);                                  // Luchador's own-sale disables the boss this round
         check("boss disabled after Luchador sold", lucha.effectiveBoss() == null);
 
         Run chic = bossRun(BossBlind.THE_MANACLE);
-        chic.getJokers().add(Jokers.CHICOT.make());
+        chic.board().add(Jokers.CHICOT.make());
         check("Chicot disables the boss", chic.effectiveBoss() == null);
 
         // --- The Tooth: lose $1 per card played ---
@@ -63,7 +63,7 @@ public final class BossBlindTests {
         // --- Mr. Bones converts a loss into a clear (one charge) ---
         Run bones = smallDeckRun(5);
         bones.setBaseHands(1);
-        bones.getJokers().add(Jokers.MR_BONES.make());
+        bones.board().add(Jokers.MR_BONES.make());
         Round br = bones.beginRound(1_000_000, null);   // far above any achievable score
         br.play(pick(br, 1));                            // out of hands and below target
         check("Mr. Bones prevents the loss", br.getOutcome() == RoundOutcome.WON);
@@ -71,7 +71,7 @@ public final class BossBlindTests {
 
         // --- ON_BOSS_DEFEATED escalates Rocket ---
         Run rocket = smallDeckRun(5);
-        rocket.getJokers().add(Jokers.ROCKET.make());
+        rocket.board().add(Jokers.ROCKET.make());
         Round rr = rocket.beginRound(1, BossBlind.THE_HOOK);   // target 1 -> any play meets it
         rr.play(pick(rr, 1));
         rr.finish();                                           // rounds no longer auto-end at the target
@@ -97,8 +97,8 @@ public final class BossBlindTests {
 
         // --- Crimson Heart: a different random joker is disabled each hand; re-enabled at round end ---
         Run crimson = smallDeckRun(8);
-        crimson.getJokers().add(Jokers.JOKER.make());
-        crimson.getJokers().add(Jokers.GREEDY_JOKER.make());
+        crimson.board().add(Jokers.JOKER.make());
+        crimson.board().add(Jokers.GREEDY_JOKER.make());
         Round cr = crimson.beginRound(1_000_000, BossBlind.CRIMSON_HEART);
         check("one joker disabled at the deal", crimson.getCrimsonDisabledJoker() != null
                 && crimson.getCrimsonDisabledJoker().isDebuffed());
@@ -134,11 +134,11 @@ public final class BossBlindTests {
 
         // --- Amber Acorn: the joker board order is randomized at the deal (same cards, seed-deterministic) ---
         Run acorn = new Run(3L);
-        for (int i = 0; i < 8; i++) acorn.getDeck().add(new DeckCard(Rank.TWO, Suit.SPADES));
+        for (int i = 0; i < 8; i++) acorn.addCardToDeck(new DeckCard(Rank.TWO, Suit.SPADES));
         var j1 = Jokers.JOKER.make();
         var j2 = Jokers.GREEDY_JOKER.make();
         var j3 = Jokers.LUSTY_JOKER.make();
-        acorn.getJokers().add(j1); acorn.getJokers().add(j2); acorn.getJokers().add(j3);
+        acorn.board().add(j1); acorn.board().add(j2); acorn.board().add(j3);
         acorn.beginRound(1_000_000, BossBlind.AMBER_ACORN);
         check("Amber Acorn keeps the same jokers", acorn.getJokers().containsAll(List.of(j1, j2, j3))
                 && acorn.getJokers().size() == 3);
@@ -153,20 +153,20 @@ public final class BossBlindTests {
 
     private static Run bossRun(BossBlind boss) {
         Run r = new Run(0L);
-        r.getDeck().addAll(Decks.standard());
+        r.resetDeck(Decks.standard());
         r.beginRound(1_000_000, boss);   // sets the active boss; the dealt hand is irrelevant to these checks
         return r;
     }
 
     private static Round deal(BossBlind boss) {
         Run r = new Run(0L);
-        r.getDeck().addAll(Decks.standard());
+        r.resetDeck(Decks.standard());
         return r.beginRound(1_000_000, boss);
     }
 
     private static Run quartzRun() {
         Run r = new Run(0L);
-        r.getDeck().addAll(Decks.standard());
+        r.resetDeck(Decks.standard());
         r.beginRound(1_000_000, BossBlind.THE_QUARTZ);
         return r;
     }
@@ -179,7 +179,7 @@ public final class BossBlindTests {
 
     private static Run smallDeckRun(int n) {
         Run r = new Run(0L);
-        for (int i = 0; i < n; i++) r.getDeck().add(new DeckCard(Rank.TWO, Suit.SPADES));   // low, non-face, non-club
+        for (int i = 0; i < n; i++) r.addCardToDeck(new DeckCard(Rank.TWO, Suit.SPADES));   // low, non-face, non-club
         return r;
     }
 
