@@ -146,8 +146,8 @@ public final class StandingsTests {
 
     // --- helpers ---
 
-    private static BlindResult won(long score)  { return new BlindResult(RoundOutcome.WON,  BigDecimal.valueOf(score), 300, 0, 0); }
-    private static BlindResult lost(long score) { return new BlindResult(RoundOutcome.LOST, BigDecimal.valueOf(score), 300, 0, 0); }
+    private static BlindResult won(long score)  { return new BlindResult(RoundOutcome.WON,  BigDecimal.valueOf(score), BigDecimal.ZERO, 300, 0, 0); }
+    private static BlindResult lost(long score) { return new BlindResult(RoundOutcome.LOST, BigDecimal.valueOf(score), BigDecimal.ZERO, 300, 0, 0); }
 
     /** Replaces the seat's deck with aces of spades so every 5-card play is an identical Flush Five. */
     private static void stackFlushFives(Run run) {

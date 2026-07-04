@@ -15,6 +15,7 @@ import model.cards.consumables.Tarots;
 import model.cards.vouchers.Voucher;
 import model.cards.vouchers.VoucherSpec;
 import model.game.*;
+import model.game.bosses.SharedDiscardPool;
 import model.game.rng.DeterministicRng;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
@@ -405,6 +406,11 @@ public final class Run {
 
     /** The active boss after per-player disabling (owns Chicot, or sold Luchador this round), or null. */
     public BossBlind effectiveBoss() { return bossDisabled() ? null : activeBoss; }
+
+    /** The Commons' shared discard pool this seat draws from, or {@code null} when no boss imposes one. */
+    public SharedDiscardPool sharedDiscardPool() {
+        return match == null ? null : match.getBossBehavior().sharedDiscards(this);
+    }
 
     /** Whether the active boss is disabled for this player. */
     public boolean bossDisabled() {

@@ -2,6 +2,7 @@ package model.game.player;
 
 import model.cards.DeckCard;
 import model.game.BossBlind;
+import model.game.bosses.SharedDiscardPool;
 import model.game.rng.RngSource;
 import model.game.scoring.HandEvaluation;
 import model.game.scoring.HandEvaluator;
@@ -36,6 +37,8 @@ public final class Round {
     private RoundOutcome outcome = RoundOutcome.IN_PROGRESS;
     private HandType lastPlayedType;   // for Blue Seal at cash-out; null until a hand is played
     private HandType firstTypeThisRound;   // for The Mouth (only this type playable this round)
+    private HandType debuffedHandType;     // The Hivemind: this type scores no base chips/mult; set by the boss resolver
+    private BigDecimal bestHandScore = BigDecimal.ZERO;   // highest single-hand score this round (Mirage/Shave exclusions)
 
     Round(Run run, long target, int handSize, int hands, int discards, RandomGenerator shuffle) {
         this.run = run;
@@ -70,6 +73,7 @@ public final class Round {
         long baseChips = run.getHandLevels().chipsFor(type);
         long baseMult  = run.getHandLevels().multFor(type);
         if (boss != null && boss.halvesBase()) { baseChips /= 2; baseMult /= 2; }            // The Flint
+        if (boss != null && type == debuffedHandType) { baseChips = 0; baseMult = 0; }       // The Hivemind (gated on the live boss, so Luchador lifts it)
 
         // Matador reads this during scoring (Phase C), so set it before the engine runs.
         run.setBossTriggered(boss != null && boss.triggersOnPlay()
@@ -79,6 +83,7 @@ public final class Round {
 
         if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());
         score = score.add(result.score());
+        if (result.score().compareTo(bestHandScore) > 0) bestHandScore = result.score();
         hand.removeAll(cards);
         hand.removeAll(result.destroyed());
         run.getDeck().removeAll(result.destroyed());   // glass breaks are permanent
@@ -114,14 +119,20 @@ public final class Round {
     /** Whether the banked score has reached the target (the round itself stays open while hands remain). */
     public boolean isTargetMet() { return score.compareTo(BigDecimal.valueOf(target)) >= 0; }
 
-    /** Discards 1-5 cards from the hand and redraws; costs one discard, never ends the round. */
+    /** Discards 1-5 cards from the hand and redraws; costs one discard (from The Commons' shared pool when active). */
     public void discard(List<DeckCard> cards) {
         requireInProgress();
-        if (discardsRemaining <= 0) throw new IllegalStateException("no discards remaining");
+        SharedDiscardPool shared = run.sharedDiscardPool();   // The Commons: the table's pool replaces the personal counter
+        if (shared != null) {
+            if (shared.getRemaining() <= 0) throw new IllegalStateException("no shared discards remaining");
+        } else if (discardsRemaining <= 0) {
+            throw new IllegalStateException("no discards remaining");
+        }
         validateSelection(cards);
 
         hand.removeAll(cards);
-        discardsRemaining--;
+        if (shared != null) shared.consume();
+        else discardsRemaining--;
         run.getStats().recordDiscard(cards);
         run.fireDiscard(cards);   // jokers (Faceless, Mail-In Rebate, ...) react to the discarded cards
         redraw();
@@ -206,7 +217,20 @@ public final class Round {
     public BigDecimal getScore()      { return score; }
     public long getTarget()           { return target; }
     public int getHandsRemaining()    { return handsRemaining; }
-    public int getDiscardsRemaining() { return discardsRemaining; }
+    /** Discards left: The Commons' shared pool when active for this seat, otherwise the personal counter. */
+    public int getDiscardsRemaining() {
+        SharedDiscardPool shared = run.sharedDiscardPool();
+        return shared != null ? shared.getRemaining() : discardsRemaining;
+    }
+
+    /** The highest single-hand score banked this round (feeds the Mirage/Shave exclusions and BlindResult). */
+    public BigDecimal getBestHandScore() { return bestHandScore; }
+
+    /** The hand type debuffed this round (zero base chips/mult when played), or null. Set by the boss resolver. */
+    public HandType getDebuffedHandType() { return debuffedHandType; }
+
+    /** The Hivemind: debuffs {@code type} for this round. Called by the Match-level boss resolver at the deal. */
+    public void setDebuffedHandType(HandType type) { this.debuffedHandType = type; }
     public RoundOutcome getOutcome()  { return outcome; }
 
     /** The most recently played hand type, or {@code null} if none yet (used by Blue Seal at cash-out). */

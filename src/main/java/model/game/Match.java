@@ -6,6 +6,8 @@ import model.cards.jokers.JokerCard;
 import model.cards.relics.RelicCard;
 import model.cards.relics.RelicContext;
 import model.cards.relics.RelicTarget;
+import model.game.bosses.BossBehavior;
+import model.game.bosses.BossBehaviors;
 import model.game.player.BlindResult;
 import model.game.player.Player;
 import model.game.player.PlayerId;
@@ -25,9 +27,11 @@ import java.math.RoundingMode;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -41,6 +45,7 @@ public final class Match {
     private final Rng rng;                       // table-level randomness
     private final Map<PlayerId, Player> players; // insertion-ordered by seat
     private final SinSelector sinSelector;
+    private final BossSelector bossSelector;                // which boss closes an ante (injectable for tests)
     private final Function<Sin, SinModifier> sinResolver;   // Sin -> behaviour (injectable for tests)
     private final SinChoiceProvider sinChoiceProvider;      // resolves sin player-choices (Pride's multiplier, ...)
     private final PointsPolicy pointsPolicy;                // converts settled results into competition points
@@ -54,6 +59,7 @@ public final class Match {
     private SinModifier sinModifier = SinModifier.NONE;   // behaviour for activeSin; refreshed when the sin changes
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
+    private BossBehavior bossBehavior = BossBehavior.NONE;   // the boss's Match-level behaviour; NONE outside boss rounds
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
     private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
 
@@ -61,6 +67,7 @@ public final class Match {
         this.seed = seed;
         this.rng = new DeterministicRng(seed);
         this.sinSelector = config.sinSelector();
+        this.bossSelector = config.bossSelector();
         this.sinResolver = config.sinResolver();
         this.sinChoiceProvider = config.sinChoiceProvider();
         this.pointsPolicy = config.pointsPolicy();
@@ -162,12 +169,20 @@ public final class Match {
             if (round == null || round.getOutcome() == RoundOutcome.IN_PROGRESS)
                 throw new IllegalStateException("seat " + p.id() + " has not finished the blind");
         }
+        // Seats whose boss is still active at the barrier (Chicot/Luchador seats are exempt from boss adjustments).
+        // Captured before settlement because endRound clears the run's boss state.
+        Set<PlayerId> participants = new LinkedHashSet<>();
+        for (Player p : players.values())
+            if (currentBoss != null && p.run().effectiveBoss() == currentBoss) participants.add(p.id());
+
         Map<PlayerId, BlindResult> results = new LinkedHashMap<>();
-        for (Player p : players.values()) {
-            BlindResult result = p.run().endRound(blind);
-            sinModifier.onRoundSettled(p.run(), result);
-            results.put(p.id(), result);
-        }
+        for (Player p : players.values()) results.put(p.id(), p.run().endRound(blind));
+
+        results = bossBehavior.adjustResults(this, results, participants);   // The Shave, before anything reads scores
+        bossBehavior.onBossEnd(this);                                        // The Bandwagon strips its stickers
+        bossBehavior = BossBehavior.NONE;
+
+        for (Player p : players.values()) sinModifier.onRoundSettled(p.run(), results.get(p.id()));
         lastResults = results;
         awardPoints(results);
         if (blind == Blind.BOSS && ante >= anteCount) {   // final boss settled: the match is over
@@ -225,7 +240,12 @@ public final class Match {
             p.run().beginRound(target, currentBoss);
             sinModifier.onRoundBegin(p.run());
         }
+        bossBehavior = BossBehaviors.behaviorFor(currentBoss);   // NONE outside boss rounds
+        bossBehavior.onBossBegin(this);                          // after every seat's round exists
     }
+
+    /** The current boss's Match-level behaviour ({@link BossBehavior#NONE} outside boss rounds). */
+    public BossBehavior getBossBehavior() { return bossBehavior; }
 
     /** Refreshes the active sin's behaviour after the sin changes and runs its once-per-ante table setup. */
     private void refreshSinForAnte() {
@@ -241,9 +261,9 @@ public final class Match {
 
     /** This ante's boss, rerolled to a different one if a Metabole armed the reroll for this ante. */
     private BossBlind selectBoss() {
-        BossBlind boss = BossBlind.select(rng.streamFor(RngSource.BOSS_BLIND, ante), ante);
+        BossBlind boss = bossSelector.select(ante, rng.streamFor(RngSource.BOSS_BLIND, ante), null);
         if (ante >= rerollBossFromAnte) {
-            boss = BossBlind.select(rng.streamFor(RngSource.BOSS_BLIND, Rng.combine(ante, 1L)), ante, boss);
+            boss = bossSelector.select(ante, rng.streamFor(RngSource.BOSS_BLIND, Rng.combine(ante, 1L)), boss);
             rerollBossFromAnte = Integer.MAX_VALUE;
         }
         return boss;

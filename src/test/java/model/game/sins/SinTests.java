@@ -94,7 +94,7 @@ public final class SinTests {
     }
 
     private static BlindResult result(long target, long score) {
-        return new BlindResult(RoundOutcome.WON, BigDecimal.valueOf(score), target, 0, 0);
+        return new BlindResult(RoundOutcome.WON, BigDecimal.valueOf(score), BigDecimal.ZERO, target, 0, 0);
     }
 
     private static void check(String label, boolean ok) {

@@ -7,7 +7,8 @@ import model.game.sins.Sins;
 import java.util.function.Function;
 
 /**
- * The injectable policies for a {@link Match}: which sin is active each ante ({@link SinSelector}), how a sin maps
+ * The injectable policies for a {@link Match}: which sin is active each ante ({@link SinSelector}), which boss
+ * closes it ({@link BossSelector}), how a sin maps
  * to behaviour ({@code sinResolver}, default {@link Sins#modifierFor}), how a sin's player choices are resolved
  * ({@link SinChoiceProvider}), how settled results become competition points ({@link PointsPolicy}, default
  * {@link ProportionalPointsPolicy}), and how many antes the match runs ({@code anteCount}, default 7). Bundled into one
@@ -18,6 +19,7 @@ import java.util.function.Function;
  * a {@code with...} call is the normal path.
  */
 public record MatchConfig(SinSelector sinSelector,
+                          BossSelector bossSelector,
                           Function<Sin, SinModifier> sinResolver,
                           SinChoiceProvider sinChoiceProvider,
                           PointsPolicy pointsPolicy,
@@ -28,6 +30,7 @@ public record MatchConfig(SinSelector sinSelector,
 
     public MatchConfig {
         if (sinSelector == null)       sinSelector = SinSelector.SEEDED_UNIFORM;
+        if (bossSelector == null)      bossSelector = BossSelector.SEEDED;
         if (sinResolver == null)       sinResolver = Sins::modifierFor;
         if (sinChoiceProvider == null) sinChoiceProvider = SinChoiceProvider.FIRST;
         if (pointsPolicy == null)      pointsPolicy = PointsPolicy.PROPORTIONAL;
@@ -35,11 +38,12 @@ public record MatchConfig(SinSelector sinSelector,
     }
 
     /** All policies at their defaults. */
-    public static MatchConfig defaults() { return new MatchConfig(null, null, null, null, 0); }
+    public static MatchConfig defaults() { return new MatchConfig(null, null, null, null, null, 0); }
 
-    public MatchConfig withSinSelector(SinSelector s)               { return new MatchConfig(s, sinResolver, sinChoiceProvider, pointsPolicy, anteCount); }
-    public MatchConfig withSinResolver(Function<Sin, SinModifier> r){ return new MatchConfig(sinSelector, r, sinChoiceProvider, pointsPolicy, anteCount); }
-    public MatchConfig withSinChoiceProvider(SinChoiceProvider p)   { return new MatchConfig(sinSelector, sinResolver, p, pointsPolicy, anteCount); }
-    public MatchConfig withPointsPolicy(PointsPolicy p)             { return new MatchConfig(sinSelector, sinResolver, sinChoiceProvider, p, anteCount); }
-    public MatchConfig withAnteCount(int n)                         { return new MatchConfig(sinSelector, sinResolver, sinChoiceProvider, pointsPolicy, n); }
+    public MatchConfig withSinSelector(SinSelector s)               { return new MatchConfig(s, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, anteCount); }
+    public MatchConfig withBossSelector(BossSelector b)             { return new MatchConfig(sinSelector, b, sinResolver, sinChoiceProvider, pointsPolicy, anteCount); }
+    public MatchConfig withSinResolver(Function<Sin, SinModifier> r){ return new MatchConfig(sinSelector, bossSelector, r, sinChoiceProvider, pointsPolicy, anteCount); }
+    public MatchConfig withSinChoiceProvider(SinChoiceProvider p)   { return new MatchConfig(sinSelector, bossSelector, sinResolver, p, pointsPolicy, anteCount); }
+    public MatchConfig withPointsPolicy(PointsPolicy p)             { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, p, anteCount); }
+    public MatchConfig withAnteCount(int n)                         { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, n); }
 }

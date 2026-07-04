@@ -4,8 +4,11 @@ import model.cards.DeckCard;
 import model.cards.consumables.ConsumableCard;
 import model.cards.jokers.JokerCard;
 import model.game.Blind;
+import model.game.BossBlind;
 import model.game.scoring.Trigger;
 import model.modifiers.Enhancement;
+
+import java.math.BigDecimal;
 
 /** Resolves a finished round: end-of-round card effects and the cash-out economy, producing a {@link BlindResult}. */
 public final class RoundSettlement {
@@ -24,7 +27,13 @@ public final class RoundSettlement {
         }
         // A failed blind awards nothing; the run continues (no elimination). [policy decision to confirm]
 
-        return new BlindResult(round.getOutcome(), round.getScore(), round.getTarget(),
+        // The Mirage: the seat's own best hand is excluded from the settled score (the score the points
+        // award reads); the target check already resolved on the raw banked score, so clearing is unaffected.
+        BigDecimal settled = round.getScore();
+        BossBlind boss = run.effectiveBoss();
+        if (boss != null && boss.dropsOwnHighestHand()) settled = settled.subtract(round.getBestHandScore());
+
+        return new BlindResult(round.getOutcome(), settled, round.getBestHandScore(), round.getTarget(),
                 round.getHandsRemaining(), run.getMoney() - entryMoney);
     }
 
