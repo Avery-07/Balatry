@@ -21,6 +21,8 @@ public final class Sins {
         // Every sin starts at NONE; built sins are registered below.
         for (Sin sin : Sin.values()) REGISTRY.put(sin, SinModifier.NONE);
         register(Sin.PRIDE, new PrideModifier());
+        register(Sin.WRATH, new WrathModifier());
+        register(Sin.SLOTH, new SlothModifier());
     }
 
     private Sins() { }

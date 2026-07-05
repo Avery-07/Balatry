@@ -2,6 +2,7 @@ package model.game.shop;
 import model.game.player.Run;
 
 import model.cards.Card;
+import model.cards.jokers.JokerCard;
 import model.cards.packs.BoosterPack;
 import model.cards.vouchers.Voucher;
 import model.game.rng.Rng;
@@ -34,7 +35,7 @@ public final class Shop {
 
     /** Full three-row shop. */
     public Shop(Run run, int shopIndex, int slotCount, ShopPool pool,
-                int packCount, PackPool packPool, int voucherCount, VoucherPool voucherPool) {
+         int packCount, PackPool packPool, int voucherCount, VoucherPool voucherPool) {
         this.run = run;
         this.shopIndex = shopIndex;
         this.pool = pool;
@@ -63,7 +64,7 @@ public final class Shop {
     public Card buy(int slotIndex) {
         Card item = require(slots, slotIndex);
         if (!run.canAcquire(item)) throw new IllegalStateException("no inventory slot for " + item);
-        charge(priced(item.getShopValue()));
+        charge(priced(item.getShopValue()), item);
         run.acquire(item);
         run.getStats().recordPurchase();
         slots.set(slotIndex, null);
@@ -90,7 +91,7 @@ public final class Shop {
     /** Buys the pack in {@code packIndex}, charging the run; the caller opens it via {@link BoosterPack#open}. */
     public BoosterPack buyPack(int packIndex) {
         BoosterPack pack = require(packs, packIndex);
-        charge(priced(pack.getShopValue()));
+        charge(priced(pack.getShopValue()), pack);
         run.getStats().recordPurchase();
         packs.set(packIndex, null);
         return pack;
@@ -120,13 +121,20 @@ public final class Shop {
      * affordability, then pay and fire ON_BOUGHT. The ordering guarantees a failed purchase has no side effects:
      * pricing effects must be pure grants, and counting/reacting effects (ON_BOUGHT) only ever see completed buys.
      */
-    private void charge(int price) {
+    private void charge(int price, Card item) {
         run.beginPurchase();
         run.fire(Trigger.ON_PURCHASE_PRICING);
+        // Wrath: a banked destroy-grant makes the next JOKER purchase free — peeked here, consumed only on
+        // completion (the Loyalty-Card lesson: a failed buy must never burn a grant). Joker effects that already
+        // waived the cost (Loyalty's free 4th) take precedence, so the grant is saved for a paid purchase.
+        boolean wrathGrant = !run.isPurchaseFree() && item instanceof JokerCard
+                && run.getSinState().getWrathFreeJokers() > 0;
+        if (wrathGrant) run.makePurchaseFree();
         int effective = run.isPurchaseFree() ? 0 : price;
         if (run.getMoney() - effective < run.minBalance())
             throw new IllegalStateException("cannot afford " + effective + " (have " + run.getMoney() + ", floor " + run.minBalance() + ")");
         run.spend(effective);
+        if (wrathGrant) run.getSinState().consumeWrathFreeJoker();
         run.fire(Trigger.ON_BOUGHT);
     }
 

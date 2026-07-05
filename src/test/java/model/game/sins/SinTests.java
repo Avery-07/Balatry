@@ -27,6 +27,8 @@ public final class SinTests {
         roundBeginChoice();
         roundSettledThreshold();
         stateReset();
+        wrathPack();
+        wrathDestroyForFree();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -34,7 +36,9 @@ public final class SinTests {
 
     private static void registration() {
         check("Pride registered as PrideModifier", Sins.modifierFor(Sin.PRIDE) instanceof PrideModifier);
-        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.WRATH) == SinModifier.NONE);
+        check("Wrath registered as WrathModifier", Sins.modifierFor(Sin.WRATH) instanceof WrathModifier);
+        check("Sloth registered with a double skip grant", Sins.modifierFor(Sin.SLOTH).tagsPerSkip() == 2);
+        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.GREED) == SinModifier.NONE);
     }
 
     /** onRoundBegin consults the injected provider and stores the chosen multiplier on each seat's SinState. */
@@ -85,6 +89,115 @@ public final class SinTests {
         run.getSinState().beginRound();
         check("beginRound resets multiplier to x1", run.getSinState().getPrideMultiplier().compareTo(BigDecimal.ONE) == 0);
         check("beginRound clears threshold-met", !run.getSinState().isPrideThresholdMet());
+    }
+
+    /** Wrath's free Mega Myth Pack: same seeded offer per seat, pick budget enforced, immediate relic cast. */
+    private static void wrathPack() {
+        Match m = Match.create(64L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.WRATH));
+        PlayerId a = m.getSeats().get(0);
+        PlayerId b = m.getSeats().get(1);
+        m.start();
+
+        check("a pending pack is granted at round begin", m.getRun(a).getPendingPacks().size() == 1);
+        var pack = m.getRun(a).getPendingPacks().get(0);
+        check("the grant is a Mega Myth Pack",
+                pack.kind() == model.cards.packs.PackKind.MYTH && pack.size() == model.cards.packs.PackSize.MEGA);
+
+        var openA = m.getRun(a).openPendingPack(0);
+        var openB = m.getRun(b).openPendingPack(0);
+        check("the pack leaves the pending area on open", m.getRun(a).getPendingPacks().isEmpty());
+        checkInt("Mega offer is 5 options", openA.getOptions().size(), 5);
+        checkInt("Mega pick budget is 2", openA.getPicksLeft(), 2);
+        boolean mirrored = true;
+        for (int i = 0; i < 5; i++) {
+            var ca = (model.cards.relics.RelicCard) openA.getOptions().get(i);
+            var cb = (model.cards.relics.RelicCard) openB.getOptions().get(i);
+            mirrored &= ca.getSpec().getName().equals(cb.getSpec().getName());
+        }
+        check("both seats see the same seeded offer", mirrored);
+
+        // A picked relic is cast immediately (Harpax as the probe if offered; otherwise just burn the picks).
+        var first = openA.pick(0);
+        var second = openA.pick(1);
+        check("picks come off the offer", openA.getOptions().get(0) == null && openA.getOptions().get(1) == null);
+        checkThrows("the pick budget is enforced", () -> openA.pick(2));
+        check("picked relics never touch the relic area", m.getRun(a).getRelics().isEmpty());
+        m.useRelicCard(a, (model.cards.relics.RelicCard) first, model.cards.relics.RelicTarget.on(b));
+        m.useRelicCard(a, (model.cards.relics.RelicCard) second, model.cards.relics.RelicTarget.on(b));
+        check("pack relics cast without holding slots", m.getRun(a).getRelics().isEmpty());
+
+        // An unopened pack dies with its round.
+        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
+        m.toShop();
+        check("an unopened pack does not survive the round", m.getRun(b).getPendingPacks().isEmpty());
+    }
+
+    /** Wrath's destroy-for-free: sin-gated, Eternal rejected, grants stack across rounds and die with the ante. */
+    private static void wrathDestroyForFree() {
+        Match m = Match.create(65L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.WRATH));
+        PlayerId a = m.getSeats().get(0);
+        Run run = m.getRun(a);
+        run.board().add(model.cards.jokers.Jokers.JOKER.make());
+        run.board().add(model.cards.jokers.Jokers.GREEDY_JOKER.make());
+        var eternal = model.cards.jokers.Jokers.LUSTY_JOKER.make();
+        eternal.apply(model.modifiers.Sticker.ETERNAL);
+        run.board().add(eternal);
+        m.start();
+
+        m.wrathDestroyJoker(a, 0);
+        m.wrathDestroyJoker(a, 0);                       // grants stack
+        checkInt("two destroys bank two grants", run.getSinState().getWrathFreeJokers(), 2);
+        checkInt("destroyed jokers leave the board", run.board().size(), 1);
+        checkThrows("an Eternal joker cannot be destroyed", () -> m.wrathDestroyJoker(a, 0));
+        check("destroying earns no money", run.getMoney() == 0);
+
+        // The grants survive into the shop and make joker purchases free; a pack purchase is untouched.
+        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
+        m.toShop();
+        var shop = run.getShop();
+        run.addMoney(50);
+        int before = run.getMoney();
+        boolean jokerBought = false;
+        for (int i = 0; i < shop.getSlotCount(); i++) {
+            if (shop.getSlot(i) instanceof model.cards.jokers.JokerCard && run.canAcquire(shop.getSlot(i))) {
+                shop.buy(i);
+                jokerBought = true;
+                break;
+            }
+        }
+        if (jokerBought) {
+            checkInt("a grant makes the joker purchase free", run.getMoney(), before);
+            checkInt("one grant consumed on completion", run.getSinState().getWrathFreeJokers(), 1);
+        }
+        int cash = run.getMoney();
+        shop.buyPack(0);
+        check("a pack purchase does not touch the grant", run.getMoney() < cash
+                && run.getSinState().getWrathFreeJokers() == (jokerBought ? 1 : 2));
+
+        // Grants expire with the ante.
+        run.getSinState().grantWrathFreeJoker();
+        run.beginAnte();
+        checkInt("unspent grants die with the ante", run.getSinState().getWrathFreeJokers(), 0);
+
+        // Sin gating: the same action under another sin is rejected.
+        Match pride = Match.create(66L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
+        PlayerId pa = pride.getSeats().get(0);
+        pride.getRun(pa).board().add(model.cards.jokers.Jokers.JOKER.make());
+        pride.start();
+        checkThrows("destroy-for-free is Wrath-gated", () -> pride.wrathDestroyJoker(pa, 0));
+    }
+
+    private static void checkInt(String label, int actual, int expected) {
+        check(label + " (" + actual + ")", actual == expected);
+    }
+
+    private static void checkThrows(String label, Runnable action) {
+        boolean threw = false;
+        try { action.run(); } catch (RuntimeException e) { threw = true; }
+        check(label, threw);
     }
 
     private static Run headlessWithMultiplier(BigDecimal m) {

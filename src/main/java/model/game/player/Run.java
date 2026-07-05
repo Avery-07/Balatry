@@ -4,8 +4,11 @@ import model.cards.Card;
 import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
+import model.cards.packs.BoosterPack;
+import model.cards.packs.PackOpening;
 import model.cards.jokers.JokerTrait;
 import model.game.sins.SinState;
+import model.game.tags.SkipTag;
 import model.cards.consumables.ConsumableSpec;
 import model.cards.relics.RelicCard;
 import model.cards.relics.RelicSpec;
@@ -50,6 +53,8 @@ public final class Run {
     private final List<RelicCard> relics = new ArrayList<>();   // held, single-use multiplayer cards
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
     private final BossState bossState = new BossState();     // boss-imposed state (Quartz, Pillar, Crimson Heart, flags)
+    private final List<BoosterPack> pendingPacks = new ArrayList<>();   // granted, unopened packs (Wrath, pack tags); cleared at round end
+    private final List<SkipTag> pendingTags = new ArrayList<>();        // NEXT_SHOP / NEXT_BOSS / META tags awaiting their moment
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
     private int handSize = 8;
@@ -162,6 +167,31 @@ public final class Run {
 
     /** Destroys {@code joker} (by identity); Eternal jokers survive (Ankh, Hex, Madness, Ceremonial Dagger). */
     public boolean destroyJoker(JokerCard joker) { return board.destroy(joker); }
+
+    /** Grants a skip tag: IMMEDIATE tags resolve now; pending timings accumulate until their moment. */
+    public void grantTag(SkipTag tag) {
+        stats.recordTagGained();
+        if (tag.getTiming() == SkipTag.Timing.IMMEDIATE) tag.resolve(this);
+        else pendingTags.add(tag);
+    }
+
+    /** Unmodifiable view of tags awaiting their moment (next shop, next boss, Double). */
+    public List<SkipTag> getPendingTags() { return Collections.unmodifiableList(pendingTags); }
+
+    /** Removes one pending {@code tag} if present (the Match consumes Investment at a defeated boss). */
+    public boolean consumePendingTag(SkipTag tag) { return pendingTags.remove(tag); }
+
+    /** Grants an unopened pack (Wrath's free Mega Myth Pack, pack tags); openable until the round ends. */
+    public void grantPack(BoosterPack pack) { pendingPacks.add(pack); }
+
+    /** Unmodifiable view of granted, unopened packs. */
+    public List<BoosterPack> getPendingPacks() { return Collections.unmodifiableList(pendingPacks); }
+
+    /** Opens the pending pack at {@code index} on the seeded pack stream; the pack leaves the pending area. */
+    public PackOpening openPendingPack(int index) {
+        BoosterPack pack = pendingPacks.remove(index);
+        return pack.openFor(this, rng.streamFor(RngSource.PACK_CONTENTS, stats.nextSalt(RngSource.PACK_CONTENTS)));
+    }
 
     /** Adds an existing relic card to the area, if there is room (NEGATIVE relics are free). */
     public void addRelic(RelicCard relic) {
@@ -366,7 +396,7 @@ public final class Run {
     }
 
     /** Resets this run's per-ante allowances; call at the start of each ante. */
-    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); bossState.beginAnte(); }
+    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); bossState.beginAnte(); sinState.beginAnte(); }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -518,6 +548,7 @@ public final class Run {
         BlindResult result = SETTLEMENT.settle(this, round, blind);
         afflictions.endRound();   // clear round-scoped relic debuffs; strip any joker sticker this seat's afflictions added
         bossState.endRound();     // restore Quartz debuffs, re-enable Crimson Heart's joker, drop the boss
+        pendingPacks.clear();     // an unopened Wrath pack does not carry past its round
         round = null;
         return result;
     }

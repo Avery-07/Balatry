@@ -40,6 +40,7 @@ public final class Round {
     private HandType debuffedHandType;     // The Hivemind: this type scores no base chips/mult; set by the boss resolver
     private BigDecimal bestHandScore = BigDecimal.ZERO;   // highest single-hand score this round (Mirage/Shave exclusions)
     private DeckCard forcedCard;           // Cerulean Bell: must be included in every play and discard; null when inactive
+    private boolean acted;                 // whether this seat has played or discarded (skipping requires an untouched round)
 
     Round(Run run, long target, int handSize, int hands, int discards, RandomGenerator shuffle) {
         this.run = run;
@@ -83,6 +84,7 @@ public final class Round {
 
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
 
+        acted = true;
         run.recordAntePlayed(cards);   // The Pillar: this ante's played cards (non-boss blinds only; see Run)
 
         if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());
@@ -117,6 +119,17 @@ public final class Round {
         resolve();
     }
 
+    /**
+     * Skips this blind: only legal before the seat has played or discarded. The round ends SKIPPED — no score,
+     * no cash-out, no points (the seat is absent from the award) — in exchange for the blind's skip tag,
+     * granted by {@code Match.skipBlind}.
+     */
+    public void skip() {
+        requireInProgress();
+        if (acted) throw new IllegalStateException("cannot skip after playing or discarding");
+        outcome = RoundOutcome.SKIPPED;
+    }
+
     /** Resolves the terminal outcome from the banked score; Mr. Bones may turn a miss into a save. */
     private void resolve() {
         if (score.compareTo(BigDecimal.valueOf(target)) >= 0) outcome = RoundOutcome.WON;
@@ -137,6 +150,7 @@ public final class Round {
         }
         validateSelection(cards);
 
+        acted = true;
         hand.removeAll(cards);
         if (shared != null) shared.consume();
         else discardsRemaining--;

@@ -46,13 +46,14 @@ public final class DeterminismTests {
 
     // Coverage counters, reset per match: the harness asserts its own non-vacuity, so a future driver
     // regression that stops clearing blinds or buying cards fails loudly instead of testing nothing.
-    private static int clearedBlinds, purchases, swaps;
+    private static int clearedBlinds, purchases, swaps, skips;
 
     public static void main(String[] args) {
         // --- replay determinism + seat mirroring under default (seeded) policies ---
         List<String> first  = playMatch(4242L, MatchConfig.defaults(), false);
         check("coverage: blinds cleared under default policies", clearedBlinds >= 4);
         check("coverage: the shop path is exercised", purchases >= 2);
+        check("coverage: the skip verb is exercised", skips >= 2);
         List<String> second = playMatch(4242L, MatchConfig.defaults(), false);
         compareTraces("replay (default policies)", first, second);
         List<String> other = playMatch(4243L, MatchConfig.defaults(), false);
@@ -95,11 +96,15 @@ public final class DeterminismTests {
             }
         }
         match.start();
-        clearedBlinds = 0; purchases = 0; swaps = 0;
+        clearedBlinds = 0; purchases = 0; swaps = 0; skips = 0;
 
         List<String> trace = new ArrayList<>();
         while (match.getPhase() == MatchPhase.BLIND) {
-            for (PlayerId id : match.getSeats()) driveRound(match.getRun(id));
+            boolean skipHere = match.getAnte() == 2 && match.getBlind() == Blind.SMALL;   // the skip verb, mirrored
+            for (PlayerId id : match.getSeats()) {
+                if (skipHere) { match.skipBlind(id); skips++; }
+                else driveRound(match.getRun(id));
+            }
             match.toShop();
 
             for (PlayerId id : match.getSeats()) if (match.getResult(id).cleared()) clearedBlinds++;
@@ -253,6 +258,7 @@ public final class DeterminismTests {
           .append(" blind=").append(match.getBlind())
           .append(" sin=").append(match.getActiveSin())
           .append(" boss=").append(match.getCurrentBoss())
+          .append(" tag=").append(match.getCurrentTag())
           .append(" phase=").append(match.getPhase()).append('\n');
         for (PlayerId id : match.getSeats()) {
             sb.append("points=").append(match.getStandings().getPoints(id))
@@ -273,6 +279,8 @@ public final class DeterminismTests {
                .append(result.handsRemaining()).append('/').append(result.moneyEarned());
         sb.append("\njokers=");
         for (JokerCard j : run.getJokers()) sb.append(cardDescriptor(j)).append(';');
+        sb.append("\ntags=").append(run.getPendingTags());
+        sb.append(" tagsGained=").append(run.getStats().getTagsGained());
         sb.append("\nconsumables=");
         for (ConsumableCard c : run.getConsumables()) sb.append(cardDescriptor(c)).append(';');
         sb.append("\nlevels=");

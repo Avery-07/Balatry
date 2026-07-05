@@ -88,6 +88,7 @@ public final class MatchTests {
         sinDispatchOrdering();
         swapGuards();
         endOfMatch();
+        skipAndTags();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -140,6 +141,11 @@ public final class MatchTests {
         check("swap exchanged the jokers", envy.getRun(a).getJokers().get(0) == jb
                 && envy.getRun(b).getJokers().get(0) == ja);
 
+        // Eternal guards against sale and destruction; a swap is neither (decision: no consent, no protection).
+        envy.getRun(a).getJokers().get(0).apply(model.modifiers.Sticker.ETERNAL);
+        envy.swapJokers(a, 0, b, 0);
+        check("an Eternal joker is still swappable", envy.getRun(b).getJokers().get(0).hasSticker(model.modifiers.Sticker.ETERNAL));
+
         // Slot accounting: B is full (5 slot-consumers) plus one NEGATIVE joker; trading the NEGATIVE
         // away for A's slot-consuming joker would put B at 6/5 used slots, so the swap must be rejected.
         for (int i = 0; i < 4; i++) envy.getRun(b).board().add(stubJoker());   // B: 5 consumers
@@ -178,6 +184,82 @@ public final class MatchTests {
         for (PlayerId id : match.getSeats()) noShops &= match.getRun(id).getShop() == null;
         check("no post-match shop opened", noShops);
         checkThrows("nextBlind blocked after the match", match::nextBlind);
+    }
+
+    /** The skip verb: SKIPPED outcome, forfeited economy and points, tag granted; guards on acting and phase. */
+    private static void skipAndTags() {
+        Match match = Match.create(140L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE)
+                        .withBossSelector((ante, rng, exclude) -> BossBlind.THE_HOOK));   // hands untouched
+        PlayerId a = match.getSeats().get(0);
+        PlayerId b = match.getSeats().get(1);
+        for (PlayerId id : match.getSeats()) {
+            java.util.List<DeckCard> aces = new java.util.ArrayList<>();
+            for (int i = 0; i < 16; i++) aces.add(new DeckCard(Rank.ACE, Suit.SPADES));
+            match.getRun(id).resetDeck(aces);
+        }
+        match.start();
+        check("every blind carries a seeded tag", match.getCurrentTag() != null);
+
+        match.skipBlind(a);                                   // A skips; B clears
+        check("skip ends the round SKIPPED",
+                match.getRun(a).getRound().getOutcome() == RoundOutcome.SKIPPED);
+        checkThrows("a seat cannot skip twice", () -> match.skipBlind(a));
+        check("the skip granted exactly one tag", match.getRun(a).getStats().getTagsGained() == 1);
+        int moneyAtSkip = match.getRun(a).getMoney();
+
+        match.getRun(b).getRound().play(handOf(match.getRun(b), 5));   // a Flush Five clears; exhaust() would not
+        match.getRun(b).getRound().finish();
+        match.toShop();
+        BlindResult skipped = match.getResult(a);
+        check("a skipped result forfeits everything", skipped.outcome() == RoundOutcome.SKIPPED
+                && skipped.score().signum() == 0 && skipped.moneyEarned() == 0);
+        check("the skipper is absent from the award",
+                !match.getStandings().getLastAward().containsKey(a));
+        check("the clearer takes the full round pot",
+                match.getStandings().getLastAward().getOrDefault(b, 0L) == 100L);
+        checkThrows("no skipping outside the blind phase", () -> match.skipBlind(b));
+        match.nextBlind();
+
+        // Acting forfeits the right to skip.
+        match.getRun(b).getRound().play(handOf(match.getRun(b), 5));
+        checkThrows("no skip after acting", () -> match.skipBlind(b));
+
+        // Investment: pending until the next boss is defeated, then $25 per copy.
+        match.getRun(a).grantTag(model.game.tags.SkipTag.INVESTMENT_TAG);
+        match.getRun(a).grantTag(model.game.tags.SkipTag.INVESTMENT_TAG);
+        exhaust(match.getRun(a));
+        match.getRun(b).getRound().finish();
+        match.toShop();
+        match.nextBlind();                                    // the ante-1 boss
+        for (PlayerId id : match.getSeats()) {                // both clear it (Flush Five >> target)
+            match.getRun(id).getRound().play(handOf(match.getRun(id), 5));
+            if (match.getRun(id).getRound().getOutcome() == RoundOutcome.IN_PROGRESS)
+                match.getRun(id).getRound().finish();
+        }
+        // Equalize interest (both seats at the cap) so the only cash-out difference is the Investment payout.
+        // A holds the 2 granted copies plus however many the skipped blind's seeded tag happened to add.
+        match.getRun(a).addMoney(100);
+        match.getRun(b).addMoney(100);
+        long copies = match.getRun(a).getPendingTags().stream()
+                .filter(t -> t == model.game.tags.SkipTag.INVESTMENT_TAG).count();
+        check("at least the two granted Investments are pending", copies >= 2);
+        long aBefore = match.getRun(a).getMoney();
+        long bBefore = match.getRun(b).getMoney();
+        match.toShop();
+        long aDelta = match.getRun(a).getMoney() - aBefore;
+        long bDelta = match.getRun(b).getMoney() - bBefore;
+        check("Investment pays $25 per copy at a defeated boss (" + aDelta + " vs " + bDelta + ")",
+                aDelta - bDelta == 25 * copies);
+        check("consumed Investments leave the pending area", match.getRun(a).getPendingTags().isEmpty());
+
+        // Sloth: a skip grants the tag twice.
+        Match sloth = Match.create(141L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.SLOTH));
+        PlayerId sa = sloth.getSeats().get(0);
+        sloth.start();
+        sloth.skipBlind(sa);
+        check("Sloth grants a second tag on skip", sloth.getRun(sa).getStats().getTagsGained() == 2);
     }
 
     private static JokerCard stubJoker() {

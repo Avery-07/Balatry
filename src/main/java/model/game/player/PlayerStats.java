@@ -66,6 +66,8 @@ public final class PlayerStats {
     private int cardsDestroyed;     // cards destroyed this run (Canio)
     private int glassDestroyed;     // Glass cards destroyed this run (Glass Joker)
     private int blindsSkipped;      // blinds skipped this run (Throwback / Speed Tag)
+    private int unusedDiscards;   // discards unspent at settlement, run-cumulative (Garbage Tag)
+    private int tagsGained;       // skip tags gained this run
     private int timesTargeted;      // opponent effects aimed at this player this run (Anger; multiplayer)
 
     // --- round-scoped gameplay history (reset in beginRound) ---
@@ -229,6 +231,14 @@ public final class PlayerStats {
     public void recordGlassDestroyed(int n) { glassDestroyed += n; cardsDestroyed += n; }
     /** Records a skipped blind (Throwback / Speed Tag). */
     public void recordBlindSkipped()  { blindsSkipped++; }
+
+    /** Skip tags gained this run (any timing). */
+    public int getTagsGained()        { return tagsGained; }
+    public void recordTagGained()     { tagsGained++; }
+
+    /** Discards left unspent at each played round's settlement, accumulated over the run (Garbage Tag). */
+    public int getUnusedDiscards()            { return unusedDiscards; }
+    public void recordUnusedDiscards(int n)   { unusedDiscards += n; }
     /** Records an opponent effect aimed at this player (Anger; multiplayer). */
     public void recordTargeted()      { timesTargeted++; }
 

@@ -21,6 +21,7 @@ import model.game.player.Run;
 import model.game.shop.Shop;
 import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
+import model.game.tags.SkipTag;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -60,6 +61,7 @@ public final class Match {
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
     private BossBehavior bossBehavior = BossBehavior.NONE;   // the boss's Match-level behaviour; NONE outside boss rounds
+    private SkipTag currentTag;                    // the tag this blind offers for skipping (table-level, seeded)
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
     private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
 
@@ -185,6 +187,11 @@ public final class Match {
         for (Player p : players.values()) sinModifier.onRoundSettled(p.run(), results.get(p.id()));
         lastResults = results;
         awardPoints(results);
+        if (blind == Blind.BOSS)
+            for (Player p : players.values())
+                if (results.get(p.id()).cleared())   // Investment Tag pays $25 per copy when the next boss falls
+                    while (p.run().consumePendingTag(SkipTag.INVESTMENT_TAG))
+                        p.run().addMoney(SkipTag.INVESTMENT_PAYOUT);
         if (blind == Blind.BOSS && ante >= anteCount) {   // final boss settled: the match is over
             phase = MatchPhase.FINISHED;
             return;
@@ -235,6 +242,7 @@ public final class Match {
     /** Deals every seat into the current blind on its own seed. */
     private void dealBlind() {
         currentBoss = (blind == Blind.BOSS) ? selectBoss() : null;   // table-level: same boss for every seat
+        currentTag = selectTag();                                    // table-level: the same skip reward for every seat
         long target = getCurrentTarget();
         for (Player p : players.values()) {
             p.run().beginRound(target, currentBoss);
@@ -246,6 +254,31 @@ public final class Match {
 
     /** The current boss's Match-level behaviour ({@link BossBehavior#NONE} outside boss rounds). */
     public BossBehavior getBossBehavior() { return bossBehavior; }
+
+    /** The skip tag this blind carries: seeded on the table stream, keyed by ante and blind, same for all seats. */
+    private SkipTag selectTag() {
+        var stream = rng.streamFor(RngSource.SKIP_TAG, Rng.combine(ante, blind.ordinal()));
+        return SkipTag.values()[stream.nextInt(SkipTag.values().length)];
+    }
+
+    /** The tag skipping the current blind would grant. */
+    public SkipTag getCurrentTag() { return currentTag; }
+
+    /**
+     * Skips the current blind for one seat: legal only before the seat has played or discarded. The round ends
+     * SKIPPED — no score, no cash-out, absent from the points award — and the blind's tag is granted (twice
+     * under Sloth, via {@link model.game.sins.SinModifier#tagsPerSkip}). Any blind may be skipped, boss included.
+     */
+    public void skipBlind(PlayerId id) {
+        require(MatchPhase.BLIND, "skipBlind");
+        Run run = getRun(id);
+        Round round = run.getRound();
+        if (round == null || round.getOutcome() != RoundOutcome.IN_PROGRESS)
+            throw new IllegalStateException("seat " + id + " has no round to skip");
+        round.skip();
+        run.getStats().recordBlindSkipped();
+        for (int i = 0; i < sinModifier.tagsPerSkip(); i++) run.grantTag(currentTag);
+    }
 
     /** Refreshes the active sin's behaviour after the sin changes and runs its once-per-ante table setup. */
     private void refreshSinForAnte() {
@@ -276,8 +309,8 @@ public final class Match {
      * Envy's swap happens) while Envy is the active sin, and only if neither seat ends up over its joker slots
      * (a swap is 1:1, but exchanging a NEGATIVE joker for a slot-consuming one is asymmetric).
      *
-     * <p>Open design questions, deliberately not decided here: the consent mechanic, and whether Eternal or
-     * Pinned stickers should block a swap (a swap is neither a sale nor a destruction, so today they do not).
+     * <p>Swaps are unilateral by design — Envy is coveting, not trading — and no sticker protects a joker
+     * from one: Eternal guards against sale and destruction, and a swap is neither.
      */
     public void swapJokers(PlayerId a, int indexA, PlayerId b, int indexB) {
         require(MatchPhase.SHOP, "swapJokers");
@@ -313,10 +346,21 @@ public final class Match {
      * negated by consuming the shield. The relic is removed from the caster's relic area either way.
      */
     public void useRelic(PlayerId casterId, int relicIndex, RelicTarget target) {
+        Run caster = getRun(casterId);
+        castRelic(casterId, caster.getRelics().get(relicIndex), target);
+        caster.consumeRelic(relicIndex);
+    }
+
+    /** Casts a relic not held in the relic area — a Myth-pack pick, used immediately (Wrath's free pack). */
+    public void useRelicCard(PlayerId casterId, RelicCard relic, RelicTarget target) {
+        castRelic(casterId, relic, target);
+    }
+
+    /** The relic cast core: Anger's targeted-count, Aegis negation, then the effect. */
+    private void castRelic(PlayerId casterId, RelicCard relic, RelicTarget target) {
         if (phase == MatchPhase.LOBBY || phase == MatchPhase.FINISHED)
             throw new IllegalStateException("relics cannot be used in phase " + phase);
         Run caster = getRun(casterId);
-        RelicCard relic = caster.getRelics().get(relicIndex);
 
         PlayerId targetId = target.opponent();
         Run targetRun = (targetId == null) ? null : getRun(targetId);
@@ -330,8 +374,23 @@ public final class Match {
         if (!negated)
             relic.getSpec().getEffect().resolve(
                     new RelicContext(this, caster, casterId, targetRun, targetId, target));
+    }
 
-        caster.consumeRelic(relicIndex);
+    /**
+     * Wrath: destroys the caster's own joker at {@code index} — no money, but the next joker purchase is free
+     * (grants stack and expire with the ante). Legal in any live phase ("whenever you want"); Eternal jokers
+     * cannot be destroyed, and since this is a deliberate player action the rejection is loud.
+     */
+    public void wrathDestroyJoker(PlayerId id, int index) {
+        if (activeSin != Sin.WRATH)
+            throw new IllegalStateException("destroying for a grant is a Wrath mechanic; active sin is " + activeSin);
+        if (phase == MatchPhase.LOBBY || phase == MatchPhase.FINISHED)
+            throw new IllegalStateException("jokers cannot be destroyed in phase " + phase);
+        Run run = getRun(id);
+        JokerCard joker = boardCard(run.board(), index, id);
+        if (!run.board().destroy(joker))
+            throw new IllegalStateException("an Eternal joker cannot be destroyed: " + joker.getSpec().getName());
+        run.getSinState().grantWrathFreeJoker();
     }
 
     /** Records {@code spec} as the table's most recently used consumable (read by Mimesis). */

@@ -27,6 +27,12 @@ public final class RoundSettlement {
         }
         // A failed blind awards nothing; the run continues (no elimination). [policy decision to confirm]
 
+        if (round.getOutcome() == RoundOutcome.SKIPPED)   // a skip forfeits everything: no reward, no interest
+            return new BlindResult(RoundOutcome.SKIPPED, BigDecimal.ZERO, BigDecimal.ZERO,
+                    round.getTarget(), round.getHandsRemaining(), 0);
+
+        run.getStats().recordUnusedDiscards(round.getDiscardsRemaining());   // Garbage Tag's run accumulator
+
         // The Mirage: the seat's own best hand is excluded from the settled score (the score the points
         // award reads); the target check already resolved on the raw banked score, so clearing is unaffected.
         BigDecimal settled = round.getScore();

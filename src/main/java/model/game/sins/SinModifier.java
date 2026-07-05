@@ -34,6 +34,9 @@ public interface SinModifier {
     /** Per seat, after its round is settled: read the {@code result} and apply any end-of-round sin effect. */
     default void onRoundSettled(Run run, BlindResult result) { }
 
+    /** How many copies of the blind's tag a skip grants (Sloth: 2). */
+    default int tagsPerSkip() { return 1; }
+
     /** The inert sin: no ante is modified. Used as the default and whenever a sin has no model behaviour yet. */
     SinModifier NONE = new SinModifier() { };
 }

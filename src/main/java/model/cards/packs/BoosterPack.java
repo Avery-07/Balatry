@@ -54,12 +54,13 @@ public final class BoosterPack extends Card {
     public List<Card> open(Run run, RandomGenerator stream) {
         int count = baseOptionCount() + run.getPackOptionBonus();
         List<Card> options = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            Card c = generate(stream);
-            if (c == null) return List.of();   // Spectral / Myth: no content source yet
-            options.add(c);
-        }
+        for (int i = 0; i < count; i++) options.add(generate(stream));
         return options;
+    }
+
+    /** Opens this pack into a {@link PackOpening}: the generated options plus the pick budget. */
+    public PackOpening openFor(Run run, RandomGenerator stream) {
+        return new PackOpening(this, open(run, stream), pickCount(run));
     }
 
     /** How many cards the player keeps, factoring the run's bonus (Connoisseur, Mega only). */
