@@ -18,9 +18,11 @@ import java.util.function.Consumer;
  *
  * <p>Timing classes: {@code IMMEDIATE} tags resolve at the moment of the grant. {@code NEXT_BOSS} tags
  * (Investment) wait pending on the run and are consumed by the Match when the next boss is defeated.
- * {@code NEXT_SHOP} tags and the {@code META} Double Tag are granted and held pending, but their resolution
- * couples to shop generation / tag selection and is deliberately deferred to the shop-modifier pass (the same
- * seam Greed and Lust need) — they accumulate on the run untouched until then.
+ * {@code NEXT_SHOP} tags wait pending and are consumed by {@link Run#openShop} into the shop's
+ * {@link model.game.shop.ShopSetup} (Coupon frees the initial card/pack rows, D6 zeroes the reroll base,
+ * Voucher adds a voucher slot, Uncommon/Rare inject free jokers, Negative banks a free-Negative transform).
+ * The {@code META} Double Tag waits pending and is consumed by {@link Run#grantTag}: every pending copy
+ * duplicates the next selected tag.
  *
  * <p>Pack-granting tags use the pending-pack area, which is cleared at round end — a skipping player has the
  * whole skipped round to open theirs.

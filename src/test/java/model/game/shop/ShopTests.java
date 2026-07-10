@@ -41,6 +41,7 @@ public final class ShopTests {
     public static void main(String[] args) {
         unitChecks();
         fullShopChecks();
+        modifierPassChecks();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -231,6 +232,133 @@ public final class ShopTests {
         checkInt("Grabber via shop: +1 hand", sr.getBaseHands(), handsBefore + 1);
         checkInt("Grabber charged $10", sr.getMoney(), moneyBefore - 10);
         check("voucher slot cleared", vshop.getVoucher(0) == null);
+    }
+
+    /**
+     * The shop-modifier pass: NEXT_SHOP tags consumed into the {@link ShopSetup} (Coupon, D6, Voucher,
+     * Uncommon/Rare injection, Negative transform), rolled-position salting keeping tagged and untagged seats
+     * mirrored, the per-reroll purchase cap, and the sin's {@code configureShop} hook wired through the Match.
+     */
+    private static void modifierPassChecks() {
+        // --- Coupon Tag: initial card + pack rows free; rerolled contents full price; tag consumed ---
+        Run coupon = new Run(60L); coupon.addMoney(10);
+        coupon.grantTag(model.game.tags.SkipTag.COUPON_TAG);
+        Shop cs = coupon.openShop();
+        check("Coupon consumed on shop open", coupon.getPendingTags().isEmpty());
+        boolean allFree = true;
+        for (int i = 0; i < cs.getSlotCount(); i++) allFree &= cs.slotPrice(i) == 0;
+        for (int i = 0; i < cs.getPackCount(); i++) allFree &= cs.packPrice(i) == 0;
+        check("Coupon: initial cards and packs are free", allFree);
+        int before = coupon.getMoney();
+        cs.buyPack(0);
+        checkInt("Coupon: free pack purchase charges nothing", coupon.getMoney(), before);
+        cs.reroll();   // -5
+        check("Coupon: rerolled contents are full price", cs.getSlot(0) == null || cs.slotPrice(0) > 0);
+        coupon.closeShop();
+        check("next shop is not free", coupon.openShop().slotPrice(0) > 0);
+
+        // --- D6 Tag: reroll cost starts at $0 (still +$1 per reroll), this shop only ---
+        Run d6 = new Run(61L);
+        d6.grantTag(model.game.tags.SkipTag.D6_TAG);
+        Shop ds = d6.openShop();
+        checkInt("D6: first reroll costs 0", ds.rerollCost(), 0);
+        ds.reroll();   // affordable at $0
+        checkInt("D6: second reroll costs 1", ds.rerollCost(), 1);
+        d6.closeShop();
+        checkInt("D6: next shop rerolls from the base again", d6.openShop().rerollCost(), 5);
+
+        // --- Voucher Tags stack: each adds one voucher slot to the next shop ---
+        Run vt = new Run(62L);
+        vt.grantTag(model.game.tags.SkipTag.VOUCHER_TAG);
+        vt.grantTag(model.game.tags.SkipTag.VOUCHER_TAG);
+        checkInt("two Voucher Tags -> 4 voucher slots", vt.openShop().getVoucherCount(), 4);
+
+        // --- Uncommon/Rare Tags: free leading jokers; the rolled offering behind them stays mirrored ---
+        Run tagged = new Run(63L);
+        tagged.grantTag(model.game.tags.SkipTag.UNCOMMON_TAG);
+        tagged.grantTag(model.game.tags.SkipTag.RARE_TAG);
+        Run plain = new Run(63L);
+        Shop ts = tagged.openShop();
+        Shop pls = plain.openShop();
+        checkInt("Uncommon+Rare -> 3 extra leading slots", ts.getSlotCount(), pls.getSlotCount() + 3);
+        boolean injectedOk = true;
+        for (int i = 0; i < 3; i++)
+            injectedOk &= ts.getSlot(i) instanceof JokerCard && ts.slotPrice(i) == 0;
+        check("injected jokers are free", injectedOk);
+        check("Uncommon Tag jokers are Uncommon",
+                ((JokerCard) ts.getSlot(0)).getSpec().getRarity() == Rarity.UNCOMMON
+                        && ((JokerCard) ts.getSlot(1)).getSpec().getRarity() == Rarity.UNCOMMON);
+        check("Rare Tag joker is Rare", ((JokerCard) ts.getSlot(2)).getSpec().getRarity() == Rarity.RARE);
+        boolean rolledMirrored = true;
+        for (int i = 0; i < pls.getSlotCount(); i++) rolledMirrored &= sameItem(ts.getSlot(3 + i), pls.getSlot(i));
+        check("rolled offering mirrors an untagged seat", rolledMirrored);
+        tagged.addMoney(20); plain.addMoney(20);
+        ts.reroll(); pls.reroll();
+        checkInt("injected slots vanish on reroll", ts.getSlotCount(), pls.getSlotCount());
+        boolean rerollMirrored = true;
+        for (int i = 0; i < pls.getSlotCount(); i++) rerollMirrored &= sameItem(ts.getSlot(i), pls.getSlot(i));
+        check("rerolled offering still mirrors", rerollMirrored);
+
+        // --- Negative Tag: the next base-edition rolled joker becomes free and Negative, across rerolls ---
+        int[] rolls = {0};
+        ShopPool lateJokers = stream -> {
+            if (rolls[0]++ < 2) { DeckCard d = new DeckCard(Rank.ACE, Suit.SPADES); d.setShopValue(1); return d; }
+            return new JokerCard(SPEC, 4);
+        };
+        Run neg = new Run(64L); neg.addMoney(20);
+        ShopSetup negSetup = new ShopSetup(2, lateJokers, 0, null, 0, null);
+        negSetup.addNegativeJokerGrant();
+        Shop ns = new Shop(neg, 0, negSetup);
+        check("no joker rolled -> grant unconsumed", ns.getSlot(0).getEdition() == null && ns.slotPrice(0) > 0);
+        ns.reroll();   // both slots roll jokers now
+        check("grant survives the reroll: first joker is Negative",
+                ns.getSlot(0).getEdition() == Edition.NEGATIVE);
+        checkInt("transformed joker is free", ns.slotPrice(0), 0);
+        check("one grant transforms one joker", ns.getSlot(1).getEdition() == null && ns.slotPrice(1) > 0);
+
+        // --- Negative Tag skips jokers that already carry an edition ---
+        ShopPool foilPool = stream -> { JokerCard j = new JokerCard(SPEC, 4); j.apply(Edition.FOIL); return j; };
+        ShopSetup foilSetup = new ShopSetup(2, foilPool, 0, null, 0, null);
+        foilSetup.addNegativeJokerGrant();
+        Shop fs = new Shop(new Run(65L), 0, foilSetup);
+        check("editioned jokers are not transformed",
+                fs.getSlot(0).getEdition() == Edition.FOIL && fs.slotPrice(0) > 0);
+
+        // --- purchase cap: one item per roll state; a reroll grants a fresh allowance; a capped buy is side-effect free ---
+        Run capped = new Run(66L); capped.addMoney(30);
+        ShopSetup capSetup = new ShopSetup(3, JOKER_POOL, 0, null, 0, null);
+        capSetup.setMaxPurchasesPerReroll(1);
+        Shop caps = new Shop(capped, 0, capSetup);
+        caps.buy(0);
+        int held = capped.getMoney();
+        int jokers = capped.getJokers().size();
+        checkThrows("second buy this roll is blocked", () -> caps.buy(1));
+        check("blocked buy is side-effect free",
+                capped.getMoney() == held && capped.getJokers().size() == jokers && caps.getSlot(1) != null);
+        caps.reroll();
+        caps.buy(0);
+        checkInt("reroll grants a fresh allowance", capped.getJokers().size(), jokers + 1);
+
+        // --- the sin's configureShop hook: wired per seat through the Match, applied before tags ---
+        model.game.sins.SinModifier shopSin = new model.game.sins.SinModifier() {
+            @Override public void configureShop(Run run, ShopSetup setup) {
+                setup.addSlots(1);
+                setup.addVouchers(1);
+            }
+        };
+        Match sinMatch = Match.create(70L, List.of("A", "B"),
+                model.game.MatchConfig.defaults()
+                        .withSinSelector((ante, rng) -> model.game.Sin.GREED)
+                        .withSinResolver(sin -> shopSin));
+        sinMatch.start();
+        for (PlayerId id : sinMatch.getSeats()) exhaust(sinMatch, id);
+        sinMatch.getRun(sinMatch.getSeats().get(0)).grantTag(model.game.tags.SkipTag.VOUCHER_TAG);
+        sinMatch.toShop();
+        Shop seatA = sinMatch.getRun(sinMatch.getSeats().get(0)).getShop();
+        Shop seatB = sinMatch.getRun(sinMatch.getSeats().get(1)).getShop();
+        checkInt("sin adds a card slot on every seat", seatB.getSlotCount(), 4);
+        checkInt("sin voucher on seat B", seatB.getVoucherCount(), 3);
+        checkInt("sin voucher + tag voucher stack on seat A", seatA.getVoucherCount(), 4);
     }
 
     /**

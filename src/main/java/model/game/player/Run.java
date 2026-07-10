@@ -29,6 +29,7 @@ import model.game.shop.CatalogPackPool;
 import model.game.shop.CatalogShopPool;
 import model.game.shop.CatalogVoucherPool;
 import model.game.shop.Shop;
+import model.game.shop.ShopSetup;
 import model.modifiers.Edition;
 
 import java.util.ArrayList;
@@ -170,9 +171,16 @@ public final class Run {
 
     /** Grants a skip tag: IMMEDIATE tags resolve now; pending timings accumulate until their moment. */
     public void grantTag(SkipTag tag) {
-        stats.recordTagGained();
-        if (tag.getTiming() == SkipTag.Timing.IMMEDIATE) tag.resolve(this);
-        else pendingTags.add(tag);
+        // Double Tag: every pending copy duplicates the next selected tag (Double itself excluded), so a grant
+        // of X with n pending Doubles yields 1 + n copies of X, all resolved with X's own timing.
+        int copies = 1;
+        if (tag != SkipTag.DOUBLE_TAG)
+            while (pendingTags.remove(SkipTag.DOUBLE_TAG)) copies++;
+        for (int i = 0; i < copies; i++) {
+            stats.recordTagGained();
+            if (tag.getTiming() == SkipTag.Timing.IMMEDIATE) tag.resolve(this);
+            else pendingTags.add(tag);
+        }
     }
 
     /** Unmodifiable view of tags awaiting their moment (next shop, next boss, Double). */
@@ -556,15 +564,54 @@ public final class Run {
     /** The active shop, or {@code null} outside the shop phase. */
     public Shop getShop() { return shop; }
 
-    /** Opens this run's shop for the SHOP phase, with seed-mirrored card, pack, and voucher rows. */
+    /**
+     * Opens this run's shop for the SHOP phase: assembles a {@link ShopSetup} from the run's defaults, lets the
+     * active sin configure the ante's ambient shop environment, layers this seat's pending NEXT_SHOP tags on
+     * top, then builds the shop. Rolled contents stay seed-mirrored across seats regardless of tag differences
+     * (injected slots are extra and rolled positions keep their own salts).
+     */
     public Shop openShop() {
         afflictions.beginShop();   // promote a pending Limos debuff before the shop fills its first slot
-        shop = new Shop(this, stats.nextShopIndex(),
+        ShopSetup setup = new ShopSetup(
                 shopSlots, CatalogShopPool.INSTANCE,
                 packSlots, CatalogPackPool.INSTANCE,
                 voucherSlots, CatalogVoucherPool.INSTANCE);
+        if (match != null) match.getSinModifier().configureShop(this, setup);
+        applyPendingShopTags(setup);
+        shop = new Shop(this, stats.nextShopIndex(), setup);
         fire(Trigger.ON_SHOP_START);
         return shop;
+    }
+
+    /**
+     * Consumes every pending NEXT_SHOP tag into {@code setup}. All copies resolve into this one shop and stack
+     * (two Voucher Tags add two vouchers; two Negative Tags bank two transforms). Injected tag jokers draw from
+     * the occurrence-salted JOKER_GENERATION stream — seats mirror them only if their tag histories mirror,
+     * which is the correct scope for player-earned boosts.
+     */
+    private void applyPendingShopTags(ShopSetup setup) {
+        for (SkipTag tag : List.copyOf(pendingTags)) {
+            if (tag.getTiming() != SkipTag.Timing.NEXT_SHOP) continue;
+            pendingTags.remove(tag);
+            switch (tag) {
+                case COUPON_TAG   -> setup.setInitialItemsFree(true);
+                case D6_TAG       -> setup.setRerollsFromZero(true);
+                case VOUCHER_TAG  -> setup.addVouchers(1);
+                case NEGATIVE_TAG -> setup.addNegativeJokerGrant();
+                case RARE_TAG     -> setup.injectFreeCard(rolledTagJoker(model.cards.jokers.Rarity.RARE));
+                case UNCOMMON_TAG -> {
+                    setup.injectFreeCard(rolledTagJoker(model.cards.jokers.Rarity.UNCOMMON));
+                    setup.injectFreeCard(rolledTagJoker(model.cards.jokers.Rarity.UNCOMMON));
+                }
+                default -> throw new IllegalStateException("unhandled NEXT_SHOP tag: " + tag);
+            }
+        }
+    }
+
+    /** A tag-granted free shop joker of {@code rarity}, drawn from the occurrence-salted generation stream. */
+    private JokerCard rolledTagJoker(model.cards.jokers.Rarity rarity) {
+        return model.cards.jokers.Jokers.randomOfRarity(rarity,
+                rng.streamFor(RngSource.JOKER_GENERATION, stats.nextSalt(RngSource.JOKER_GENERATION))).make();
     }
 
     /** Closes the active shop. */

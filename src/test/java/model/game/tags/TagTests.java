@@ -26,6 +26,7 @@ public final class TagTests {
         permanentTags();
         packTags();
         pendingTags();
+        doubleTag();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -115,6 +116,34 @@ public final class TagTests {
         checkInt("tags gained counts every timing", run.getStats().getTagsGained(), 3);
         check("a pending tag can be consumed once", run.consumePendingTag(SkipTag.INVESTMENT_TAG)
                 && !run.consumePendingTag(SkipTag.INVESTMENT_TAG));
+    }
+
+    /** Double Tag: every pending copy duplicates the next selected tag (Double excluded), with its own timing. */
+    private static void doubleTag() {
+        // One pending Double + an IMMEDIATE grant -> the effect resolves twice ($10 -> $20 -> $40).
+        Run run = new Run(9L);
+        run.addMoney(10);
+        run.grantTag(SkipTag.DOUBLE_TAG);
+        run.grantTag(SkipTag.ECONOMY_TAG);
+        checkInt("Double resolves an immediate tag twice", run.getMoney(), 40);
+        check("Double consumed by the grant", run.getPendingTags().isEmpty());
+
+        // Two pending Doubles + a pending-timing grant -> three copies, all pending with the tag's own timing.
+        Run stacked = new Run(10L);
+        stacked.grantTag(SkipTag.DOUBLE_TAG);
+        stacked.grantTag(SkipTag.DOUBLE_TAG);
+        stacked.grantTag(SkipTag.VOUCHER_TAG);
+        checkInt("two Doubles -> three pending copies", stacked.getPendingTags().size(), 3);
+        check("all copies are the selected tag",
+                stacked.getPendingTags().stream().allMatch(t -> t == SkipTag.VOUCHER_TAG));
+        checkInt("each copy counts as a gained tag", stacked.getStats().getTagsGained(), 5);
+
+        // A Double never copies another Double: granting a second leaves both pending.
+        Run selfless = new Run(11L);
+        selfless.grantTag(SkipTag.DOUBLE_TAG);
+        selfless.grantTag(SkipTag.DOUBLE_TAG);
+        check("Double does not copy itself",
+                selfless.getPendingTags().equals(List.of(SkipTag.DOUBLE_TAG, SkipTag.DOUBLE_TAG)));
     }
 
     private static void check(String label, boolean ok) {

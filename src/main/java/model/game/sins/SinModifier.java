@@ -18,10 +18,10 @@ import model.game.player.Run;
  * {@link Run} — the same place {@link model.game.player.Afflictions} and {@link model.game.player.PlayerStats}
  * live — not on the modifier. That home is an open design decision and is intentionally not yet introduced here.
  *
- * <p><b>Scope of the current hooks.</b> Only the three decision-free, subsystem-free lifecycle points are present.
- * Hooks that require a synchronous player choice (Pride's modifier, Wrath's card), couple to the scoring engine
- * (Lust), the shop generator (Greed/Lust/Gluttony), the points award (Pride/Gluttony), or cross-player resolution
- * (Envy) are deliberately omitted until their shape is settled, so this seam can land without churn elsewhere.
+ * <p><b>Scope of the current hooks.</b> The three decision-free lifecycle points, plus {@link #configureShop}
+ * (the shop-modifier pass: Greed/Lust/Gluttony's seam). Hooks that couple to the scoring engine (Lust's
+ * per-hand-type mult), the points award (Gluttony's pool), or cross-player resolution (Envy) remain omitted
+ * until their shape is settled, so this seam can grow without churn elsewhere.
  */
 public interface SinModifier {
 
@@ -33,6 +33,13 @@ public interface SinModifier {
 
     /** Per seat, after its round is settled: read the {@code result} and apply any end-of-round sin effect. */
     default void onRoundSettled(Run run, BlindResult result) { }
+
+    /**
+     * Per seat, as its shop opens: mutate {@code setup} to shape this visit (pools, row sizes, pricing rules,
+     * purchase limits). Runs before the run's pending NEXT_SHOP tags apply, so the sin sets the ante's ambient
+     * shop environment and tags layer player-earned boosts on top. This is Greed/Lust/Gluttony's seam.
+     */
+    default void configureShop(Run run, model.game.shop.ShopSetup setup) { }
 
     /** How many copies of the blind's tag a skip grants (Sloth: 2). */
     default int tagsPerSkip() { return 1; }
