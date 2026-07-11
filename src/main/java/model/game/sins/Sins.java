@@ -25,6 +25,7 @@ public final class Sins {
         register(Sin.SLOTH, new SlothModifier());
         register(Sin.GLUTTONY, new GluttonyModifier());
         register(Sin.GREED, new GreedModifier());
+        register(Sin.LUST, new LustModifier());
     }
 
     private Sins() { }

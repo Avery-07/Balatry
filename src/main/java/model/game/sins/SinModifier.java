@@ -54,8 +54,17 @@ public interface SinModifier {
     default void onAnteSettled(Match match) { }
 
     /**
+     * Per seat, after the engine scores a hand but before the score joins the round total: return the
+     * (possibly transformed) hand score. Lust multiplies here; the returned value is what the round, the
+     * best-hand tracker, the play result, and {@link #onHandScored} all see. Fired only for seated runs.
+     */
+    default java.math.BigDecimal adjustHandScore(Run run, model.game.scoring.HandType type,
+                                                 java.math.BigDecimal handScore) { return handScore; }
+
+    /**
      * Per seat, after each hand is fully scored and boss after-effects applied (Greed's chips-to-money ladder).
-     * {@code handScore} is this hand's contribution, not the round total. Fired only for seated runs.
+     * {@code handScore} is this hand's contribution (post-{@link #adjustHandScore}), not the round total.
+     * Fired only for seated runs.
      */
     default void onHandScored(Run run, java.math.BigDecimal handScore) { }
 

@@ -217,11 +217,13 @@ public final class DeterminismTests {
             Card item = shop.getSlot(i);
             if (item == null || !run.canAcquire(item)) continue;
             if (run.getMoney() - item.getShopValue() < run.minBalance() + 4) continue;   // conservative: discounts only cheapen
+            if (shop.purchasesRemaining() == 0) break;   // Lust: one item per roll state
             shop.buy(i);
             purchases++;
             break;   // at most one card per shop keeps the economy varied but bounded
         }
 
+        if (shop.purchasesRemaining() == 0) return;   // Lust: the allowance may already be spent on a card
         for (int i = 0; i < shop.getVoucherCount(); i++) {
             Voucher voucher = shop.getVoucher(i);
             if (voucher == null || voucher.isDebuffed() || !run.canRedeem(voucher)) continue;   // Greed claims are dead

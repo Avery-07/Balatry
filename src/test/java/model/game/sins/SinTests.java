@@ -40,6 +40,9 @@ public final class SinTests {
         greedRerollClaims();
         greedDebuffEnforcement();
         greedLadderWiring();
+        lustMultiplier();
+        lustWiring();
+        lustShop();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -51,7 +54,8 @@ public final class SinTests {
         check("Sloth registered with a double skip grant", Sins.modifierFor(Sin.SLOTH).tagsPerSkip() == 2);
         check("Gluttony registered as GluttonyModifier", Sins.modifierFor(Sin.GLUTTONY) instanceof GluttonyModifier);
         check("Greed registered as GreedModifier", Sins.modifierFor(Sin.GREED) instanceof GreedModifier);
-        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.LUST) == SinModifier.NONE);
+        check("Lust registered as LustModifier", Sins.modifierFor(Sin.LUST) instanceof LustModifier);
+        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.ENVY) == SinModifier.NONE);
     }
 
     /** onRoundBegin consults the injected provider and stores the chosen multiplier on each seat's SinState. */
@@ -517,6 +521,108 @@ public final class SinTests {
         run.getRound().play(new java.util.ArrayList<>(run.getRound().getHand().subList(0, 5)));
         checkInt("one played hand fires the hook once", seen.size(), 1);
         check("the hook carries the hand score", seen.get(0).signum() > 0);
+    }
+
+
+    /** The diversity multiplier: +0.5x per type unlocked before the hand; the unlocking hand gets nothing. */
+    private static void lustMultiplier() {
+        Match m = Match.create(96L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.LUST));
+        m.start();
+        Run run = m.getRun(m.getSeats().get(0));
+        LustModifier lust = new LustModifier();
+        var hundred = java.math.BigDecimal.valueOf(100);
+
+        check("the round's first hand is x1",
+                lust.adjustHandScore(run, model.game.scoring.HandType.PAIR, hundred).compareTo(hundred) == 0);
+        check("a repeat keeps the unlocked x1.5 but adds nothing",
+                lust.adjustHandScore(run, model.game.scoring.HandType.PAIR, hundred)
+                        .compareTo(java.math.BigDecimal.valueOf(150)) == 0);
+        check("a new type still scores at the old multiplier",
+                lust.adjustHandScore(run, model.game.scoring.HandType.FLUSH, hundred)
+                        .compareTo(java.math.BigDecimal.valueOf(150)) == 0);
+        check("two unlocked types pay x2",
+                lust.adjustHandScore(run, model.game.scoring.HandType.HIGH_CARD, hundred)
+                        .compareTo(java.math.BigDecimal.valueOf(200)) == 0);
+        checkInt("three types unlocked", run.getSinState().lustUniqueTypes(), 3);
+        check("the advertised next multiplier is x2.5",
+                run.getSinState().lustMultiplier().compareTo(new java.math.BigDecimal("2.5")) == 0);
+
+        run.getSinState().beginRound();
+        check("a new round starts back at x1",
+                lust.adjustHandScore(run, model.game.scoring.HandType.PAIR, hundred).compareTo(hundred) == 0);
+    }
+
+    /** Round wiring: the adjusted score is what the play result, round total, and best-hand tracker see. */
+    private static void lustWiring() {
+        var fixed = java.math.BigDecimal.valueOf(777);
+        SinModifier spy = new SinModifier() {
+            @Override public java.math.BigDecimal adjustHandScore(Run run, model.game.scoring.HandType type,
+                                                                  java.math.BigDecimal handScore) { return fixed; }
+        };
+        Match m = Match.create(97L, List.of("A", "B"),
+                MatchConfig.defaults()
+                        .withSinSelector((ante, rng) -> Sin.LUST)
+                        .withSinResolver(sin -> spy));
+        m.start();
+        Run run = m.getRun(m.getSeats().get(0));
+        var result = run.getRound().play(new java.util.ArrayList<>(run.getRound().getHand().subList(0, 5)));
+        check("the play result carries the adjusted score", result.handScore().compareTo(fixed) == 0);
+        check("the round total is built from the adjusted score", run.getRound().getScore().compareTo(fixed) == 0);
+
+        // End to end with the real modifier: one played hand unlocks its type for the hands after it.
+        Match real = Match.create(98L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.LUST));
+        real.start();
+        Run realRun = real.getRun(real.getSeats().get(0));
+        realRun.getRound().play(new java.util.ArrayList<>(realRun.getRound().getHand().subList(0, 5)));
+        checkInt("a real played hand unlocks its type", realRun.getSinState().lustUniqueTypes(), 1);
+        check("the next hand would score x1.5",
+                realRun.getSinState().lustMultiplier().compareTo(new java.math.BigDecimal("1.5")) == 0);
+    }
+
+    /** The crowded shop: +2 items in the card/pack rows only, mirrored across seats, one purchase per roll. */
+    private static void lustShop() {
+        Match m = Match.create(99L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.LUST));
+        m.start();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+        for (PlayerId id : m.getSeats()) { m.getRun(id).addMoney(50); m.getRun(id).getRound().finish(); }
+        m.toShop();
+        var shopA = m.getRun(a).getShop();
+        var shopB = m.getRun(b).getShop();
+
+        checkInt("two extra items land in the card/pack rows",
+                shopA.getSlotCount() + shopA.getPackCount(), 3 + 3 + LustModifier.EXTRA_ITEMS);
+        checkInt("the voucher row never grows", shopA.getVoucherCount(), 2);
+        check("seats grow the same shape",
+                shopA.getSlotCount() == shopB.getSlotCount() && shopA.getPackCount() == shopB.getPackCount());
+
+        // Same seed, same split: the extra-item rolls are table-level and deterministic.
+        Match m2 = Match.create(99L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.LUST));
+        m2.start();
+        for (PlayerId id : m2.getSeats()) m2.getRun(id).getRound().finish();
+        m2.toShop();
+        var shop2 = m2.getRun(m2.getSeats().get(0)).getShop();
+        check("the split replays with the seed",
+                shop2.getSlotCount() == shopA.getSlotCount() && shop2.getPackCount() == shopA.getPackCount());
+
+        // One purchase per roll state; a reroll grants a fresh allowance.
+        checkInt("a fresh shop allows one purchase", shopA.purchasesRemaining(), 1);
+        int slot = -1;
+        for (int i = 0; i < shopA.getSlotCount(); i++)
+            if (shopA.getSlot(i) != null && m.getRun(a).canAcquire(shopA.getSlot(i))) { slot = i; break; }
+        check("a buyable slot exists", slot >= 0);
+        shopA.buy(slot);
+        checkInt("the allowance is spent", shopA.purchasesRemaining(), 0);
+        int next = -1;
+        for (int i = 0; i < shopA.getSlotCount(); i++)
+            if (shopA.getSlot(i) != null && m.getRun(a).canAcquire(shopA.getSlot(i))) { next = i; break; }
+        final int ni = next;
+        if (ni >= 0) checkThrows("a second purchase this roll is refused", () -> shopA.buy(ni));
+        shopA.reroll();
+        checkInt("a reroll grants a fresh allowance", shopA.purchasesRemaining(), 1);
     }
 
     private static void checkInt(String label, int actual, int expected) {

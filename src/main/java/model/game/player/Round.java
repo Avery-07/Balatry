@@ -83,13 +83,16 @@ public final class Round {
                 && (!boss.zerosMoneyOnMostPlayed() || type == run.getStats().getMostPlayedHand()));
 
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
+        BigDecimal handScore = result.score();
+        if (run.getMatch() != null)   // Lust: the diversity multiplier transforms the hand's final score
+            handScore = run.getMatch().getSinModifier().adjustHandScore(run, type, handScore);
 
         acted = true;
         run.recordAntePlayed(cards);   // The Pillar: this ante's played cards (non-boss blinds only; see Run)
 
         if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());
-        score = score.add(result.score());
-        if (result.score().compareTo(bestHandScore) > 0) bestHandScore = result.score();
+        score = score.add(handScore);
+        if (handScore.compareTo(bestHandScore) > 0) bestHandScore = handScore;
         hand.removeAll(cards);
         hand.removeAll(result.destroyed());
         run.destroyDeckCards(result.destroyed());   // glass breaks are permanent (hand removal above is idempotent)
@@ -99,7 +102,7 @@ public final class Round {
         if (boss != null) applyBossAfterPlay(boss, type, cards.size());
 
         if (run.getMatch() != null)
-            run.getMatch().getSinModifier().onHandScored(run, result.score());   // Greed: the chips-to-money ladder
+            run.getMatch().getSinModifier().onHandScored(run, handScore);   // Greed: the chips-to-money ladder
 
         // Meeting the target no longer ends the round: chips fund the points share, so play continues while
         // hands remain. The round resolves when hands run out, or earlier via a voluntary finish().
@@ -109,7 +112,7 @@ public final class Round {
             run.rollCrimsonHeart();   // Crimson Heart: a different joker is disabled for the next hand
         }
 
-        return new PlayResult(type, result.score(), score, result.destroyed());
+        return new PlayResult(type, handScore, score, result.destroyed());
     }
 
     /**

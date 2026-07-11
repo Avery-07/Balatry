@@ -84,6 +84,12 @@ public final class Shop {
         return override != null ? override : priced(item.getShopValue());
     }
 
+    /** How many more purchases this roll state allows (Lust caps at 1 per roll; unlimited otherwise). */
+    public int purchasesRemaining() {
+        int cap = setup.getMaxPurchasesPerReroll();
+        return cap == Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.max(0, cap - purchasesThisRoll);
+    }
+
     /** Cost of the next reroll: the base (the run's, or $0 under a D6 Tag) plus $1 per reroll already done. */
     public int rerollCost() {
         int base = setup.isRerollsFromZero() ? 0 : run.getBaseRerollCost();

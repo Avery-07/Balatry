@@ -1,7 +1,11 @@
 package model.game.sins;
 
+import model.game.scoring.HandType;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Per-player, round-scoped state owned by the active sin, living beside the {@link model.game.player.Run} exactly
@@ -21,6 +25,7 @@ public final class SinState {
     private BigDecimal greedChips = BigDecimal.ZERO;                    // Greed: chips scored so far this round
     private BigDecimal greedRequirement = GreedModifier.BASE_REQUIREMENT;   // Greed: chips the next dollar needs
     private BigDecimal greedThreshold = GreedModifier.BASE_REQUIREMENT;     // Greed: cumulative chips at which it pays
+    private final Set<HandType> lustTypes = EnumSet.noneOf(HandType.class); // Lust: hand types unlocked this round
 
     /** The Pride multiplier this player chose this round (x1 by default / no gamble). */
     public BigDecimal getPrideMultiplier() { return prideMultiplier; }
@@ -67,6 +72,19 @@ public final class SinState {
         greedThreshold = greedThreshold.add(greedRequirement);
     }
 
+    // --- Lust: each unique hand type played unlocks +0.5x for hands played after it; resets every round ---
+
+    /** How many distinct hand types this player has played so far this round. */
+    public int lustUniqueTypes() { return lustTypes.size(); }
+
+    /** The multiplier the next hand will receive: 1 + 0.5 per already-unlocked type (x1 before any). */
+    public BigDecimal lustMultiplier() {
+        return BigDecimal.ONE.add(LustModifier.STEP.multiply(BigDecimal.valueOf(lustTypes.size())));
+    }
+
+    /** Marks {@code type} as played; the unlocking hand itself does not benefit, so record after scoring. */
+    void recordLustType(HandType type) { lustTypes.add(type); }
+
     /** Resets round-scoped sin state; called by {@link model.game.player.Run} at the start of each round. */
     public void beginRound() {
         prideMultiplier = BigDecimal.ONE;
@@ -74,6 +92,7 @@ public final class SinState {
         greedChips = BigDecimal.ZERO;
         greedRequirement = GreedModifier.BASE_REQUIREMENT;
         greedThreshold = GreedModifier.BASE_REQUIREMENT;
+        lustTypes.clear();
     }
 
     /** Resets ante-scoped sin state (unspent Wrath grants do not survive the ante); called at each ante start. */
