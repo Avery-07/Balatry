@@ -41,6 +41,18 @@ public interface SinModifier {
      */
     default void configureShop(Run run, model.game.shop.ShopSetup setup) { }
 
+    /**
+     * Per seat, after each consumable use — a tarot/planet/spectral from the consumable area, a relic cast,
+     * or an eaten joker under Gluttony. Fired only for seated runs (headless runs have no table).
+     */
+    default void onConsumableUsed(Run run) { }
+
+    /**
+     * At the table, when an ante's boss settles — after results and points, before shops open (or the match
+     * finishes). The moment for end-of-ante sin resolution, e.g. Gluttony's gauge payout.
+     */
+    default void onAnteSettled(Match match) { }
+
     /** How many copies of the blind's tag a skip grants (Sloth: 2). */
     default int tagsPerSkip() { return 1; }
 

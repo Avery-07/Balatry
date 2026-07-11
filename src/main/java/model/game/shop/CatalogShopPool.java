@@ -10,7 +10,8 @@ import java.util.random.RandomGenerator;
 /**
  * Catalog-backed {@link ShopPool} for the card row: Jokers (rarity-weighted), Tarots, and Planets, in a
  * base-game-style mix (no playing cards by default). Costs come straight off each card. Draws use only the
- * supplied stream, so a shared seed mirrors offerings across runs. Spectrals are excluded until that catalog exists.
+ * supplied stream, so a shared seed mirrors offerings across runs. Spectrals and Relics stay out of the base
+ * mix by design; effects that add them swap in their own pool (e.g. Gluttony's {@link GluttonyShopPool}).
  */
 public final class CatalogShopPool implements ShopPool {
 

@@ -21,6 +21,7 @@ import model.game.player.Run;
 import model.game.shop.Shop;
 import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
+import model.game.sins.SinTableState;
 import model.game.tags.SkipTag;
 
 import java.math.BigDecimal;
@@ -58,6 +59,7 @@ public final class Match {
     private Blind blind = Blind.SMALL;
     private Sin activeSin;                         // null until started
     private SinModifier sinModifier = SinModifier.NONE;   // behaviour for activeSin; refreshed when the sin changes
+    private final SinTableState sinTableState = new SinTableState();   // table-level, ante-scoped state owned by the active sin
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
     private BossBehavior bossBehavior = BossBehavior.NONE;   // the boss's Match-level behaviour; NONE outside boss rounds
@@ -192,6 +194,8 @@ public final class Match {
                 if (results.get(p.id()).cleared())   // Investment Tag pays $25 per copy when the next boss falls
                     while (p.run().consumePendingTag(SkipTag.INVESTMENT_TAG))
                         p.run().addMoney(SkipTag.INVESTMENT_PAYOUT);
+        if (blind == Blind.BOSS)
+            sinModifier.onAnteSettled(this);   // end-of-ante sin resolution (Gluttony's payout) before shops open
         if (blind == Blind.BOSS && ante >= anteCount) {   // final boss settled: the match is over
             phase = MatchPhase.FINISHED;
             return;
@@ -282,12 +286,16 @@ public final class Match {
 
     /** Refreshes the active sin's behaviour after the sin changes and runs its once-per-ante table setup. */
     private void refreshSinForAnte() {
+        sinTableState.beginAnte();   // no sin ever reads another's leftovers
         sinModifier = sinResolver.apply(activeSin);
         sinModifier.onAnteBegin(this);
     }
 
     /** The sin behaviour active this ante ({@link SinModifier#NONE} before {@link #start}). */
     public SinModifier getSinModifier() { return sinModifier; }
+
+    /** Table-level, ante-scoped state owned by the active sin (Gluttony's gauge and tallies). */
+    public SinTableState getSinTableState() { return sinTableState; }
 
     /** The provider that resolves sin player-choices (e.g. Pride's multiplier); injected via {@link MatchConfig}. */
     public SinChoiceProvider getSinChoiceProvider() { return sinChoiceProvider; }
@@ -374,6 +382,7 @@ public final class Match {
         if (!negated)
             relic.getSpec().getEffect().resolve(
                     new RelicContext(this, caster, casterId, targetRun, targetId, target));
+        sinModifier.onConsumableUsed(caster);   // a relic is a consumable used, even if Aegis absorbed its effect
     }
 
     /**
@@ -391,6 +400,27 @@ public final class Match {
         if (!run.board().destroy(joker))
             throw new IllegalStateException("an Eternal joker cannot be destroyed: " + joker.getSpec().getName());
         run.getSinState().grantWrathFreeJoker();
+    }
+
+    /**
+     * Gluttony: eats the joker at {@code index} on {@code id}'s board — destroys it for its sell value plus the
+     * ${@value model.game.sins.GluttonyModifier#EAT_BONUS} eat bonus, counting as a consumable use for the
+     * communal gauge. Eating is a deliberate action, so an Eternal joker is rejected loudly (matching sale);
+     * but it is not a sale — ON_SOLD does not fire and Verdant Leaf's debuff is not lifted.
+     */
+    public int gluttonyEatJoker(PlayerId id, int index) {
+        if (activeSin != Sin.GLUTTONY)
+            throw new IllegalStateException("eating jokers is a Gluttony mechanic; active sin is " + activeSin);
+        if (phase == MatchPhase.LOBBY || phase == MatchPhase.FINISHED)
+            throw new IllegalStateException("jokers cannot be eaten in phase " + phase);
+        Run run = getRun(id);
+        JokerCard joker = boardCard(run.board(), index, id);
+        if (!run.board().destroy(joker))
+            throw new IllegalStateException("an Eternal joker cannot be eaten: " + joker.getSpec().getName());
+        int gained = joker.getSellValue() + model.game.sins.GluttonyModifier.EAT_BONUS;
+        run.addMoney(gained);
+        sinModifier.onConsumableUsed(run);
+        return gained;
     }
 
     /** Records {@code spec} as the table's most recently used consumable (read by Mimesis). */

@@ -23,6 +23,7 @@ public final class Sins {
         register(Sin.PRIDE, new PrideModifier());
         register(Sin.WRATH, new WrathModifier());
         register(Sin.SLOTH, new SlothModifier());
+        register(Sin.GLUTTONY, new GluttonyModifier());
     }
 
     private Sins() { }

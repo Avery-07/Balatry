@@ -365,6 +365,7 @@ public final class Run {
         consumableTargets = List.of();
         stats.recordConsumableUsed(spec);
         if (match != null) match.recordConsumableUsed(spec);   // Mimesis: the table's last-used consumable
+        if (match != null) match.getSinModifier().onConsumableUsed(this);   // Gluttony: feed the communal gauge
         if (spec.getType() != ConsumableType.SPECTRAL && spec != Tarots.THE_FOOL.spec())
             lastTarotOrPlanet = spec;     // The Fool later recreates the last Tarot/Planet used
     }
