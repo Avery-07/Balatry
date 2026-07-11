@@ -358,6 +358,8 @@ public final class Run {
     /** Uses the consumable at {@code index}, applying its effect to {@code targets}, then removes it from inventory. */
     public void useConsumable(int index, List<? extends Card> targets) {
         ConsumableCard consumable = consumables.get(index);
+        if (consumable.isDebuffed())   // Greed's claim: a debuffed consumable is dead until the sticker is removed
+            throw new IllegalStateException("a debuffed consumable cannot be used: " + consumable.getSpec().getName());
         ConsumableSpec spec = consumable.getSpec();
         consumables.remove(consumable);   // free its slot before the effect runs, so creation effects (Emperor, High Priestess) can fill it
         consumableTargets = List.copyOf(targets);
@@ -399,6 +401,8 @@ public final class Run {
 
     /** Applies {@code voucher}'s effect and records it; consumes this ante's single redemption. */
     public void redeemVoucher(Voucher voucher) {
+        if (voucher.isDebuffed())
+            throw new IllegalStateException("a debuffed voucher cannot be redeemed: " + voucher.getSpec().getName());
         if (!stats.canRedeem(voucher)) throw new IllegalStateException("voucher not redeemable: " + voucher.getSpec().getName());
         voucher.getSpec().getEffect().apply(this);
         stats.markRedeemed(voucher.getSpec());

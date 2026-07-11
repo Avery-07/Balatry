@@ -99,6 +99,7 @@ public final class Shop {
         run.getStats().recordPurchase();
         slots.set(slotIndex, null);
         slotPrices.set(slotIndex, null);
+        notifyPurchase(item);
         return item;
     }
 
@@ -112,6 +113,8 @@ public final class Shop {
         run.getStats().recordReroll();
         rerollFill();
         run.fire(Trigger.ON_SHOP_REROLL);
+        if (run.getMatch() != null)
+            run.getMatch().getSinModifier().onShopRerolled(run, this);   // Greed: re-debuff claimed reappearances
     }
 
     // --- pack row ---
@@ -130,10 +133,15 @@ public final class Shop {
     /** Buys the pack in {@code packIndex}, charging the run; the caller opens it via {@link BoosterPack#open}. */
     public BoosterPack buyPack(int packIndex) {
         BoosterPack pack = require(packs, packIndex);
+        // A debuffed pack (Greed's claim) could never be opened, so the purchase itself is refused: unlike a
+        // debuffed joker (sellable, Exorcism-curable), a dead pack purchase would be pure loss with no decision.
+        if (pack.isDebuffed())
+            throw new IllegalStateException("a debuffed pack cannot be purchased: " + pack);
         charge(packPrice(packIndex), pack);
         run.getStats().recordPurchase();
         packs.set(packIndex, null);
         packPrices.set(packIndex, null);
+        notifyPurchase(pack);
         return pack;
     }
 
@@ -146,6 +154,8 @@ public final class Shop {
     /** Redeems the voucher in {@code voucherIndex}: enforces eligibility, charges the run, applies the effect. */
     public void redeemVoucher(int voucherIndex) {
         Voucher voucher = require(vouchers, voucherIndex);
+        if (voucher.isDebuffed())   // Greed's claim: a debuffed voucher would apply no effect, so refuse before charging
+            throw new IllegalStateException("a debuffed voucher cannot be redeemed: " + voucher.getSpec().getName());
         if (!run.canRedeem(voucher)) throw new IllegalStateException("voucher not redeemable: " + voucher.getSpec().getName());
         requirePurchaseAllowance();
         int price = priced(voucher.getShopValue());
@@ -154,6 +164,7 @@ public final class Shop {
         purchasesThisRoll++;
         run.redeemVoucher(voucher);
         vouchers.set(voucherIndex, null);
+        notifyPurchase(voucher);
     }
 
     // --- internals ---
@@ -180,6 +191,11 @@ public final class Shop {
         if (wrathGrant) run.getSinState().consumeWrathFreeJoker();
         purchasesThisRoll++;
         run.fire(Trigger.ON_BOUGHT);
+    }
+
+    /** Notifies the active sin of a completed purchase (Greed's claim propagation); never fires for a failed buy. */
+    private void notifyPurchase(Card item) {
+        if (run.getMatch() != null) run.getMatch().getSinModifier().onPurchase(run, item);
     }
 
     /** Enforces the setup's per-reroll purchase cap before any charge or spend happens. */

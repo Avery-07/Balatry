@@ -53,6 +53,24 @@ public interface SinModifier {
      */
     default void onAnteSettled(Match match) { }
 
+    /**
+     * Per seat, after each hand is fully scored and boss after-effects applied (Greed's chips-to-money ladder).
+     * {@code handScore} is this hand's contribution, not the round total. Fired only for seated runs.
+     */
+    default void onHandScored(Run run, java.math.BigDecimal handScore) { }
+
+    /**
+     * Per seat, after a completed shop purchase from any row — card, pack, or voucher (Greed's claim
+     * propagation). Fired only for seated runs, and never for a failed purchase.
+     */
+    default void onPurchase(Run buyer, model.cards.Card item) { }
+
+    /**
+     * Per seat, after its shop's card row rerolls, with the fresh contents in place (Greed re-debuffs claimed
+     * items that reappear). Fired only for seated runs.
+     */
+    default void onShopRerolled(Run run, model.game.shop.Shop shop) { }
+
     /** How many copies of the blind's tag a skip grants (Sloth: 2). */
     default int tagsPerSkip() { return 1; }
 

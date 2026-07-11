@@ -598,8 +598,13 @@ public enum Jokers {
 
     /** A random joker weighted by rarity; falls back to any joker while a rarity bucket is unimplemented. */
     public static Jokers weightedRandom(RandomGenerator stream) {
+        return weightedRandom(stream, COMMON_WEIGHT, UNCOMMON_WEIGHT);
+    }
+
+    /** Rarity-weighted draw with caller-supplied cumulative weights out of 100 (Greed boosts rarity: 30/75). */
+    public static Jokers weightedRandom(RandomGenerator stream, int commonCumulative, int uncommonCumulative) {
         int r = stream.nextInt(100);
-        Rarity target = r < COMMON_WEIGHT ? Rarity.COMMON : r < UNCOMMON_WEIGHT ? Rarity.UNCOMMON : Rarity.RARE;
+        Rarity target = r < commonCumulative ? Rarity.COMMON : r < uncommonCumulative ? Rarity.UNCOMMON : Rarity.RARE;
         Jokers[] all = values();
         int matching = 0;
         for (Jokers j : all) if (j.rarity() == target) matching++;

@@ -98,6 +98,9 @@ public final class Round {
 
         if (boss != null) applyBossAfterPlay(boss, type, cards.size());
 
+        if (run.getMatch() != null)
+            run.getMatch().getSinModifier().onHandScored(run, result.score());   // Greed: the chips-to-money ladder
+
         // Meeting the target no longer ends the round: chips fund the points share, so play continues while
         // hands remain. The round resolves when hands run out, or earlier via a voluntary finish().
         if (handsRemaining == 0) resolve();

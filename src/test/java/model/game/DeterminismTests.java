@@ -49,14 +49,17 @@ public final class DeterminismTests {
     private static int clearedBlinds, purchases, swaps, skips;
 
     public static void main(String[] args) {
-        // --- replay determinism + seat mirroring under default (seeded) policies ---
-        List<String> first  = playMatch(4242L, MatchConfig.defaults(), false);
+        // --- replay determinism + seat mirroring under seeded policies ---
+        // Greed couples seats by design (a claim permanently de-mirrors shops, boards, and money), so the
+        // mirror-asserted runs draw from every other sin; Greed is covered by pure replay determinism below.
+        MatchConfig mirrorSafe = MatchConfig.defaults().withSinSelector(DeterminismTests::nonCouplingSin);
+        List<String> first  = playMatch(4242L, mirrorSafe, false);
         check("coverage: blinds cleared under default policies", clearedBlinds >= 4);
         check("coverage: the shop path is exercised", purchases >= 2);
         check("coverage: the skip verb is exercised", skips >= 2);
-        List<String> second = playMatch(4242L, MatchConfig.defaults(), false);
+        List<String> second = playMatch(4242L, mirrorSafe, false);
         compareTraces("replay (default policies)", first, second);
-        List<String> other = playMatch(4243L, MatchConfig.defaults(), false);
+        List<String> other = playMatch(4243L, mirrorSafe, false);
         check("a different seed produces a different trace", !first.equals(other));
 
         // --- the cross-player machinery under the same lens: Envy + The Commons + a swap every shop ---
@@ -69,6 +72,13 @@ public final class DeterminismTests {
         List<String> envy2 = playMatch(9001L, pinned, true, true);
         compareTraces("replay (Envy + Commons + swaps)", envy1, envy2);
 
+        // --- Greed: seats intentionally diverge (claims, debuffs, skipped vouchers), but every divergence
+        // must be seed-deterministic — the same seed twice replays the same coupled outcome bit for bit.
+        MatchConfig greedy = MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GREED);
+        List<String> greed1 = playMatch(4343L, greedy, false, false, false);
+        List<String> greed2 = playMatch(4343L, greedy, false, false, false);
+        compareTraces("replay (Greed antes)", greed1, greed2);
+
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
     }
@@ -79,11 +89,22 @@ public final class DeterminismTests {
      * Plays a full match with the state-blind driver, asserting seat mirroring along the way, and returns the
      * state trace (a fingerprint at every barrier and every shop) for replay comparison.
      */
+    /** Every sin except Greed, seeded: the mirror-asserted runs keep sin variety without seat coupling. */
+    private static Sin nonCouplingSin(int ante, model.game.rng.Rng rng) {
+        Sin[] pool = { Sin.PRIDE, Sin.LUST, Sin.GLUTTONY, Sin.SLOTH, Sin.WRATH, Sin.ENVY };
+        return pool[rng.nextInt(model.game.rng.RngSource.ANTE_MODIFIER, ante, pool.length)];
+    }
+
     private static List<String> playMatch(long seed, MatchConfig config, boolean envySwaps) {
         return playMatch(seed, config, envySwaps, false);
     }
 
     private static List<String> playMatch(long seed, MatchConfig config, boolean envySwaps, boolean stackedDecks) {
+        return playMatch(seed, config, envySwaps, stackedDecks, true);
+    }
+
+    private static List<String> playMatch(long seed, MatchConfig config, boolean envySwaps, boolean stackedDecks,
+                                          boolean assertMirrors) {
         Match match = Match.create(seed, List.of("A", "B"), config);
         PlayerId a = match.getSeats().get(0);
         PlayerId b = match.getSeats().get(1);
@@ -115,14 +136,17 @@ public final class DeterminismTests {
             boolean coupled = match.getBlind() == Blind.BOSS && match.getCurrentBoss() == BossBlind.THE_COMMONS;
             String fa = seatFingerprint(match.getRun(a), coupled ? null : match.getResult(a));
             String fb = seatFingerprint(match.getRun(b), coupled ? null : match.getResult(b));
-            if (!fa.equals(fb)) System.out.println("== seat A ==\n" + fa + "\n== seat B ==\n" + fb);
-            check("seats mirrored at the barrier (ante " + match.getAnte() + " " + match.getBlind() + ")", fa.equals(fb));
+            if (assertMirrors) {
+                if (!fa.equals(fb)) System.out.println("== seat A ==\n" + fa + "\n== seat B ==\n" + fb);
+                check("seats mirrored at the barrier (ante " + match.getAnte() + " " + match.getBlind() + ")", fa.equals(fb));
+            }
 
             if (match.getPhase() == MatchPhase.FINISHED) break;
             for (PlayerId id : match.getSeats()) driveShop(match.getRun(id));
             trace.add(shopFingerprint(match.getRun(a)) + "\n" + shopFingerprint(match.getRun(b)));
-            check("shops mirrored (ante " + match.getAnte() + " " + match.getBlind() + ")",
-                    shopFingerprint(match.getRun(a)).equals(shopFingerprint(match.getRun(b))));
+            if (assertMirrors)
+                check("shops mirrored (ante " + match.getAnte() + " " + match.getBlind() + ")",
+                        shopFingerprint(match.getRun(a)).equals(shopFingerprint(match.getRun(b))));
 
             if (envySwaps && match.getActiveSin() == Sin.ENVY
                     && !match.getRun(a).getJokers().isEmpty() && !match.getRun(b).getJokers().isEmpty()) {
@@ -200,7 +224,7 @@ public final class DeterminismTests {
 
         for (int i = 0; i < shop.getVoucherCount(); i++) {
             Voucher voucher = shop.getVoucher(i);
-            if (voucher == null || !run.canRedeem(voucher)) continue;
+            if (voucher == null || voucher.isDebuffed() || !run.canRedeem(voucher)) continue;   // Greed claims are dead
             if (run.getMoney() - voucher.getShopValue() < run.minBalance()) continue;
             shop.redeemVoucher(i);
             break;

@@ -16,9 +16,10 @@ public final class SinTableState {
 
     private final Map<PlayerId, Integer> gluttonyUses = new LinkedHashMap<>();
     private int gluttonyGauge;
+    private final Map<String, PlayerId> greedClaims = new LinkedHashMap<>();   // Greed: item identity -> first buyer
 
     /** Resets all table-scoped sin state; called by the Match when an ante's sin refreshes. */
-    public void beginAnte() { clearGluttony(); }
+    public void beginAnte() { clearGluttony(); clearGreedClaims(); }
 
     /** Records one consumable use by {@code id}, minting {@code gaugeContribution} dollars into the pool. */
     public void recordGluttonyUse(PlayerId id, int gaugeContribution) {
@@ -37,4 +38,15 @@ public final class SinTableState {
 
     /** Empties the gauge and tallies (after a payout, or at ante begin). */
     void clearGluttony() { gluttonyUses.clear(); gluttonyGauge = 0; }
+
+    // --- Greed: items claimed this shop phase; mirrored copies elsewhere are debuffed ---
+
+    /** Records that {@code buyer} bought the item with {@code identity}; the first buyer keeps the claim. */
+    public void recordGreedClaim(String identity, PlayerId buyer) { greedClaims.putIfAbsent(identity, buyer); }
+
+    /** Every claim this shop phase, in purchase order: item identity to first buyer. */
+    public Map<String, PlayerId> getGreedClaims() { return Collections.unmodifiableMap(greedClaims); }
+
+    /** Empties the claims (each round begin: claims live for one shop phase). */
+    public void clearGreedClaims() { greedClaims.clear(); }
 }

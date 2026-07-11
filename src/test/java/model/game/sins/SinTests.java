@@ -34,6 +34,12 @@ public final class SinTests {
         gluttonyEating();
         gluttonyPayout();
         gluttonyAnteLifecycle();
+        greedLadder();
+        greedShopPool();
+        greedSharedShop();
+        greedRerollClaims();
+        greedDebuffEnforcement();
+        greedLadderWiring();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -44,7 +50,8 @@ public final class SinTests {
         check("Wrath registered as WrathModifier", Sins.modifierFor(Sin.WRATH) instanceof WrathModifier);
         check("Sloth registered with a double skip grant", Sins.modifierFor(Sin.SLOTH).tagsPerSkip() == 2);
         check("Gluttony registered as GluttonyModifier", Sins.modifierFor(Sin.GLUTTONY) instanceof GluttonyModifier);
-        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.GREED) == SinModifier.NONE);
+        check("Greed registered as GreedModifier", Sins.modifierFor(Sin.GREED) instanceof GreedModifier);
+        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.LUST) == SinModifier.NONE);
     }
 
     /** onRoundBegin consults the injected provider and stores the chosen multiplier on each seat's SinState. */
@@ -350,6 +357,166 @@ public final class SinTests {
         m.getRun(a).beginAnte();   // (per-run resets are separate; the table reset happened in refreshSinForAnte)
         check("a fresh ante starts with an empty tally map or the new use only",
                 m.getSinTableState().gluttonyUses(a) == 1 && m.getSinTableState().getGluttonyGauge() == 4);
+    }
+
+
+    /** The chips-to-money ladder: 500 then x1.5 more per dollar, paid as crossed, reset every round. */
+    private static void greedLadder() {
+        Match m = Match.create(90L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GREED));
+        m.start();
+        Run run = m.getRun(m.getSeats().get(0));
+        GreedModifier greed = new GreedModifier();
+
+        int base = run.getMoney();
+        greed.onHandScored(run, java.math.BigDecimal.valueOf(499));
+        checkInt("499 chips pay nothing", run.getMoney() - base, 0);
+        greed.onHandScored(run, java.math.BigDecimal.ONE);
+        checkInt("crossing 500 pays $1", run.getMoney() - base, 1);
+        greed.onHandScored(run, java.math.BigDecimal.valueOf(800));       // total 1300, rung at 1250
+        checkInt("crossing 1250 pays the second dollar", run.getMoney() - base, 2);
+        greed.onHandScored(run, java.math.BigDecimal.valueOf(9087));      // total 10387: rungs 2375, 4062, 6592, 10387
+        checkInt("one huge hand crosses several rungs at once", run.getMoney() - base, 6);
+        check("the next rung escalates x1.5 floored",
+                run.getSinState().getGreedThreshold().compareTo(java.math.BigDecimal.valueOf(16079)) == 0);
+
+        run.getSinState().beginRound();
+        check("a new round counts from 0", run.getSinState().getGreedChips().signum() == 0
+                && run.getSinState().getGreedThreshold().compareTo(GreedModifier.BASE_REQUIREMENT) == 0);
+        greed.onHandScored(run, java.math.BigDecimal.valueOf(500));
+        checkInt("the ladder pays again from 500", run.getMoney() - base, 7);
+    }
+
+    /** Greed's card row: same type mix, boosted joker rarity (30/45/25). */
+    private static void greedShopPool() {
+        Run run = new Run(91L);
+        var setup = new model.game.shop.ShopSetup(3, model.game.shop.CatalogShopPool.INSTANCE, 0, null, 0, null);
+        new GreedModifier().configureShop(run, setup);
+        check("configureShop swaps in the Greed pool", setup.getCardPool() == model.game.shop.GreedShopPool.INSTANCE);
+
+        int common = 0, uncommon = 0, rare = 0; boolean tarot = false, planet = false;
+        var stream = new java.util.Random(7);
+        for (int i = 0; i < 800; i++) {
+            var c = model.game.shop.GreedShopPool.INSTANCE.roll(stream);
+            if (c instanceof model.cards.jokers.JokerCard j) {
+                switch (j.getSpec().getRarity()) {
+                    case COMMON -> common++;
+                    case UNCOMMON -> uncommon++;
+                    case RARE -> rare++;
+                    default -> { }
+                }
+            } else if (c instanceof model.cards.consumables.ConsumableCard cc) {
+                if (cc.getSpec().getType() == model.cards.consumables.ConsumableType.TAROT) tarot = true;
+                if (cc.getSpec().getType() == model.cards.consumables.ConsumableType.PLANET) planet = true;
+            }
+        }
+        check("uncommons become the norm (" + common + "/" + uncommon + "/" + rare + ")", uncommon > common);
+        check("rares are common enough to matter", rare > 80);
+        check("the type mix keeps tarots and planets", tarot && planet);
+    }
+
+    /** The shared shop: a completed purchase debuffs the item in every other seat's shop, by identity. */
+    private static void greedSharedShop() {
+        Match m = Match.create(92L, List.of("A", "B", "C"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GREED));
+        m.start();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1), c = m.getSeats().get(2);
+        for (PlayerId id : m.getSeats()) { m.getRun(id).addMoney(50); m.getRun(id).getRound().finish(); }
+        m.toShop();
+
+        // Card row: A buys the first acquirable slot; B's and C's mirrored copies are debuffed, the rest clean.
+        var shopA = m.getRun(a).getShop();
+        int slot = -1;
+        for (int i = 0; i < shopA.getSlotCount(); i++)
+            if (shopA.getSlot(i) != null && m.getRun(a).canAcquire(shopA.getSlot(i))) { slot = i; break; }
+        check("a buyable slot exists", slot >= 0);
+        var bought = shopA.buy(slot);
+        check("the buyer's copy stays clean", !bought.isDebuffed());
+        check("other seats' copies are debuffed",
+                m.getRun(b).getShop().getSlot(slot).isDebuffed() && m.getRun(c).getShop().getSlot(slot).isDebuffed());
+        int other = (slot + 1) % shopA.getSlotCount();
+        check("unclaimed items stay clean", !m.getRun(b).getShop().getSlot(other).isDebuffed());
+        check("the claim is recorded to the buyer", m.getSinTableState().getGreedClaims().containsValue(a));
+
+        // Pack row: A buys pack 0; B's mirrored pack is debuffed and its purchase is refused outright.
+        shopA.buyPack(0);
+        check("the mirrored pack is debuffed", m.getRun(b).getShop().getPack(0).isDebuffed());
+        checkThrows("a debuffed pack cannot be purchased", () -> m.getRun(b).getShop().buyPack(0));
+
+        // Voucher row: A redeems a voucher; B's mirrored copy is debuffed and redemption is refused pre-charge.
+        var shopB = m.getRun(b).getShop();
+        int v = -1;
+        for (int i = 0; i < shopA.getVoucherCount(); i++)
+            if (shopA.getVoucher(i) != null && m.getRun(a).canRedeem(shopA.getVoucher(i))) { v = i; break; }
+        check("a redeemable voucher exists", v >= 0);
+        shopA.redeemVoucher(v);
+        check("the mirrored voucher is debuffed", shopB.getVoucher(v).isDebuffed());
+        int money = m.getRun(b).getMoney();
+        final int vi = v;
+        checkThrows("a debuffed voucher cannot be redeemed", () -> shopB.redeemVoucher(vi));
+        checkInt("the refused redemption charged nothing", m.getRun(b).getMoney(), money);
+    }
+
+    /** Claims outlive rerolls: a claimed identity reappearing in a non-buyer's reroll is re-debuffed. */
+    private static void greedRerollClaims() {
+        Match m = Match.create(93L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GREED));
+        m.start();
+        Run runA = m.getRun(m.getSeats().get(0)), runB = m.getRun(m.getSeats().get(1));
+        var spec = model.cards.jokers.JokerSpec.named("Coveted", model.cards.jokers.Rarity.COMMON).build();
+        model.game.shop.ShopPool covetedPool = stream -> new model.cards.jokers.JokerCard(spec, 4);
+
+        new GreedModifier().onPurchase(runA, new model.cards.jokers.JokerCard(spec, 4));   // A claims "Coveted"
+
+        runB.addMoney(10);
+        var shopB = new model.game.shop.Shop(runB, 9, new model.game.shop.ShopSetup(2, covetedPool, 0, null, 0, null));
+        check("claims do not reach into unrolled shops by magic", !shopB.getSlot(0).isDebuffed());
+        shopB.reroll();
+        check("the claimed identity is re-debuffed on a non-buyer's reroll",
+                shopB.getSlot(0).isDebuffed() && shopB.getSlot(1).isDebuffed());
+
+        runA.addMoney(10);
+        var shopA = new model.game.shop.Shop(runA, 9, new model.game.shop.ShopSetup(2, covetedPool, 0, null, 0, null));
+        shopA.reroll();
+        check("the buyer's own reappearances stay clean", !shopA.getSlot(0).isDebuffed());
+
+        new GreedModifier().onRoundBegin(runA);
+        check("claims die at round begin", m.getSinTableState().getGreedClaims().isEmpty());
+    }
+
+    /** A permanently debuffed item is dead at every active-use site until the sticker is removed. */
+    private static void greedDebuffEnforcement() {
+        Match m = Match.create(94L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GREED));
+        m.start();
+        PlayerId a = m.getSeats().get(0);
+        Run run = m.getRun(a);
+
+        run.createConsumable(model.cards.consumables.Tarots.THE_HERMIT.spec());
+        run.getConsumables().get(0).apply(model.modifiers.Sticker.DEBUFFED);
+        checkThrows("a debuffed consumable cannot be used", () -> run.useConsumable(0));
+
+        var relic = new model.cards.relics.RelicCard(model.cards.relics.Relics.AEGIS.spec());
+        relic.apply(model.modifiers.Sticker.DEBUFFED);
+        checkThrows("a debuffed relic cannot be cast",
+                () -> m.useRelicCard(a, relic, model.cards.relics.RelicTarget.none()));
+    }
+
+    /** Round wiring: the per-hand hook fires after scoring with the hand's own score. */
+    private static void greedLadderWiring() {
+        var seen = new java.util.ArrayList<java.math.BigDecimal>();
+        SinModifier spy = new SinModifier() {
+            @Override public void onHandScored(Run run, java.math.BigDecimal handScore) { seen.add(handScore); }
+        };
+        Match m = Match.create(95L, List.of("A", "B"),
+                MatchConfig.defaults()
+                        .withSinSelector((ante, rng) -> Sin.GREED)
+                        .withSinResolver(sin -> spy));
+        m.start();
+        Run run = m.getRun(m.getSeats().get(0));
+        run.getRound().play(new java.util.ArrayList<>(run.getRound().getHand().subList(0, 5)));
+        checkInt("one played hand fires the hook once", seen.size(), 1);
+        check("the hook carries the hand score", seen.get(0).signum() > 0);
     }
 
     private static void checkInt(String label, int actual, int expected) {

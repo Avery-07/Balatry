@@ -366,6 +366,8 @@ public final class Match {
 
     /** The relic cast core: Anger's targeted-count, Aegis negation, then the effect. */
     private void castRelic(PlayerId casterId, RelicCard relic, RelicTarget target) {
+        if (relic.isDebuffed())   // Greed's claim: a debuffed relic is dead until the sticker is removed
+            throw new IllegalStateException("a debuffed relic cannot be cast: " + relic.getSpec().getName());
         if (phase == MatchPhase.LOBBY || phase == MatchPhase.FINISHED)
             throw new IllegalStateException("relics cannot be used in phase " + phase);
         Run caster = getRun(casterId);
