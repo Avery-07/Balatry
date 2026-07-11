@@ -11,17 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Gluttony: shops contain all types of consumables (the card row swaps to {@link GluttonyShopPool}), jokers
- * become edible ({@code Match#gluttonyEatJoker}: destroy for sell value + ${@value #EAT_BONUS}, counting as a
- * consumable use), and every consumable used mints ${@value #GAUGE_PER_USE} into a communal gauge tracked on
- * the match's {@link SinTableState}.
- *
- * <p>When the ante's boss settles, the gauge pays out: the top consumer takes {@value #LEADER_SHARE_PERCENT}%
- * of the pool and everyone else splits the rest equally. Tied leaders split the leader share; if <em>all</em>
- * seats are tied the whole pool splits equally. Shares are floored to whole dollars and the remainder goes to
- * the first leader in seat order, so the payout is deterministic and always totals the pool.
- */
+/** Gluttony: shops contain all types of consumables (the card row swaps to {@link GluttonyShopPool}), jokers become edible ({@code Match#gluttonyEatJoker}: destroy for sell value + ${@value #EAT_BONUS}, counting as a consumable use), and every consumable used mints ${@value #GAUGE_PER_USE} into a communal gauge tracked on the match's {@link SinTableState}. */
 public final class GluttonyModifier implements SinModifier {
 
     /** Dollars minted into the communal gauge per consumable used. */

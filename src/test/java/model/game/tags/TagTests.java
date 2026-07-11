@@ -12,11 +12,7 @@ import model.game.scoring.HandType;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Run-as-main harness for the skip-tag catalog: immediate economy and permanent-upgrade effects, pack grants
- * into the pending area, the null-safety of stat-driven tags on a fresh run, and the pending timings
- * accumulating untouched.
- */
+/** Run-as-main harness for the skip-tag catalog: immediate economy and permanent-upgrade effects, pack grants into the pending area, the null-safety of stat-driven tags on a fresh run, and the pending timings accumulating untouched. */
 public final class TagTests {
 
     private static int failures = 0;

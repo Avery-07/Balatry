@@ -8,10 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * Offers a voucher the run is eligible to redeem: not already redeemed, and (for an upgrade) its base
- * already redeemed. Draws use only the supplied stream so a shared seed mirrors offerings.
- */
+/** Offers a voucher the run is eligible to redeem: not already redeemed, and (for an upgrade) its base already redeemed. */
 public final class CatalogVoucherPool implements VoucherPool {
 
     public static final CatalogVoucherPool INSTANCE = new CatalogVoucherPool();

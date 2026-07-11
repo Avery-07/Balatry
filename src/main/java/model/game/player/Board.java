@@ -10,17 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * A seat's joker board — the single chokepoint for every joker inventory mutation, so the invariants live in
- * exactly one place and cannot be bypassed: the slot limit (NEGATIVE jokers are free), Eternal ("can not be
- * sold or destroyed": {@link #sell} rejects loudly since selling is a deliberate player action, {@link #destroy}
- * skips silently since effects hitting an Eternal joker simply fail), and the sale side effects (ON_SOLD fires
- * while the joker is still on the board, sell value banks, Verdant Leaf's debuff lifts).
- *
- * <p>Reads go through {@link #view()}, an unmodifiable live view; callers that fire effects while iterating
- * must snapshot it ({@code List.copyOf}), matching {@link Run#fire}'s contract. Order is meaningful state
- * (Blueprint, Brainstorm, Ceremonial Dagger adjacency, Pinned), so reordering is an operation, not an accident.
- */
+/** A seat's joker board — the single chokepoint for every joker inventory mutation, so the invariants live in exactly one place and cannot be bypassed: the slot limit (NEGATIVE jokers are free), Eternal ("can not be sold or destroyed": {@link #sell} rejects loudly since selling is a deliberate player action, {@link #destroy} skips silently since effects hitting an Eternal joker simply fail), and the sale side effects (ON_SOLD fires while the joker is still on the board, sell value banks, Verdant Leaf's debuff lifts). */
 public final class Board {
 
     private final Run run;
@@ -72,10 +62,7 @@ public final class Board {
         return true;
     }
 
-    /**
-     * Sells the joker at {@code index}: rejects Eternal, fires ON_SOLD while the joker is still on the board
-     * (Luchador reacts to its own sale), banks the sell value, and lifts Verdant Leaf's debuff for the round.
-     */
+    /** Sells the joker at {@code index}: rejects Eternal, fires ON_SOLD while the joker is still on the board (Luchador reacts to its own sale), banks the sell value, and lifts Verdant Leaf's debuff for the round. */
     public int sell(int index) {
         JokerCard joker = jokers.get(index);
         if (joker.hasSticker(Sticker.ETERNAL))

@@ -7,20 +7,7 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.random.RandomGenerator;
 
-/**
- * The Balatry boss blinds. The five vanilla suit/face-debuff blinds (Club, Goad, Window, Plant, Head) are removed;
- * The Water is retuned to −1 discard; and six new blinds are added (The Quartz, The Hivemind, The Commons,
- * The Bandwagon, The Mirage, The Shave). Each constant carries declarative effect data that the round/scoring
- * layer reads: a chip-target multiplier, hand/discard/hand-size changes, a per-card debuff predicate, a random
- * per-card debuff fraction, base chip/mult halving, play restrictions, and play-time hooks.
- *
- * <p>Effects that are purely informational in a model layer (cards drawn face down: The House, The Wheel,
- * The Fish, The Mark, and Amber Acorn's flip) are present in the roster but inert, resolved client-side.
- * Cross-player effects (see {@link #isCrossPlayer}) are live, resolved by the {@code model.game.bosses} behaviours.
- *
- * <p>A boss may be disabled for a player by Chicot (owned) or Luchador (sold this round); the round/scoring layer
- * gates every effect on {@code run.effectiveBoss()}, so a disabled boss is simply absent.
- */
+/** The Balatry boss blinds. The five vanilla suit/face-debuff blinds (Club, Goad, Window, Plant, Head) are removed; The Water is retuned to −1 discard; and six new blinds are added (The Quartz, The Hivemind, The Commons, The Bandwagon, The Mirage, The Shave). */
 public enum BossBlind {
 
     THE_HOOK     ("The Hook",      b -> b.afterPlayDiscard(2).playTriggered()),
@@ -43,8 +30,6 @@ public enum BossBlind {
     THE_MARK     ("The Mark",      b -> b),                         // face cards drawn face down (they still score) — cosmetic
 
     // New Balatry regular blinds. The Quartz and The Mirage are single-player, resolved in Round/RoundSettlement.
-    // The cross-player ones are resolved by the Match-level behaviours in model.game.bosses (see BossBehaviors):
-    // aggregates read every seat; effects apply only to seats whose boss is still active (Chicot/Luchador exempt).
     THE_QUARTZ   ("The Quartz",    b -> b.randomDebuffOneIn(7)),    // ~1 in 7 of your cards are debuffed this round
     THE_HIVEMIND ("The Hivemind",  b -> b.crossPlayer()),           // debuff the most-played hand type across all players
     THE_COMMONS  ("The Commons",   b -> b.crossPlayer()),           // all players share one discard pool (sum of their discards)
@@ -125,11 +110,7 @@ public enum BossBlind {
     public boolean triggersOnPlay()          { return playTriggered; }
     public boolean isFinisher()              { return finisher; }
 
-    /**
-     * Whether this blind's effect is resolved across players rather than within one run (The Hivemind, The
-     * Commons, The Bandwagon, The Shave); such blinds are resolved by their {@code model.game.bosses}
-     * behaviour, created per boss round via {@code BossBehaviors.behaviorFor}.
-     */
+    /** Whether this blind's effect is resolved across players rather than within one run (The Hivemind, The Commons, The Bandwagon, The Shave); such blinds are resolved by their {@code model.game.bosses} behaviour, created per boss round via {@code BossBehaviors.behaviorFor}. */
     public boolean isCrossPlayer()           { return crossPlayer; }
 
     /** The Mirage: this player's single highest-scoring hand is excluded from their final (ranking) score. */

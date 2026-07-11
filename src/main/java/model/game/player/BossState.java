@@ -10,14 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Boss-imposed state living beside a {@link Run}, like {@link PlayerStats} and {@link Afflictions}: which boss
- * is active and whether this seat disabled it, plus every piece of per-round boss bookkeeping — The Quartz's
- * debuffed cards (restored at round end), The Pillar's ante-played set (cleared at ante start), Crimson Heart's
- * disabled joker (sticker owned here, mirroring the Katadesmos convention), Verdant Leaf's sold flag, and the
- * per-play boss-triggered flag Matador reads. {@link Run} keeps the behaviour (rolls, gates); this owns the state
- * and its lifecycle.
- */
+/** Boss-imposed state living beside a {@link Run}, like {@link PlayerStats} and {@link Afflictions}: which boss is active and whether this seat disabled it, plus every piece of per-round boss bookkeeping — The Quartz's debuffed cards (restored at round end), The Pillar's ante-played set (cleared at ante start), Crimson Heart's disabled joker (sticker owned here, mirroring the Katadesmos convention), Verdant Leaf's sold flag, and the per-play boss-triggered flag Matador reads. */
 public final class BossState {
 
     private BossBlind activeBoss;          // the boss for the current blind, or null (small/big blinds, headless rounds)

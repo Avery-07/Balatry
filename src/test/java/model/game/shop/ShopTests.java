@@ -24,11 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Run-as-main harness for the shop. Covers the {@link Shop} unit behaviour (mirroring, buy/sell,
- * slot limits + NEGATIVE, reroll, Match open/close) and the full three-row shop (dimensions,
- * weighted card row, booster packs, and voucher redemption rules).
- */
+/** Run-as-main harness for the shop. */
 public final class ShopTests {
 
     private static int failures = 0;
@@ -234,11 +230,7 @@ public final class ShopTests {
         check("voucher slot cleared", vshop.getVoucher(0) == null);
     }
 
-    /**
-     * The shop-modifier pass: NEXT_SHOP tags consumed into the {@link ShopSetup} (Coupon, D6, Voucher,
-     * Uncommon/Rare injection, Negative transform), rolled-position salting keeping tagged and untagged seats
-     * mirrored, the per-reroll purchase cap, and the sin's {@code configureShop} hook wired through the Match.
-     */
+    /** The shop-modifier pass: NEXT_SHOP tags consumed into the {@link ShopSetup} (Coupon, D6, Voucher, Uncommon/Rare injection, Negative transform), rolled-position salting keeping tagged and untagged seats mirrored, the per-reroll purchase cap, and the sin's {@code configureShop} hook wired through the Match. */
     private static void modifierPassChecks() {
         // --- Coupon Tag: initial card + pack rows free; rerolled contents full price; tag consumed ---
         Run coupon = new Run(60L); coupon.addMoney(10);
@@ -361,11 +353,7 @@ public final class ShopTests {
         checkInt("sin voucher + tag voucher stack on seat A", seatA.getVoucherCount(), 4);
     }
 
-    /**
-     * The purchase lifecycle around {@code Shop.charge}: Loyalty Card's 4th purchase is free (granted at pricing
-     * time, counted at completion), a failed buy leaves no side effects (no counter advance, no burned grant),
-     * and ON_BOUGHT never fires for a failed buy.
-     */
+    /** The purchase lifecycle around {@code Shop.charge}: Loyalty Card's 4th purchase is free (granted at pricing time, counted at completion), a failed buy leaves no side effects (no counter advance, no burned grant), and ON_BOUGHT never fires for a failed buy. */
     private static void purchaseLifecycleChecks() {
         // Loyalty Card: purchases 1-3 paid, 4th free, counter advances only on completed buys.
         Run loyal = new Run(30L); loyal.addMoney(100);

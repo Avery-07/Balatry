@@ -13,20 +13,7 @@ import model.modifiers.Edition;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A per-run, seed-mirrored shop for one SHOP phase. Three rows: a rerollable card row, plus fixed booster-pack
- * and voucher rows (only the card row rerolls, as in the base game). Shop prices reflect the run's discount.
- *
- * <p>All customisation flows through the {@link ShopSetup} captured at construction: row sizes and pools, the
- * Coupon/D6 pricing rules, injected free cards (extra leading slots on the initial fill only), pending Negative
- * transforms (the next base-edition jokers rolled become free Negatives, across rerolls, until exhausted), and
- * the per-reroll purchase cap. Rolled slots are salted by their <em>rolled</em> position, independent of any
- * injected slots in front of them, so seats with different tag boosts still mirror the seeded offering.
- *
- * <p>Per-slot price overrides sit beside the rows: {@code null} means "derive from the card's shop value and
- * the run's discount"; a number is the final price (injected and Negative-transformed items are $0, Coupon
- * zeroes the initial card and pack rows).
- */
+/** A per-run, seed-mirrored shop for one SHOP phase. */
 public final class Shop {
 
     private final Run run;
@@ -175,18 +162,12 @@ public final class Shop {
 
     // --- internals ---
 
-    /**
-     * Charges {@code price} in three steps: price (ON_PURCHASE_PRICING may grant a free purchase), validate
-     * affordability, then pay and fire ON_BOUGHT. The ordering guarantees a failed purchase has no side effects:
-     * pricing effects must be pure grants, and counting/reacting effects (ON_BOUGHT) only ever see completed buys.
-     */
+    /** Charges {@code price} in three steps: price (ON_PURCHASE_PRICING may grant a free purchase), validate affordability, then pay and fire ON_BOUGHT. */
     private void charge(int price, Card item) {
         requirePurchaseAllowance();
         run.beginPurchase();
         run.fire(Trigger.ON_PURCHASE_PRICING);
-        // Wrath: a banked destroy-grant makes the next JOKER purchase free — peeked here, consumed only on
-        // completion (the Loyalty-Card lesson: a failed buy must never burn a grant). Joker effects that already
-        // waived the cost (Loyalty's free 4th) take precedence, so the grant is saved for a paid purchase.
+        // Wrath: a banked grant makes the next joker free — peeked here, consumed only on completion.
         boolean wrathGrant = !run.isPurchaseFree() && item instanceof JokerCard
                 && run.getSinState().getWrathFreeJokers() > 0;
         if (wrathGrant) run.makePurchaseFree();
@@ -246,20 +227,13 @@ public final class Shop {
             slots.get(0).apply(model.modifiers.Sticker.DEBUFFED);
     }
 
-    /**
-     * Rolls the card for rolled position {@code rolled}. The salt uses the rolled coordinate — not the final
-     * slot index — so injected slots in front never shift the seeded offering out of mirror with other seats.
-     */
+    /** Rolls the card for rolled position {@code rolled}. */
     private Card rollSlot(int rolled) {
         long salt = Rng.combine(shopIndex, rerolls, rolled);
         return setup.getCardPool().roll(run.getRng().streamFor(RngSource.SHOP_CONTENTS, salt));
     }
 
-    /**
-     * Negative Tag: turns base-edition jokers just rolled (from {@code firstRolledIndex} on) into free Negative
-     * ones, consuming one grant each, in slot order, until grants run out. Unconsumed grants persist to later
-     * rerolls — "the next base-edition shop joker", however long it takes to appear.
-     */
+    /** Negative Tag: turns base-edition jokers just rolled (from {@code firstRolledIndex} on) into free Negative ones, consuming one grant each, in slot order, until grants run out. */
     private void applyNegativeGrants(int firstRolledIndex) {
         for (int i = firstRolledIndex; i < slots.size() && negativeGrantsLeft > 0; i++) {
             Card c = slots.get(i);

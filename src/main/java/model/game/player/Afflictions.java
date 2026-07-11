@@ -8,25 +8,7 @@ import model.modifiers.Sticker;
 
 import java.util.List;
 
-/**
- * Relic-imposed state living beside a {@link Run}, like {@link PlayerStats} and {@link HandLevels}: the
- * debuffs and shields other players (or the owner) have placed on this seat. Three timescales:
- *
- * <ul>
- *   <li><b>Round-scoped debuffs</b> (Anathema rank, Miasma suit, Katadesmos joker). Armed between rounds as
- *       {@code pending}; promoted to {@code active} at the next {@link #beginRound}; cleared at {@link #endRound}.
- *       Rank/suit are consulted by the scoring engine via {@link #debuffs}; the joker debuff is applied as a
- *       {@link Sticker#DEBUFFED} sticker at round start (and removed at round end only if this object added it,
- *       so a genuine debuff is never stripped).</li>
- *   <li><b>Next-shop debuff</b> (Limos). Armed as {@code pending}; promoted at the next {@link #beginShop};
- *       read by the shop while filling its first slot; cleared at {@link #endShop}.</li>
- *   <li><b>Per-ante shield</b> (Aegis). Armed by the owner; consumed by the first hostile effect that lands;
- *       reset at {@link #beginAnte}.</li>
- * </ul>
- *
- * <p>Suit matching mirrors the boss suit-debuff semantics (a WILD card counts as every suit), so Miasma and a
- * suit boss treat cards identically.
- */
+/** Relic-imposed state living beside a {@link Run}, like {@link PlayerStats} and {@link HandLevels}: the debuffs and shields other players (or the owner) have placed on this seat. */
 public final class Afflictions {
 
     private Rank pendingRank, activeRank;

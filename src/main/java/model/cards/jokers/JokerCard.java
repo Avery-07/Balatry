@@ -31,11 +31,7 @@ public final class JokerCard extends MarketCard {
 
     public JokerSpec getSpec()       { return spec; }
 
-    /**
-     * Whether this joker actively presents {@code trait} right now: it declares the trait <em>and</em> is not
-     * debuffed. The single place the debuff gate is applied for special-interaction queries, so callers
-     * (boss disabling, loss prevention) cannot accidentally honor a debuffed joker's trait.
-     */
+    /** Whether this joker actively presents {@code trait} right now: it declares the trait and is not debuffed. */
     public boolean hasActiveTrait(JokerTrait trait) { return !isDebuffed() && spec.has(trait); }
 
     public int getCounter()          { return counter; }

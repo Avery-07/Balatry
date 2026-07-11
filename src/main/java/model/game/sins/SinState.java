@@ -7,16 +7,7 @@ import java.math.RoundingMode;
 import java.util.EnumSet;
 import java.util.Set;
 
-/**
- * Per-player, round-scoped state owned by the active sin, living beside the {@link model.game.player.Run} exactly
- * as {@link model.game.player.Afflictions} and {@link model.game.player.PlayerStats} do. Sin modifiers (same
- * package) write it; other systems read it. Everything here resets each round via {@link #beginRound()}.
- *
- * <p>Round-scoped fields reset via {@link #beginRound()}; ante-scoped fields (Wrath's stacking free-joker
- * grants, which survive round transitions but expire with the ante) reset via {@link #beginAnte()}. Writes are
- * package-private where only {@link SinModifier}s mutate; Wrath's grant/consume pair is public because its
- * writers live at the Match (destroy) and Shop (purchase) layers.
- */
+/** Per-player, round-scoped state owned by the active sin, living beside the {@link model.game.player.Run} exactly as {@link model.game.player.Afflictions} and {@link model.game.player.PlayerStats} do. */
 public final class SinState {
 
     private BigDecimal prideMultiplier = BigDecimal.ONE;   // Pride: the score multiplier this player chose this round
@@ -33,10 +24,7 @@ public final class SinState {
     /** Whether this player's round score reached target x {@link #getPrideMultiplier()}. */
     public boolean isPrideThresholdMet()   { return prideThresholdMet; }
 
-    /**
-     * The factor the points award should apply to this player's round points: the chosen multiplier if the Pride
-     * threshold was met, otherwise 1 (no effect). Read by the points system once it exists.
-     */
+    /** The factor the points award should apply to this player's round points: the chosen multiplier if the Pride threshold was met, otherwise 1 (no effect). */
     public BigDecimal pridePointMultiplier() { return prideThresholdMet ? prideMultiplier : BigDecimal.ONE; }
 
     void setPrideMultiplier(BigDecimal m)  { prideMultiplier = m; }

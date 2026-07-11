@@ -7,12 +7,7 @@ import model.game.rng.RngSource;
 
 import java.util.random.RandomGenerator;
 
-/**
- * Everything a {@link RelicEffect} needs at resolution: the owning {@link Match}, the caster's
- * {@link Run} and seat, the targeted {@link Run} and seat (both {@code null} for self/global relics), and the
- * caster's {@link RelicTarget} selection. Randomness comes off the caster's keyed RNG, so a shared seed
- * mirrors any chance an effect rolls (Pyre's victim pick).
- */
+/** Everything a {@link RelicEffect} needs at resolution: the owning {@link Match}, the caster's {@link Run} and seat, the targeted {@link Run} and seat (both {@code null} for self/global relics), and the caster's {@link RelicTarget} selection. */
 public record RelicContext(Match match, Run source, PlayerId sourceId,
                            Run target, PlayerId targetId, RelicTarget selection) {
 

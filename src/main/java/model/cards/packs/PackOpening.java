@@ -6,12 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * An opened booster pack: the offered options and the remaining pick budget. Picking removes the card from the
- * offer (indices stay stable; picked slots become null) and hands it to the caller, who routes it — jokers to
- * the board, consumables to the area, and Myth-pack relics to an immediate cast via
- * {@code Match#useRelicCard} ("use immediately"). Unpicked options are simply abandoned.
- */
+/** An opened booster pack: the offered options and the remaining pick budget. */
 public final class PackOpening {
 
     private final BoosterPack pack;

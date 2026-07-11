@@ -14,16 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The Bandwagon: the joker owned by the most players (identity by spec name, counted once per seat across
- * every seat) is debuffed for the round — every copy on participating boards gets a {@link Sticker#DEBUFFED}
- * sticker, removed at the barrier. A bandwagon needs riders: with no joker owned by at least two seats, the
- * blind has no effect. Ties break toward the lexicographically smallest name (deterministic and mirror-safe).
- *
- * <p>Only stickers this behaviour added are stripped, mirroring the Katadesmos convention, so a genuinely
- * debuffed joker is never un-debuffed. Known edge, accepted: a mid-round Luchador does not lift the stickers
- * (they are physical state, unlike The Hivemind's play-time gate).
- */
+/** The Bandwagon: the joker owned by the most players (identity by spec name, counted once per seat across every seat) is debuffed for the round — every copy on participating boards gets a {@link Sticker#DEBUFFED} sticker, removed at the barrier. */
 final class BandwagonBehavior implements BossBehavior {
 
     private final List<JokerCard> stickered = new ArrayList<>();   // exactly the cards this behaviour debuffed

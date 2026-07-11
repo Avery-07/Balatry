@@ -12,11 +12,7 @@ import model.game.player.RoundOutcome;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * Run-as-main harness for the sin seam and the Pride modifier: registry wiring, the round-begin choice resolved
- * through the injected {@link SinChoiceProvider}, the round-settled threshold check (met / not met / no-gamble),
- * and {@link SinState} reset.
- */
+/** Run-as-main harness for the sin seam and the Pride modifier: registry wiring, the round-begin choice resolved through the injected {@link SinChoiceProvider}, the round-settled threshold check (met / not met / no-gamble), and {@link SinState} reset. */
 public final class SinTests {
 
     private static int failures = 0;

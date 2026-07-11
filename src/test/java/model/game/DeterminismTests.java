@@ -19,26 +19,7 @@ import model.modifiers.Sticker;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Full-match determinism harness — the guard on the project's core invariant: same seed, same decisions,
- * bit-identical outcomes, mirrored across seats. Three checks:
- *
- * <ul>
- *   <li><b>Replay determinism:</b> a scripted 7-ante match (plays, discards, voluntary finishes, purchases,
- *       rerolls, voucher redemptions) run twice from the same seed produces an identical state trace at every
- *       settlement barrier and shop.</li>
- *   <li><b>Seat mirroring:</b> within one run, two seats executing the identical script have identical state
- *       fingerprints at every barrier and identical shop offerings at every shop.</li>
- *   <li><b>Cross-player machinery:</b> the same two checks with Envy pinned as the sin, The Commons pinned as
- *       the boss, and an Envy joker swap each shop — the shared pool, the swap, and sin dispatch all under the
- *       determinism lens.</li>
- * </ul>
- *
- * <p>The driver is state-blind-legal: every action is guarded by reads (never exception control flow), and it
- * adapts to whatever boss the seed produces (Psychic's 5-card rule, Eye/Mouth type restrictions, Cerulean
- * Bell's forced card, shared discard pools), so it survives any seed. A different seed must produce a
- * different trace — asserted, so the fingerprint can't silently degenerate.
- */
+/** Full-match determinism harness — the guard on the project's core invariant: same seed, same decisions, bit-identical outcomes, mirrored across seats. */
 public final class DeterminismTests {
 
     private static int failures = 0;
@@ -50,7 +31,7 @@ public final class DeterminismTests {
 
     public static void main(String[] args) {
         // --- replay determinism + seat mirroring under seeded policies ---
-        // Greed couples seats by design (a claim permanently de-mirrors shops, boards, and money), so the
+        // Greed de-mirrors seats by design; mirror-asserted runs use every other sin (Greed: replay-only, below).
         // mirror-asserted runs draw from every other sin; Greed is covered by pure replay determinism below.
         MatchConfig mirrorSafe = MatchConfig.defaults().withSinSelector(DeterminismTests::nonCouplingSin);
         List<String> first  = playMatch(4242L, mirrorSafe, false);
@@ -85,10 +66,7 @@ public final class DeterminismTests {
 
     // --- the scripted match ---
 
-    /**
-     * Plays a full match with the state-blind driver, asserting seat mirroring along the way, and returns the
-     * state trace (a fingerprint at every barrier and every shop) for replay comparison.
-     */
+    /** Plays a full match with the state-blind driver, asserting seat mirroring along the way, and returns the state trace (a fingerprint at every barrier and every shop) for replay comparison. */
     /** Every sin except Greed, seeded: the mirror-asserted runs keep sin variety without seat coupling. */
     private static Sin nonCouplingSin(int ante, model.game.rng.Rng rng) {
         Sin[] pool = { Sin.PRIDE, Sin.LUST, Sin.GLUTTONY, Sin.SLOTH, Sin.WRATH, Sin.ENVY };
@@ -130,9 +108,7 @@ public final class DeterminismTests {
 
             for (PlayerId id : match.getSeats()) if (match.getResult(id).cleared()) clearedBlinds++;
             trace.add(barrierFingerprint(match));
-            // The Commons couples seats by design: the shared pool is first-come-first-served, so round
-            // scores are order-dependent (digging opportunities, and pool-readers like Banner). At a Commons
-            // barrier only the persistent state must mirror; everywhere else, results included.
+            // The Commons couples seats (shared pool): only persistent state must mirror at its barrier.
             boolean coupled = match.getBlind() == Blind.BOSS && match.getCurrentBoss() == BossBlind.THE_COMMONS;
             String fa = seatFingerprint(match.getRun(a), coupled ? null : match.getResult(a));
             String fb = seatFingerprint(match.getRun(b), coupled ? null : match.getResult(b));
@@ -161,11 +137,7 @@ public final class DeterminismTests {
         return trace;
     }
 
-    /**
-     * Plays one seat's round with state-derived decisions only: one discard when the hand is deep, 5-card plays
-     * (adapting to Psychic/Eye/Mouth/Cerulean Bell), and a voluntary early finish once the target is met on the
-     * third or later hand — exercising the money-vs-share tradeoff.
-     */
+    /** Plays one seat's round with state-derived decisions only: one discard when the hand is deep, 5-card plays (adapting to Psychic/Eye/Mouth/Cerulean Bell), and a voluntary early finish once the target is met on the third or later hand — exercising the money-vs-share tradeoff. */
     private static void driveRound(Run run) {
         Round round = run.getRound();
         int discardActions = 0;

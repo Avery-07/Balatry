@@ -9,12 +9,7 @@ import model.cards.relics.Relics;
 
 import java.util.random.RandomGenerator;
 
-/**
- * The Gluttony card-row pool: "shops contain all types of consumables." The consumable share is boosted and
- * split across all four types — Joker 60 / Tarot 10 / Planet 10 / Spectral 10 / Relic 10, versus the base
- * 72/14/14/0/0 of {@link CatalogShopPool} — so the sin is felt, not just technically true. Draws use only the
- * supplied stream, so a shared seed still mirrors offerings across seats.
- */
+/** The Gluttony card-row pool: "shops contain all types of consumables." The consumable share is boosted and split across all four types — Joker 60 / Tarot 10 / Planet 10 / Spectral 10 / Relic 10, versus the base 72/14/14/0/0 of {@link CatalogShopPool} — so the sin is felt, not just technically true. */
 public final class GluttonyShopPool implements ShopPool {
 
     public static final GluttonyShopPool INSTANCE = new GluttonyShopPool();

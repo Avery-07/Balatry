@@ -6,12 +6,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Table-level, ante-scoped state owned by the active sin — the match analogue of the per-player
- * {@link SinState}. The Match resets it whenever an ante's sin refreshes, so no sin ever reads another's
- * leftovers. Currently hosts Gluttony's communal gauge: the pool of minted dollars and each seat's consumption
- * tally. Both are openly readable — the sin's design says players can see how much everyone consumes.
- */
+/** Table-level, ante-scoped state owned by the active sin — the match analogue of the per-player {@link SinState}. */
 public final class SinTableState {
 
     private final Map<PlayerId, Integer> gluttonyUses = new LinkedHashMap<>();

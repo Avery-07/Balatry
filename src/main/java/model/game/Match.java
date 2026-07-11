@@ -36,11 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-/**
- * Aggregate root for one competitive game. Owns the shared, authoritative state
- * (seed, roster, ante/blind/phase progression, active sin) and the cross-player
- * operations; each {@link Run} owns one player's private state beneath it.
- */
+/** Aggregate root for one competitive game. */
 public final class Match {
 
     private final long seed;
@@ -161,11 +157,7 @@ public final class Match {
         dealBlind();
     }
 
-    /**
-     * BLIND -> SHOP: settles every seat's finished round and records the results. After the final ante's boss
-     * (ante == anteCount) the match instead transitions straight to FINISHED — the results are still settled and
-     * recorded, but no post-match shop opens.
-     */
+    /** BLIND -> SHOP: settles every seat's finished round and records the results. */
     public void toShop() {
         require(MatchPhase.BLIND, "toShop");
         for (Player p : players.values()) {                         // barrier: everyone must be done
@@ -204,11 +196,7 @@ public final class Match {
         phase = MatchPhase.SHOP;
     }
 
-    /**
-     * Converts one settled blind's results into standings points: the policy computes the base award, then each
-     * seat's Pride point multiplier is applied on top (a met Pride wager mints points above the round's nominal
-     * pot). Runs after {@code onRoundSettled} so sin state (Pride's threshold) is resolved first.
-     */
+    /** Converts one settled blind's results into standings points: the policy computes the base award, then each seat's Pride point multiplier is applied on top (a met Pride wager mints points above the round's nominal pot). */
     private void awardPoints(Map<PlayerId, BlindResult> results) {
         Map<PlayerId, Long> base = pointsPolicy.award(ante, blind, results);
         Map<PlayerId, Long> adjusted = new LinkedHashMap<>();
@@ -268,11 +256,7 @@ public final class Match {
     /** The tag skipping the current blind would grant. */
     public SkipTag getCurrentTag() { return currentTag; }
 
-    /**
-     * Skips the current blind for one seat: legal only before the seat has played or discarded. The round ends
-     * SKIPPED — no score, no cash-out, absent from the points award — and the blind's tag is granted (twice
-     * under Sloth, via {@link model.game.sins.SinModifier#tagsPerSkip}). Any blind may be skipped, boss included.
-     */
+    /** Skips the current blind for one seat: legal only before the seat has played or discarded. */
     public void skipBlind(PlayerId id) {
         require(MatchPhase.BLIND, "skipBlind");
         Run run = getRun(id);
@@ -312,14 +296,7 @@ public final class Match {
 
     // --- cross-player operations ---
 
-    /**
-     * Envy: exchange one joker between two seats. Only legal in the SHOP phase (the between-rounds window where
-     * Envy's swap happens) while Envy is the active sin, and only if neither seat ends up over its joker slots
-     * (a swap is 1:1, but exchanging a NEGATIVE joker for a slot-consuming one is asymmetric).
-     *
-     * <p>Swaps are unilateral by design — Envy is coveting, not trading — and no sticker protects a joker
-     * from one: Eternal guards against sale and destruction, and a swap is neither.
-     */
+    /** Envy: exchange one joker between two seats. */
     public void swapJokers(PlayerId a, int indexA, PlayerId b, int indexB) {
         require(MatchPhase.SHOP, "swapJokers");
         if (activeSin != Sin.ENVY)
@@ -348,11 +325,7 @@ public final class Match {
         return board.get(index);
     }
 
-    /**
-     * Spends {@code casterId}'s held relic at {@code relicIndex}, resolving its effect against {@code target}.
-     * A hostile effect (one aimed at another seat) is recorded for Anger and, if that seat has an armed Aegis,
-     * negated by consuming the shield. The relic is removed from the caster's relic area either way.
-     */
+    /** Spends {@code casterId}'s held relic at {@code relicIndex}, resolving its effect against {@code target}. */
     public void useRelic(PlayerId casterId, int relicIndex, RelicTarget target) {
         Run caster = getRun(casterId);
         castRelic(casterId, caster.getRelics().get(relicIndex), target);
@@ -387,11 +360,7 @@ public final class Match {
         sinModifier.onConsumableUsed(caster);   // a relic is a consumable used, even if Aegis absorbed its effect
     }
 
-    /**
-     * Wrath: destroys the caster's own joker at {@code index} — no money, but the next joker purchase is free
-     * (grants stack and expire with the ante). Legal in any live phase ("whenever you want"); Eternal jokers
-     * cannot be destroyed, and since this is a deliberate player action the rejection is loud.
-     */
+    /** Wrath: destroys the caster's own joker at {@code index} — no money, but the next joker purchase is free (grants stack and expire with the ante). */
     public void wrathDestroyJoker(PlayerId id, int index) {
         if (activeSin != Sin.WRATH)
             throw new IllegalStateException("destroying for a grant is a Wrath mechanic; active sin is " + activeSin);
@@ -404,12 +373,7 @@ public final class Match {
         run.getSinState().grantWrathFreeJoker();
     }
 
-    /**
-     * Gluttony: eats the joker at {@code index} on {@code id}'s board — destroys it for its sell value plus the
-     * ${@value model.game.sins.GluttonyModifier#EAT_BONUS} eat bonus, counting as a consumable use for the
-     * communal gauge. Eating is a deliberate action, so an Eternal joker is rejected loudly (matching sale);
-     * but it is not a sale — ON_SOLD does not fire and Verdant Leaf's debuff is not lifted.
-     */
+    /** Gluttony: eats the joker at {@code index} on {@code id}'s board — destroys it for its sell value plus the ${@value model.game.sins.GluttonyModifier#EAT_BONUS} eat bonus, counting as a consumable use for the communal gauge. */
     public int gluttonyEatJoker(PlayerId id, int index) {
         if (activeSin != Sin.GLUTTONY)
             throw new IllegalStateException("eating jokers is a Gluttony mechanic; active sin is " + activeSin);

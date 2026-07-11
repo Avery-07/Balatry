@@ -1,9 +1,6 @@
 package model.game.rng;
 
-/**
- * The distinct purposes for which the game draws randomness; each is an independent keyed stream.
- * Each constant carries a stable {@code code} that feeds the RNG key. Never reuse a code; only append new ones.
- */
+/** The distinct purposes for which the game draws randomness; each is an independent keyed stream. */
 public enum RngSource {
     BOSS_BLIND         (1),        // boss blind selection for an ante
     SHOP_CONTENTS      (2),        // cards spawn in a shop slot

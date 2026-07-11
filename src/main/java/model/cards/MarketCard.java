@@ -2,10 +2,7 @@ package model.cards;
 
 import model.cards.capability.Sellable;
 
-/**
- * A card that can be both bought and sold (jokers, consumables). Adds sell value on top of {@link Card};
- * playing cards extend {@link Card} directly since they are never sold.
- */
+/** A card that can be both bought and sold (jokers, consumables). */
 public abstract class MarketCard extends Card implements Sellable {
 
     private int sellValue;

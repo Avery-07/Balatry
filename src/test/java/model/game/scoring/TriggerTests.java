@@ -13,11 +13,7 @@ import model.game.player.Run;
 
 import java.util.List;
 
-/**
- * Run-as-main harness pinning the five previously-undispatched triggers: ON_SOLD, ON_SHOP_START,
- * ON_SHOP_REROLL, ON_SHOP_END, ON_HAND_DISCARDED. Each uses a probe joker whose counter advances on its
- * trigger; ON_HAND_DISCARDED also proves the discarded-card context channel is readable from the effect.
- */
+/** Run-as-main harness pinning the five previously-undispatched triggers: ON_SOLD, ON_SHOP_START, ON_SHOP_REROLL, ON_SHOP_END, ON_HAND_DISCARDED. */
 public final class TriggerTests {
 
     private static int failures = 0;

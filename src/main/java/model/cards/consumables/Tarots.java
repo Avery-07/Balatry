@@ -15,12 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * The twenty-two Tarot cards. Each carries the Balatry effect (the "New Effect" where the master sheet
- * diverges from the base game, otherwise the base effect). Card-targeting tarots read their selection from
- * {@link Run#getConsumableTargets()}; "up to N" effects apply to the first {@code min(N, selection)} cards.
- * Effect-created cards and probabilistic rolls draw on the run's keyed RNG so a shared seed mirrors outcomes.
- */
+/** The twenty-two Tarot cards. */
 public enum Tarots {
 
     THE_FOOL("The Fool", (run, self) -> {

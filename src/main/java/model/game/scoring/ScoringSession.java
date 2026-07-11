@@ -58,10 +58,7 @@ public final class ScoringSession {
         }
     }
 
-    /**
-     * Immediately re-fires a joker's played-hand effect and edition. This is the joker-retrigger primitive
-     * (for Blueprint/Brainstorm): it runs in place, not deferred, and a depth guard breaks any retrigger cycle.
-     */
+    /** Immediately re-fires a joker's played-hand effect and edition. */
     public void retriggerJoker(JokerCard joker) {
         if (joker == null || joker.isDebuffed() || retriggerDepth >= MAX_RETRIGGER_DEPTH) return;
         retriggerDepth++;

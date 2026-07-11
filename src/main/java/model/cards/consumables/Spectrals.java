@@ -20,12 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * The nineteen Spectral cards (the Balatry effect where the master sheet diverges, otherwise the base effect).
- * Reuses the consumable plumbing: card-targeting spectrals read {@link Run#getDeckCardTargets()}; Aura and
- * Exorcism read the general {@link Run#getConsumableTargets()} so they can target a deck card, joker, or
- * consumable. Random and generative effects draw on {@link RngSource#SPECTRAL_GENERATION}.
- */
+/** The nineteen Spectral cards (the Balatry effect where the master sheet diverges, otherwise the base effect). */
 public enum Spectrals {
 
     FAMILIAR("Familiar", (run, self) -> {

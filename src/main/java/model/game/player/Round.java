@@ -15,11 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * One player's play against a single blind: draw pile, hand, remaining hands/discards, banked score, and outcome.
- * Meeting the target does not end the round (chips fund the points share); the round resolves when hands run out
- * or the player calls {@link #finish()}.
- */
+/** One player's play against a single blind: draw pile, hand, remaining hands/discards, banked score, and outcome. */
 public final class Round {
 
     private static final int MAX_SELECTION = 5;
@@ -115,21 +111,13 @@ public final class Round {
         return new PlayResult(type, handScore, score, result.destroyed());
     }
 
-    /**
-     * Voluntarily ends the round, resolving the outcome from the banked score. The tradeoff this enables:
-     * a player who has met the target can stop early to bank remaining hands as cash-out money, or keep
-     * playing them for a bigger chip share. Finishing below the target concedes (Mr. Bones may still save it).
-     */
+    /** Voluntarily ends the round, resolving the outcome from the banked score. */
     public void finish() {
         requireInProgress();
         resolve();
     }
 
-    /**
-     * Skips this blind: only legal before the seat has played or discarded. The round ends SKIPPED — no score,
-     * no cash-out, no points (the seat is absent from the award) — in exchange for the blind's skip tag,
-     * granted by {@code Match.skipBlind}.
-     */
+    /** Skips this blind: only legal before the seat has played or discarded. */
     public void skip() {
         requireInProgress();
         if (acted) throw new IllegalStateException("cannot skip after playing or discarding");
@@ -183,11 +171,7 @@ public final class Round {
         refreshForcedCard();   // Cerulean Bell: re-pick if the forced card left the hand
     }
 
-    /**
-     * Cerulean Bell: keeps one random hand card forced into every play and discard. Re-picked (on the
-     * boss-effect stream) whenever the current forced card is no longer in hand; cleared when the boss is
-     * absent or disabled, so a mid-round Luchador lifts the constraint.
-     */
+    /** Cerulean Bell: keeps one random hand card forced into every play and discard. */
     private void refreshForcedCard() {
         BossBlind boss = run.effectiveBoss();
         if (boss == null || !boss.forcesCardSelection()) { forcedCard = null; return; }

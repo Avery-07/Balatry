@@ -15,11 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * A booster pack: a buyable (not sellable) card that, when opened, offers a set of cards of one
- * {@link PackKind} to choose from. Counts follow the master sheet; option/pick counts factor in voucher
- * bonuses (Sampler, Connoisseur). Every kind now has a content catalog (Myth packs offer Relics).
- */
+/** A booster pack: a buyable (not sellable) card that, when opened, offers a set of cards of one {@link PackKind} to choose from. */
 public final class BoosterPack extends Card {
 
     private final PackKind kind;

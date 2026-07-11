@@ -14,12 +14,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Run-as-main harness for the Match-level boss behaviours: The Hivemind (cross-table hand-type debuff),
- * The Commons (shared discard pool), The Bandwagon (most-owned joker debuffed), The Mirage (own best hand
- * excluded from the settled score), The Shave (global best hand excluded, ties shave symmetrically), plus
- * per-player boss disabling (Chicot exemption) and the {@link BossSelector} policy seam.
- */
+/** Run-as-main harness for the Match-level boss behaviours: The Hivemind (cross-table hand-type debuff), The Commons (shared discard pool), The Bandwagon (most-owned joker debuffed), The Mirage (own best hand excluded from the settled score), The Shave (global best hand excluded, ties shave symmetrically), plus per-player boss disabling (Chicot exemption) and the {@link BossSelector} policy seam. */
 public final class BossBehaviorTests {
 
     private static int failures = 0;

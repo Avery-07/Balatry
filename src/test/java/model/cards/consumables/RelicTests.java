@@ -19,12 +19,7 @@ import model.game.shop.Shop;
 
 import java.util.List;
 
-/**
- * Run-as-main harness for the ten Relics. Three slices: round-scoped debuffs routed through the scoring engine
- * (Anathema rank, Miasma suit, Katadesmos joker, plus the round-boundary clear), immediate cross-player effects
- * resolved through {@link Match#useRelic} (Pyre, Katabasis, Harpax, Mimesis), and the multiplayer guards
- * (Aegis negation + Anger targeting, Limos shop debuff, Metabole boss reroll).
- */
+/** Run-as-main harness for the ten Relics. */
 public final class RelicTests {
 
     private static int failures = 0;
@@ -184,10 +179,7 @@ public final class RelicTests {
         }
     }
 
-    /**
-     * Stacks {@code run} so a single hand clears any blind under any boss: eight Aces in cycling suits (so any
-     * 3- or 5-card window is a same-rank hand, never an accidental flush) and every hand type leveled far up.
-     */
+    /** Stacks {@code run} so a single hand clears any blind under any boss: eight Aces in cycling suits (so any 3- or 5-card window is a same-rank hand, never an accidental flush) and every hand type leveled far up. */
     private static void stackToWin(Run run) {
         run.resetDeck(java.util.List.of());
         Suit[] suits = Suit.values();

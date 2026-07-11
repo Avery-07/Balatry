@@ -7,16 +7,7 @@ import model.game.player.Run;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
-/**
- * The ten Relics — Balatry's multiplayer-facing cards. A relic is bought/found, held in the relic area, and
- * spent through {@link model.game.Match#useRelic} with a {@link RelicTarget}. Effects fall into three groups:
- * round-scoped opponent debuffs that lodge on the target's {@link model.game.player.Afflictions}
- * (Anathema/Miasma/Katadesmos/Limos), immediate cross-player effects (Pyre/Katabasis/Harpax), and self/global
- * effects (Metabole/Mimesis/Aegis). Hostile effects are gated by the resolver: an armed Aegis on the target
- * negates them, and the targeting is recorded for Anger either way.
- *
- * <p>Costs are uniform for now ({@link #COST}); they are a tuning knob, not a balance claim.
- */
+/** The ten Relics — Balatry's multiplayer-facing cards. */
 public enum Relics {
 
     /** Debuffs a rank for one selected opponent for their next round. */

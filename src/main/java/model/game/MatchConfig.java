@@ -6,18 +6,7 @@ import model.game.sins.Sins;
 
 import java.util.function.Function;
 
-/**
- * The injectable policies for a {@link Match}: which sin is active each ante ({@link SinSelector}), which boss
- * closes it ({@link BossSelector}), how a sin maps
- * to behaviour ({@code sinResolver}, default {@link Sins#modifierFor}), how a sin's player choices are resolved
- * ({@link SinChoiceProvider}), how settled results become competition points ({@link PointsPolicy}, default
- * {@link ProportionalPointsPolicy}), and how many antes the match runs ({@code anteCount}, default 7). Bundled into one
- * value so policy injection has a single home rather than an ever-growing list of {@code create} overloads; add a
- * policy here and the call sites keep using {@code with...}.
- *
- * <p>Null (or, for {@code anteCount}, non-positive) components fall back to defaults, so {@link #defaults()} plus
- * a {@code with...} call is the normal path.
- */
+/** The injectable policies for a {@link Match}: which sin is active each ante ({@link SinSelector}), which boss closes it ({@link BossSelector}), how a sin maps to behaviour ({@code sinResolver}, default {@link Sins#modifierFor}), how a sin's player choices are resolved ({@link SinChoiceProvider}), how settled results become competition points ({@link PointsPolicy}, default {@link ProportionalPointsPolicy}), and how many antes the match runs ({@code anteCount}, default 7). */
 public record MatchConfig(SinSelector sinSelector,
                           BossSelector bossSelector,
                           Function<Sin, SinModifier> sinResolver,

@@ -1,11 +1,6 @@
 package model.cards.vouchers;
 
-/**
- * The voucher catalog, as base -> upgrade pairs (an upgrade can only be redeemed once its base has been).
- * Effects are implemented where they map to existing {@link model.game.player.Run} knobs; vouchers needing
- * unbuilt systems (edition rates, shop appearance weights, playing cards in the shop) carry
- * {@link VoucherEffect#NONE} for now. Removed vouchers (Hieroglyph, Petroglyph, Director's Cut, Retcon) are absent.
- */
+/** The voucher catalog, as base -> upgrade pairs (an upgrade can only be redeemed once its base has been). */
 public enum Vouchers {
 
     OVERSTOCK("Overstock", null, r -> r.setShopSlots(r.getShopSlots() + 1)),

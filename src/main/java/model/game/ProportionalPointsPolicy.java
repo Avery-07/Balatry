@@ -9,23 +9,7 @@ import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * The default {@link PointsPolicy}: every seat that cleared the blind receives a share of the round's reward
- * proportional to its chip score — a seat that scored a fifth of the cleared seats' combined chips earns a
- * fifth of the reward. Seats that failed (or were absent) are excluded from both the numerator and the
- * denominator; if nobody cleared, the round awards nothing (the pot is neither split nor rolled forward).
- *
- * <p>The reward for a round is {@code 50x + 50} where {@code x} is the 1-based global round index across the
- * match (ante 1 Small = round 1 = 100 points; ante 7 Boss = round 21 = 1100 points), so later rounds carry
- * significantly more weight and the match stays contested to the end.
- *
- * <p>Shares are rounded to whole points (HALF_UP) independently per seat, so a round's paid total may drift
- * from its nominal reward by a point or two — accepted for the simplicity of integer standings.
- *
- * <p><b>Known, deliberately deferred issue:</b> Balatro scoring grows exponentially, so an uncapped
- * proportional split lets a runaway engine claim nearly the whole reward in late antes. A per-seat cap
- * (counting at most {@code c x target} chips) is the anticipated fix; it belongs here when it comes.
- */
+/** The default {@link PointsPolicy}: every seat that cleared the blind receives a share of the round's reward proportional to its chip score — a seat that scored a fifth of the cleared seats' combined chips earns a fifth of the reward. */
 public final class ProportionalPointsPolicy implements PointsPolicy {
 
     private static final MathContext SHARE_PRECISION = new MathContext(20);

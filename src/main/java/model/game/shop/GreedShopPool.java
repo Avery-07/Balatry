@@ -7,12 +7,7 @@ import model.cards.jokers.Jokers;
 
 import java.util.random.RandomGenerator;
 
-/**
- * The Greed card-row pool: the same type mix as {@link CatalogShopPool} (Joker 72 / Tarot 14 / Planet 14), but
- * "jokers have increased rarity" — the rarity split shifts from the base 55/35/10 (C/U/R) to 30/45/25:
- * uncommons become the norm and rares appear 2.5x as often. Draws use only the supplied stream, so a shared
- * seed still mirrors offerings across seats — which is what makes Greed's shared-shop fiction hold.
- */
+/** The Greed card-row pool: the same type mix as {@link CatalogShopPool} (Joker 72 / Tarot 14 / Planet 14), but "jokers have increased rarity" — the rarity split shifts from the base 55/35/10 (C/U/R) to 30/45/25: uncommons become the norm and rares appear 2.5x as often. */
 public final class GreedShopPool implements ShopPool {
 
     public static final GreedShopPool INSTANCE = new GreedShopPool();

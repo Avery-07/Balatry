@@ -6,10 +6,7 @@ import model.cards.packs.PackSize;
 
 import java.util.random.RandomGenerator;
 
-/**
- * Rolls booster packs whose content catalogs exist (Arcana, Celestial, Standard, Buffoon); Spectral and Myth
- * are withheld until their catalogs land. Size is weighted Normal &gt; Jumbo &gt; Mega.
- */
+/** Rolls booster packs whose content catalogs exist (Arcana, Celestial, Standard, Buffoon); Spectral and Myth are withheld until their catalogs land. */
 public final class CatalogPackPool implements PackPool {
 
     public static final CatalogPackPool INSTANCE = new CatalogPackPool();

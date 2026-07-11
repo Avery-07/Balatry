@@ -8,12 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The cumulative competition standings of a match: total points per seat plus the most recent round's award.
- * Owned and updated by {@link Match} at the settlement barrier; everything here is read-only to the outside.
- * By default the players' only information about each other is their ranking and point totals — this object
- * is exactly that surface.
- */
+/** The cumulative competition standings of a match: total points per seat plus the most recent round's award. */
 public final class Standings {
 
     private final Map<PlayerId, Long> totals = new LinkedHashMap<>();   // seat order

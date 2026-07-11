@@ -15,12 +15,7 @@ import model.modifiers.Sticker;
 
 import java.util.List;
 
-/**
- * Run-as-main harness for jokers. Covers three slices: scoring deltas (Mult/Chip contributions
- * routed through the scoring engine), slot and ON_ROUND_START hooks (Joker Stencil, Mystic Summit,
- * Ceremonial Dagger, Marble), and the retrigger primitive plus debt/shop economy (Mime, a
- * Blueprint-like joker retrigger, Loyalty Card, Credit Card).
- */
+/** Run-as-main harness for jokers. */
 public final class JokerTests {
 
     private static int failures = 0;

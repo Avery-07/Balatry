@@ -2,11 +2,7 @@ package model.game.rng;
 
 import java.util.random.RandomGenerator;
 
-/**
- * Deterministic, keyed randomness for a run. Every draw is addressed by a
- * {@link RngSource} plus a {@code salt} and is reproducible in isolation:
- * the same {@code (seed, source, salt)} always yields the same result.
- */
+/** Deterministic, keyed randomness for a run. */
 public interface Rng {
 
     /** Uniform double in [0.0, 1.0) for {@code (source, salt)}. */

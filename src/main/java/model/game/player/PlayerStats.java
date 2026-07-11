@@ -18,23 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Per-player tracking that lives beside a {@link Run}: keyed RNG occurrence counters, the shop-open counter,
- * the voucher-redemption ledger, and the accumulated gameplay history that data-driven jokers read
- * (hand-type counts, consumable usage, discards, economy events). This is the home for accumulated run state;
- * {@link Run} keeps the core inventory, subsystems, and configuration. Effect application stays on {@code Run}
- * (it needs the run); here we only track what has happened.
- *
- * <p><b>Scope.</b> Most counters are run-scoped and persist for the whole game. A few are round-scoped and reset
- * in {@link #beginRound()} (their getters are named {@code ...ThisRound}); the per-ante voucher allowance resets
- * in {@link #beginAnte()}. Counters that reset on a game event with no fixed cadence (e.g. Campfire on a boss
- * defeat) expose an explicit {@code reset...} method rather than hooking a lifecycle call.
- *
- * <p><b>Recording order for hand plays.</b> {@link #recordHandPlayed} is invoked <em>before</em> the hand is
- * scored, so the current play is already counted when {@code ON_HAND_PLAYED} jokers run. Supernova therefore
- * reads {@link #getHandPlays} including the current hand, and Card Sharp checks
- * {@code getHandPlaysThisRound(type) > 1} ("played earlier this round too").
- */
+/** Per-player tracking that lives beside a {@link Run}: keyed RNG occurrence counters, the shop-open counter, the voucher-redemption ledger, and the accumulated gameplay history that data-driven jokers read (hand-type counts, consumable usage, discards, economy events). */
 public final class PlayerStats {
 
     /** How many of the most recent hand types to retain for windowed reads (e.g. Obelisk). */
@@ -139,10 +123,7 @@ public final class PlayerStats {
     /** Immutable snapshot of run hand-type play counts (absent types are zero). */
     public Map<HandType, Integer> getHandPlayCounts() { return Map.copyOf(handPlays); }
 
-    /**
-     * The most-played hand type this run, or {@code null} if none has been played. Ties break toward the
-     * higher-ranking hand (Black Hole, Satellite, Telescope, Orbital Tag).
-     */
+    /** The most-played hand type this run, or {@code null} if none has been played. */
     public HandType getMostPlayedHand() {
         HandType best = null;
         int bestCount = 0;
@@ -156,10 +137,7 @@ public final class PlayerStats {
     /** The most recent hand type played, or {@code null} if none yet. */
     public HandType getLastHandType() { return recentHands.peekFirst(); }
 
-    /**
-     * Up to {@code n} most recently played hand types, most-recent-first (index 0 is the current/last hand).
-     * Retained up to {@link #RECENT_HAND_WINDOW}; Obelisk reads indices 1 and 2 for its "last two hands".
-     */
+    /** Up to {@code n} most recently played hand types, most-recent-first (index 0 is the current/last hand). */
     public List<HandType> getRecentHands(int n) {
         List<HandType> out = new ArrayList<>(Math.min(n, recentHands.size()));
         for (HandType t : recentHands) {

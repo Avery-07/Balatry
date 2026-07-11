@@ -2,12 +2,7 @@ package model.game.player;
 
 import java.math.BigDecimal;
 
-/**
- * The competition-facing outcome of one player's blind: whether it was cleared, the final score vs target,
- * the single best hand played (The Mirage/The Shave exclusions, and a natural display stat), hands left,
- * and money earned. {@code score} is the settled score the points award reads; boss exclusions may make it
- * smaller than the raw banked score that cleared the target.
- */
+/** The competition-facing outcome of one player's blind: whether it was cleared, the final score vs target, the single best hand played (The Mirage/The Shave exclusions, and a natural display stat), hands left, and money earned. */
 public record BlindResult(RoundOutcome outcome, BigDecimal score, BigDecimal bestHand,
                           long target, int handsRemaining, int moneyEarned) {
 

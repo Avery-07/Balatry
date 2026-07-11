@@ -18,22 +18,9 @@ import model.modifiers.Sticker;
 import java.math.BigDecimal;
 import java.util.Map;
 
-/**
- * Greed. Two mechanics:
- *
- * <p><b>The chips-to-money ladder</b> — $1 for every chip threshold crossed, each next dollar needing x1.5 more
- * chips (500, then +750, +1125, +1687, ..., floored to whole chips). Per player and <em>per round</em>: the
- * ladder lives in {@link SinState} and resets with it every round, so each blind starts a fresh count from 0.
- * Dollars pay immediately as a hand's score crosses rungs, via {@link #onHandScored}.
- *
- * <p><b>The shared shop</b> — seats keep their seed-mirrored shops (that is what makes the shop "shared"), and
- * a completed purchase by any player debuffs that item in every <em>other</em> seat's open shop. Matching is by
- * item identity ({@link #identityOf}: joker/consumable/relic/voucher spec, pack kind+size, playing-card
- * rank+suit), not slot position, so it survives reroll divergence; claims are remembered on the match's
- * {@link SinTableState} for the shop phase, and {@link #onShopRerolled} re-debuffs claimed items that reappear
- * in a non-buyer's reroll. The DEBUFFED sticker is permanent — buy a claimed item and it stays dead until
- * something like Exorcism removes the sticker. Rarity: the card row swaps to {@link GreedShopPool}.
- */
+/** Greed: $1 per chip rung crossed each round (500, then x1.5 more per dollar), plus the shared shop —
+ * a purchase debuffs that item, by identity and permanently, in every other seat's shop; joker rarity is
+ * boosted via {@link GreedShopPool}. Claims live on {@link SinTableState} for one shop phase. */
 public final class GreedModifier implements SinModifier {
 
     /** Chips required for the first dollar of each round's ladder. */
@@ -96,10 +83,7 @@ public final class GreedModifier implements SinModifier {
         if (card != null && key.equals(identityOf(card)) && !card.isDebuffed()) card.apply(Sticker.DEBUFFED);
     }
 
-    /**
-     * A cross-seat identity key: mirrored copies of "the same item" share a key regardless of which seat's shop
-     * they sit in. Unknown card kinds get {@code null} and are simply not propagated.
-     */
+    /** A cross-seat identity key: mirrored copies of "the same item" share a key regardless of which seat's shop they sit in. */
     static String identityOf(Card card) {
         if (card instanceof JokerCard j)      return "joker:" + j.getSpec().getName();
         if (card instanceof ConsumableCard c) return "consumable:" + c.getSpec().getName();

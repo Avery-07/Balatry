@@ -14,11 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Run-as-main harness for the points layer: the g(x) = 50x + 50 reward curve, the chip-proportional split
- * (failed seats excluded from the denominator, nobody-cleared awards nothing, identical scores split equally),
- * cumulative {@link Standings} with ranking, and the Match integration including Pride's point multiplier.
- */
+/** Run-as-main harness for the points layer: the g(x) = 50x + 50 reward curve, the chip-proportional split (failed seats excluded from the denominator, nobody-cleared awards nothing, identical scores split equally), cumulative {@link Standings} with ranking, and the Match integration including Pride's point multiplier. */
 public final class StandingsTests {
 
     private static int failures = 0;

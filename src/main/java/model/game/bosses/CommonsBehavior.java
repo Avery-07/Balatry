@@ -5,12 +5,7 @@ import model.game.Match;
 import model.game.player.PlayerId;
 import model.game.player.Run;
 
-/**
- * The Commons: all participating seats share one discard pool, sized as the sum of their per-round discards
- * at the deal. Any seat's discard draws the pool down for everyone — the tragedy of the commons, played out
- * in discards. A seat that disables the boss (Chicot at the deal, Luchador mid-round) reverts to its own
- * untouched personal counter; discards it contributed to the pool while participating stay spent.
- */
+/** The Commons: all participating seats share one discard pool, sized as the sum of their per-round discards at the deal. */
 final class CommonsBehavior implements BossBehavior {
 
     private SharedDiscardPool pool;   // null until the boss round begins

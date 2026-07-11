@@ -5,14 +5,7 @@ import model.game.Sin;
 import java.util.EnumMap;
 import java.util.Map;
 
-/**
- * The registry from a {@link Sin} to its {@link SinModifier} behaviour. Every sin maps to {@link SinModifier#NONE}
- * until its model behaviour is built; registering a sin is a one-line change here, with no edit to {@link model.game.Match}
- * or the lifecycle wiring. This is the single extension point: implement a {@code SinModifier}, then {@link #register} it.
- *
- * <p>{@link model.game.Match} resolves through {@link #modifierFor} by default, but accepts an injected resolver
- * (for tests), so dispatch can be exercised with a spy without mutating this table.
- */
+/** The registry from a {@link Sin} to its {@link SinModifier} behaviour. */
 public final class Sins {
 
     private static final Map<Sin, SinModifier> REGISTRY = new EnumMap<>(Sin.class);

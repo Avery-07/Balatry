@@ -106,13 +106,7 @@ public final class Run {
     /** Per-player hand levels (raised by Planet cards). */
     public HandLevels getHandLevels() { return handLevels; }
 
-    /**
-     * Resolves one chance on {@code source}, salted by that source's next per-player occurrence counter.
-     * <p>Salting rule: use this counter form only for <em>emergent-timing</em> events that have no stable
-     * coordinate (glass shatter, lucky procs, effect rolls). For <em>positioned</em> draws (shop slot, ante,
-     * hand/card index) hash the coordinates with {@link Rng#combine} instead — it mirrors across players for
-     * free and needs no mutable state.
-     */
+    /** Resolves one chance on {@code source}, salted by that source's next per-player occurrence counter. */
     public boolean roll(RngSource source, int numerator, int denominator) {
         return rng.chance(source, stats.nextSalt(source), numerator, denominator);
     }
@@ -171,7 +165,7 @@ public final class Run {
 
     /** Grants a skip tag: IMMEDIATE tags resolve now; pending timings accumulate until their moment. */
     public void grantTag(SkipTag tag) {
-        // Double Tag: every pending copy duplicates the next selected tag (Double itself excluded), so a grant
+        // Double Tag: each pending copy duplicates the next selected tag (Double itself excluded).
         // of X with n pending Doubles yields 1 + n copies of X, all resolved with X's own timing.
         int copies = 1;
         if (tag != SkipTag.DOUBLE_TAG)
@@ -471,11 +465,7 @@ public final class Run {
         board.shuffle(rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT)));
     }
 
-    /**
-     * Crimson Heart: re-picks the disabled joker for the coming hand — a different one than last hand when the
-     * board allows it. Called at the deal and after every play; a disabled boss (Luchador mid-round) or an empty
-     * board clears the disable and picks nothing. Only a sticker this run added is stripped.
-     */
+    /** Crimson Heart: re-picks the disabled joker for the coming hand — a different one than last hand when the board allows it. */
     void rollCrimsonHeart() {
         JokerCard previous = bossState.clearCrimsonHeart();
         BossBlind eff = effectiveBoss();
@@ -569,12 +559,7 @@ public final class Run {
     /** The active shop, or {@code null} outside the shop phase. */
     public Shop getShop() { return shop; }
 
-    /**
-     * Opens this run's shop for the SHOP phase: assembles a {@link ShopSetup} from the run's defaults, lets the
-     * active sin configure the ante's ambient shop environment, layers this seat's pending NEXT_SHOP tags on
-     * top, then builds the shop. Rolled contents stay seed-mirrored across seats regardless of tag differences
-     * (injected slots are extra and rolled positions keep their own salts).
-     */
+    /** Opens this run's shop for the SHOP phase: assembles a {@link ShopSetup} from the run's defaults, lets the active sin configure the ante's ambient shop environment, layers this seat's pending NEXT_SHOP tags on top, then builds the shop. */
     public Shop openShop() {
         afflictions.beginShop();   // promote a pending Limos debuff before the shop fills its first slot
         ShopSetup setup = new ShopSetup(
@@ -588,12 +573,7 @@ public final class Run {
         return shop;
     }
 
-    /**
-     * Consumes every pending NEXT_SHOP tag into {@code setup}. All copies resolve into this one shop and stack
-     * (two Voucher Tags add two vouchers; two Negative Tags bank two transforms). Injected tag jokers draw from
-     * the occurrence-salted JOKER_GENERATION stream — seats mirror them only if their tag histories mirror,
-     * which is the correct scope for player-earned boosts.
-     */
+    /** Consumes every pending NEXT_SHOP tag into {@code setup}. */
     private void applyPendingShopTags(ShopSetup setup) {
         for (SkipTag tag : List.copyOf(pendingTags)) {
             if (tag.getTiming() != SkipTag.Timing.NEXT_SHOP) continue;

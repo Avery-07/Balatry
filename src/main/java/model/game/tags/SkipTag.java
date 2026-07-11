@@ -11,22 +11,7 @@ import model.game.scoring.HandType;
 
 import java.util.function.Consumer;
 
-/**
- * The skip-tag catalog (master sheet's post-rework roster: Boss, Foil, and Holographic tags removed; Charm and
- * Ethereal renamed to Arcana and Spectral). A blind's tag is seeded table-level (same for every seat) and granted
- * when the blind is skipped, via {@link Run#grantTag}.
- *
- * <p>Timing classes: {@code IMMEDIATE} tags resolve at the moment of the grant. {@code NEXT_BOSS} tags
- * (Investment) wait pending on the run and are consumed by the Match when the next boss is defeated.
- * {@code NEXT_SHOP} tags wait pending and are consumed by {@link Run#openShop} into the shop's
- * {@link model.game.shop.ShopSetup} (Coupon frees the initial card/pack rows, D6 zeroes the reroll base,
- * Voucher adds a voucher slot, Uncommon/Rare inject free jokers, Negative banks a free-Negative transform).
- * The {@code META} Double Tag waits pending and is consumed by {@link Run#grantTag}: every pending copy
- * duplicates the next selected tag.
- *
- * <p>Pack-granting tags use the pending-pack area, which is cleared at round end — a skipping player has the
- * whole skipped round to open theirs.
- */
+/** The skip-tag catalog (master sheet's post-rework roster: Boss, Foil, and Holographic tags removed; Charm and Ethereal renamed to Arcana and Spectral). */
 public enum SkipTag {
 
     // --- immediate: free packs (opened via Run.openPendingPack during the skipped round) ---

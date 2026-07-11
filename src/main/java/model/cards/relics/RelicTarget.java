@@ -5,17 +5,7 @@ import model.cards.DeckCard.Suit;
 import model.game.player.PlayerId;
 import model.game.scoring.HandType;
 
-/**
- * The caster's choice for a relic use: which seat (if any) it is aimed at, plus the one selector the relic
- * reads. Most relics use exactly one selector; the unused fields stay null / {@link #NO_INDEX}. Effects guard
- * their own inputs, so a malformed selection degrades to a no-op rather than throwing.
- *
- * @param opponent  the targeted seat, or {@code null} for self/global relics
- * @param rank      rank selector (Anathema)
- * @param suit      suit selector (Miasma)
- * @param jokerIndex board-position selector, blind to the caster (Katadesmos); {@link #NO_INDEX} when unused
- * @param handType  hand-type selector (Katabasis)
- */
+/** The caster's choice for a relic use: which seat (if any) it is aimed at, plus the one selector the relic reads. */
 public record RelicTarget(PlayerId opponent, Rank rank, Suit suit, int jokerIndex, HandType handType) {
 
     public static final int NO_INDEX = -1;

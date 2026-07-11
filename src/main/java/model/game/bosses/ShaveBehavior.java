@@ -9,13 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The Shave: the single highest-scoring hand across all participating players is excluded from its owner's
- * settled score — the score the points award reads. The outcome is never changed: a cleared blind stays
- * cleared (no retroactive failure at the barrier). Mirrored seeds make exact cross-seat ties real, not
- * theoretical; every seat whose best hand equals the global maximum is shaved, which is the only symmetric
- * resolution under identical play.
- */
+/** The Shave: the single highest-scoring hand across all participating players is excluded from its owner's settled score — the score the points award reads. */
 final class ShaveBehavior implements BossBehavior {
 
     @Override

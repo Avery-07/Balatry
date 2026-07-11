@@ -23,14 +23,7 @@ import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.random.RandomGenerator;
 
-/**
- * The joker catalog, in document order with a comment before every group of five. Each entry diverges to its
- * "New Effect" where the design doc defines one. Effects read only the existing run/scoring/stats surface;
- * jokers needing systems not yet modelled (boss blinds, static hand-size/discard modifiers, evaluator-threshold
- * changes, pack-skip/open events, the tag system, per-card bonus-chip storage) are left as inline {@code skipped:}
- * comments at their position. A few use small counter encodings (a hand-id marker, or bit-packed state) to stay
- * self-contained without new engine hooks.
- */
+/** The joker catalog, in document order with a comment before every group of five. */
 public enum Jokers {
 
     // Jokers 001-005

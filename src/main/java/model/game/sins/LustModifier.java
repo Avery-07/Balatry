@@ -9,20 +9,9 @@ import model.game.shop.ShopSetup;
 
 import java.math.BigDecimal;
 
-/**
- * Lust. Two mechanics:
- *
- * <p><b>The diversity multiplier</b> — each unique hand type played this round grants a persistent +0.5x to the
- * <em>final score</em> of hands played after it (x1 for the round's first hand, x1.5 once one type is played,
- * x2 at two, ...). The unlocking hand itself does not benefit: {@link #adjustHandScore} multiplies by the
- * already-unlocked count first and records the hand's type after. Repeats keep whatever is unlocked but add
- * nothing. The set lives round-scoped in {@link SinState}, so every blind starts back at x1.
- *
- * <p><b>The crowded shop</b> — every shop grows {@value #EXTRA_ITEMS} extra items, each landing in the card or
- * pack row (never the voucher row) by a table-level seeded roll, so all seats' shops grow the same shape and
- * stay mirrored. Only one item may be bought per shop roll state; a reroll grants a fresh allowance (the
- * {@link ShopSetup#setMaxPurchasesPerReroll purchase cap} built in the shop-modifier pass).
- */
+/** Lust: each unique hand type played this round grants +0.5x to the final score of later hands (the
+ * unlocking hand excluded; resets every round), and shops gain {@value #EXTRA_ITEMS} extra card/pack-row
+ * items (table-seeded, mirrored) with a one-purchase-per-roll cap. */
 public final class LustModifier implements SinModifier {
 
     /** The per-unlocked-type score bonus. */
