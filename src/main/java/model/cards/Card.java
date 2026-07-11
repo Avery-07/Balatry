@@ -1,6 +1,5 @@
 package model.cards;
 
-import model.cards.capability.Buyable;
 import model.modifiers.Edition;
 import model.modifiers.Sticker;
 import model.modifiers.StickerState;
@@ -9,7 +8,7 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /** Common state for every card: edition, stickers (with per-sticker state), and shop value. */
-public abstract class Card implements Buyable {
+public abstract class Card {
 
     private Edition edition;
     private final Map<Sticker, StickerState> stickers = new EnumMap<>(Sticker.class);
@@ -57,6 +56,6 @@ public abstract class Card implements Buyable {
         }
     }
 
-    @Override public int getShopValue()        { return shopValue; }
-    @Override public void setShopValue(int value) { shopValue = value; }
+    public int getShopValue()        { return shopValue; }
+    public void setShopValue(int value) { shopValue = value; }
 }

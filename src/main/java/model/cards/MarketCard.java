@@ -1,9 +1,8 @@
 package model.cards;
 
-import model.cards.capability.Sellable;
 
 /** A card that can be both bought and sold (jokers, consumables). */
-public abstract class MarketCard extends Card implements Sellable {
+public abstract class MarketCard extends Card {
 
     private int sellValue;
 
@@ -13,6 +12,6 @@ public abstract class MarketCard extends Card implements Sellable {
         setSellValue(shopValue / 2);
     }
 
-    @Override public int getSellValue()           { return sellValue; }
-    @Override public void setSellValue(int value)  { sellValue = value; }
+    public int getSellValue()           { return sellValue; }
+    public void setSellValue(int value)  { sellValue = value; }
 }
