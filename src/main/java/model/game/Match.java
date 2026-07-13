@@ -2,6 +2,15 @@ package model.game;
 
 import model.cards.Decks;
 import model.cards.consumables.ConsumableSpec;
+import model.cards.Card;
+import model.cards.DeckCard;
+import model.cards.consumables.ConsumableCard;
+import model.cards.packs.PackOpening;
+import model.game.actions.Action;
+import model.game.actions.RecordedChoiceProvider;
+import model.game.player.Round;
+import model.game.shop.Shop;
+import model.cards.packs.BoosterPack;
 import model.cards.jokers.JokerCard;
 import model.cards.relics.RelicCard;
 import model.cards.relics.RelicContext;
@@ -213,6 +222,7 @@ public final class Match {
     public void nextBlind() {
         require(MatchPhase.SHOP, "nextBlind");
         for (Player p : players.values()) p.run().closeShop();
+        sinModifier.onShopPhaseEnd(this);   // table-level shop-phase resolution (Pride's auction)
         switch (blind) {
             case SMALL -> blind = Blind.BIG;
             case BIG   -> blind = Blind.BOSS;
@@ -371,6 +381,169 @@ public final class Match {
         if (!run.board().destroy(joker))
             throw new IllegalStateException("an Eternal joker cannot be destroyed: " + joker.getSpec().getName());
         run.getSinState().grantWrathFreeJoker();
+    }
+
+    /**
+     * The single entry point for player-submitted commands: validates the actor, resolves index payloads
+     * against live state, enforces phase gates, and delegates to the model. Rejections are exceptions and
+     * mutate nothing. Returns the delegate's natural result (a PlayResult, a PackOpening, a sale price, ...)
+     * for the submitting client; lockstep clients derive everything else from replaying the same action.
+     */
+    public Object apply(Action action) {
+        Run run = getRun(action.actor());
+        return switch (action) {
+            case Action.PlayHand a      -> requireRound(run).play(resolveHand(run, a.handIndices()));
+            case Action.DiscardCards a  -> { requireRound(run).discard(resolveHand(run, a.handIndices())); yield null; }
+            case Action.FinishRound a   -> { requireRound(run).finish(); yield null; }
+            case Action.SkipBlind a     -> { skipBlind(a.actor()); yield null; }
+
+            case Action.UseConsumable a -> { run.useConsumable(a.consumableIndex(), resolveHand(run, a.targetHandIndices())); yield null; }
+            case Action.UseRelic a      -> { useRelic(a.actor(), a.relicIndex(), a.target() != null ? a.target() : RelicTarget.none()); yield null; }
+            case Action.SellJoker a     -> run.sellJoker(a.index());
+            case Action.SellConsumable a-> run.sellConsumable(a.index());
+            case Action.SellRelic a     -> run.sellRelic(a.index());
+            case Action.MoveJoker a     -> { run.board().move(a.from(), a.to()); yield null; }
+            case Action.OpenPack a      -> { run.beginOpening(run.openPendingPack(a.pendingIndex())); yield run.getCurrentOpening(); }
+            case Action.PickFromPack a  -> applyPick(run, a);
+
+            case Action.BuyCard a       -> requireShop(run).buy(a.slotIndex());
+            case Action.BuyPack a       -> {
+                run.grantPack(requireShop(run).buyPack(a.packIndex()));   // reuse the seeded pending-pack open path
+                run.beginOpening(run.openPendingPack(run.getPendingPacks().size() - 1));
+                yield run.getCurrentOpening();
+            }
+            case Action.RedeemVoucher a -> { requireShop(run).redeemVoucher(a.voucherIndex()); yield null; }
+            case Action.RerollShop a    -> { requireShop(run).reroll(); yield null; }
+
+            case Action.PrideBid a      -> { prideBid(a.actor(), a.amount()); yield null; }
+            case Action.EnvyCopy a      -> envyCopyPurchase(a.actor(), a.logIndex());
+            case Action.EnvySwap a      -> { swapJokers(a.actor(), a.myIndex(), a.other(), a.theirIndex()); yield null; }
+            case Action.WrathDestroy a  -> { wrathDestroyJoker(a.actor(), a.jokerIndex()); yield null; }
+            case Action.GluttonyEat a   -> gluttonyEatJoker(a.actor(), a.jokerIndex());
+            case Action.SubmitSinChoice a -> { recordSinChoice(a.actor(), a.optionIndex()); yield null; }
+            case Action.ReadyForNext a -> throw new IllegalStateException("readiness is table-level; submit it to a MatchHost");
+            case Action.NotReady a     -> throw new IllegalStateException("readiness is table-level; submit it to a MatchHost");
+        };
+    }
+
+    /** Records {@code id}'s answer for the next sin choice; requires an action-driven choice provider. */
+    public void recordSinChoice(PlayerId id, int option) {
+        getRun(id);
+        if (!(sinChoiceProvider instanceof RecordedChoiceProvider recorded))
+            throw new IllegalStateException("this match's sin choices are not action-driven");
+        recorded.record(id, option);
+    }
+
+    /** The actor's live round, only during the BLIND phase. */
+    private Round requireRound(Run run) {
+        if (phase != MatchPhase.BLIND || run.getRound() == null)
+            throw new IllegalStateException("no round in progress (phase " + phase + ")");
+        return run.getRound();
+    }
+
+    /** The actor's open shop, only during the SHOP phase. */
+    private Shop requireShop(Run run) {
+        if (phase != MatchPhase.SHOP || run.getShop() == null)
+            throw new IllegalStateException("no shop open (phase " + phase + ")");
+        return run.getShop();
+    }
+
+    /** Resolves distinct hand indices into the round's live cards; any bad index rejects the whole action. */
+    private List<DeckCard> resolveHand(Run run, List<Integer> indices) {
+        if (indices == null || indices.isEmpty()) return List.of();
+        if (indices.stream().distinct().count() != indices.size())
+            throw new IllegalArgumentException("duplicate hand indices: " + indices);
+        List<DeckCard> hand = requireRound(run).getHand();
+        List<DeckCard> cards = new java.util.ArrayList<>(indices.size());
+        for (int i : indices) {
+            if (i < 0 || i >= hand.size())
+                throw new IllegalArgumentException("hand index " + i + " out of range (hand size " + hand.size() + ")");
+            cards.add(hand.get(i));
+        }
+        return cards;
+    }
+
+    /**
+     * Picks from the actor's current opening, routing by kind: playing cards join the deck, jokers and
+     * consumables are stored (room-checked before the pick is spent), relics cast immediately with the
+     * action's target. Storing pack consumables instead of use-immediately is a deliberate interim until
+     * targeted use-from-pack has a design. The opening clears itself when its last pick is spent.
+     */
+    private Object applyPick(Run run, Action.PickFromPack a) {
+        PackOpening opening = run.getCurrentOpening();
+        if (opening == null) throw new IllegalStateException("no pack is open");
+        Card option = opening.getOptions().get(a.optionIndex());
+        if (option == null) throw new IllegalStateException("option " + a.optionIndex() + " was already picked");
+        if ((option instanceof JokerCard || option instanceof ConsumableCard) && !run.canAcquire(option))
+            throw new IllegalStateException("no inventory room for " + option);
+        Card picked = opening.pick(a.optionIndex());
+        if (opening.getPicksLeft() == 0) run.clearOpening();
+        if (picked instanceof RelicCard relic)
+            useRelicCard(run.getPlayerId(), relic, a.relicTarget() != null ? a.relicTarget() : RelicTarget.none());
+        else if (picked instanceof DeckCard card) run.addCardToDeck(card);
+        else run.acquire(picked);
+        return picked;
+    }
+
+    /** Pride: sets or raises {@code id}'s standing bid on this shop phase's legendary; resolved at phase end. */
+    public void prideBid(PlayerId id, int amount) {
+        if (activeSin != Sin.PRIDE)
+            throw new IllegalStateException("bidding is a Pride mechanic; active sin is " + activeSin);
+        if (phase != MatchPhase.SHOP)
+            throw new IllegalStateException("bids can only be placed during the shop; phase is " + phase);
+        if (amount < 1) throw new IllegalArgumentException("a bid must be at least $1");
+        Run run = getRun(id);
+        if (run.getMoney() - amount < run.minBalance())
+            throw new IllegalStateException("cannot bid " + amount + " with " + run.getMoney());
+        sinTableState.recordPrideBid(id, amount);
+    }
+
+    /**
+     * Envy: copies entry {@code logIndex} of this phase's purchase log for {@code copierId}, at twice the price
+     * the original buyer paid. Packs arrive unopened as a pending pack; everything else routes through normal
+     * inventory acquisition. Own purchases cannot be copied, and a copy never enters the log itself.
+     */
+    public Card envyCopyPurchase(PlayerId copierId, int logIndex) {
+        if (activeSin != Sin.ENVY)
+            throw new IllegalStateException("copying purchases is an Envy mechanic; active sin is " + activeSin);
+        if (phase != MatchPhase.SHOP)
+            throw new IllegalStateException("purchases can only be copied during the shop; phase is " + phase);
+        List<SinTableState.EnvyPurchase> log = sinTableState.getEnvyLog();
+        if (logIndex < 0 || logIndex >= log.size())
+            throw new IllegalArgumentException("no purchase log entry " + logIndex);
+        SinTableState.EnvyPurchase entry = log.get(logIndex);
+        if (entry.buyer().equals(copierId))
+            throw new IllegalStateException("cannot copy your own purchase");
+        Run copier = getRun(copierId);
+        int cost = entry.pricePaid() * 2;
+        if (copier.getMoney() - cost < copier.minBalance())
+            throw new IllegalStateException("cannot afford the copy at " + cost);
+        Card copy = copyOf(entry.item());
+        if (copy instanceof BoosterPack pack) {
+            copier.spend(cost);
+            copier.grantPack(pack);
+        } else {
+            if (!copier.canAcquire(copy)) throw new IllegalStateException("no inventory room for " + copy);
+            copier.spend(cost);
+            copier.acquire(copy);
+        }
+        copier.getStats().recordPurchase();
+        return copy;
+    }
+
+    /** A fresh instance of the same item: spec (and edition, for jokers) preserved, per-card state not. */
+    private static Card copyOf(Card item) {
+        if (item instanceof JokerCard j) {
+            JokerCard copy = new JokerCard(j.getSpec(), j.getShopValue());
+            if (j.getEdition() != null) copy.apply(j.getEdition());
+            return copy;
+        }
+        if (item instanceof model.cards.consumables.ConsumableCard c)
+            return new model.cards.consumables.ConsumableCard(c.getSpec());
+        if (item instanceof RelicCard r) return new RelicCard(r.getSpec());
+        if (item instanceof BoosterPack p) return new BoosterPack(p.kind(), p.size());
+        if (item instanceof model.cards.DeckCard d) return new model.cards.DeckCard(d.getRank(), d.getSuit());
+        throw new IllegalStateException("uncopyable item: " + item);
     }
 
     /** Gluttony: eats the joker at {@code index} on {@code id}'s board — destroys it for its sell value plus the ${@value model.game.sins.GluttonyModifier#EAT_BONUS} eat bonus, counting as a consumable use for the communal gauge. */

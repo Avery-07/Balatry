@@ -42,7 +42,7 @@ public enum SkipTag {
     // --- next boss: consumed by the Match when the next boss blind is defeated ---
     INVESTMENT_TAG("Investment Tag", Timing.NEXT_BOSS),
 
-    // --- next shop / meta: granted and held pending; resolution deferred to the shop-modifier pass ---
+    // --- next shop / meta: held pending; consumed by Run#openShop (NEXT_SHOP) and Run#grantTag (Double) ---
     COUPON_TAG   ("Coupon Tag",    Timing.NEXT_SHOP),
     D6_TAG       ("D6 Tag",        Timing.NEXT_SHOP),
     UNCOMMON_TAG ("Uncommon Tag",  Timing.NEXT_SHOP),

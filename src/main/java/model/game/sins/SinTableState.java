@@ -1,9 +1,13 @@
 package model.game.sins;
 
+import model.cards.Card;
+import model.cards.jokers.JokerCard;
 import model.game.player.PlayerId;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Table-level, ante-scoped state owned by the active sin — the match analogue of the per-player {@link SinState}. */
@@ -12,9 +16,12 @@ public final class SinTableState {
     private final Map<PlayerId, Integer> gluttonyUses = new LinkedHashMap<>();
     private int gluttonyGauge;
     private final Map<String, PlayerId> greedClaims = new LinkedHashMap<>();   // Greed: item identity -> first buyer
+    private final List<EnvyPurchase> envyLog = new ArrayList<>();              // Envy: this phase's copyable purchases
+    private JokerCard prideLegendary;                                          // Pride: this phase's auctioned joker
+    private final Map<PlayerId, Integer> prideBids = new LinkedHashMap<>();    // Pride: standing bids, insertion order
 
     /** Resets all table-scoped sin state; called by the Match when an ante's sin refreshes. */
-    public void beginAnte() { clearGluttony(); clearGreedClaims(); }
+    public void beginAnte() { clearGluttony(); clearGreedClaims(); clearEnvyLog(); clearPrideAuction(); }
 
     /** Records one consumable use by {@code id}, minting {@code gaugeContribution} dollars into the pool. */
     public void recordGluttonyUse(PlayerId id, int gaugeContribution) {
@@ -44,4 +51,31 @@ public final class SinTableState {
 
     /** Empties the claims (each round begin: claims live for one shop phase). */
     public void clearGreedClaims() { greedClaims.clear(); }
+
+    // --- Envy: what everyone bought this shop phase, copyable at twice the price paid ---
+
+    /** One copyable purchase: who bought what, and what they actually paid. */
+    public record EnvyPurchase(PlayerId buyer, Card item, int pricePaid) { }
+
+    public void recordEnvyPurchase(PlayerId buyer, Card item, int pricePaid) {
+        envyLog.add(new EnvyPurchase(buyer, item, pricePaid));
+    }
+
+    /** Every purchase this shop phase, in order — openly visible ("players see what others bought"). */
+    public List<EnvyPurchase> getEnvyLog() { return Collections.unmodifiableList(envyLog); }
+
+    public void clearEnvyLog() { envyLog.clear(); }
+
+    // --- Pride: the shop phase's legendary auction ---
+
+    public JokerCard getPrideLegendary() { return prideLegendary; }
+    public void setPrideLegendary(JokerCard joker) { prideLegendary = joker; }
+
+    /** Sets or replaces {@code id}'s standing bid. */
+    public void recordPrideBid(PlayerId id, int amount) { prideBids.put(id, amount); }
+
+    /** Every standing bid, in first-bid order. */
+    public Map<PlayerId, Integer> getPrideBids() { return Collections.unmodifiableMap(prideBids); }
+
+    public void clearPrideAuction() { prideLegendary = null; prideBids.clear(); }
 }

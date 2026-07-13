@@ -27,6 +27,7 @@ public final class Shop {
     private int rerolls;
     private int negativeGrantsLeft;         // Negative Tag transforms not yet consumed
     private int purchasesThisRoll;          // buys since the last reroll (any row); capped by the setup
+    private int totalPurchases;             // buys across the whole visit (any row); Sloth's empty-visit check
 
     /** Card-only shop (used directly by tests and simple callers). */
     public Shop(Run run, int shopIndex, int slotCount, ShopPool pool) {
@@ -87,12 +88,13 @@ public final class Shop {
     public Card buy(int slotIndex) {
         Card item = require(slots, slotIndex);
         if (!run.canAcquire(item)) throw new IllegalStateException("no inventory slot for " + item);
-        charge(slotPrice(slotIndex), item);
+        int price = slotPrice(slotIndex);
+        charge(price, item);
         run.acquire(item);
         run.getStats().recordPurchase();
         slots.set(slotIndex, null);
         slotPrices.set(slotIndex, null);
-        notifyPurchase(item);
+        notifyPurchase(item, price);
         return item;
     }
 
@@ -130,11 +132,12 @@ public final class Shop {
         // debuffed joker (sellable, Exorcism-curable), a dead pack purchase would be pure loss with no decision.
         if (pack.isDebuffed())
             throw new IllegalStateException("a debuffed pack cannot be purchased: " + pack);
-        charge(packPrice(packIndex), pack);
+        int price = packPrice(packIndex);
+        charge(price, pack);
         run.getStats().recordPurchase();
         packs.set(packIndex, null);
         packPrices.set(packIndex, null);
-        notifyPurchase(pack);
+        notifyPurchase(pack, price);
         return pack;
     }
 
@@ -157,7 +160,7 @@ public final class Shop {
         purchasesThisRoll++;
         run.redeemVoucher(voucher);
         vouchers.set(voucherIndex, null);
-        notifyPurchase(voucher);
+        notifyPurchase(voucher, price);
     }
 
     // --- internals ---
@@ -180,9 +183,13 @@ public final class Shop {
         run.fire(Trigger.ON_BOUGHT);
     }
 
-    /** Notifies the active sin of a completed purchase (Greed's claim propagation); never fires for a failed buy. */
-    private void notifyPurchase(Card item) {
-        if (run.getMatch() != null) run.getMatch().getSinModifier().onPurchase(run, item);
+    /** How many purchases (any row) this whole visit has seen; rerolls do not count as buying. */
+    public int totalPurchases() { return totalPurchases; }
+
+    /** Notifies the active sin of a completed purchase (Greed's claims, Envy's log); never fires for a failed buy. */
+    private void notifyPurchase(Card item, int pricePaid) {
+        totalPurchases++;
+        if (run.getMatch() != null) run.getMatch().getSinModifier().onPurchase(run, item, pricePaid);
     }
 
     /** Enforces the setup's per-reroll purchase cap before any charge or spend happens. */

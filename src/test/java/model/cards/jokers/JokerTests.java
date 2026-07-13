@@ -23,6 +23,7 @@ public final class JokerTests {
     private static final ScoringEngine ENGINE = new ScoringEngine();
 
     public static void main(String[] args) {
+        checkInt("catalog matches the doc's Jokers category (136)", Jokers.values().length, 136);
         scoringDeltas();
         slotAndRoundStartHooks();
         retriggerAndEconomy();
@@ -42,14 +43,6 @@ public final class JokerTests {
 
         // Joker: +4 Mult -> (5+11) x (1+4) = 80
         checkScore("Joker +4 mult", scoreWith(ace(), Jokers.JOKER), 80);
-
-        // Jolly: +8 Mult if contains a Pair -> (10+20) x (2+8) = 300
-        checkScore("Jolly +8 on pair", scoreWith(kings(), Jokers.JOLLY_JOKER), 300);
-        // Jolly does nothing on a high card.
-        checkScore("Jolly inert on high card", scoreWith(ace(), Jokers.JOLLY_JOKER), 16);
-
-        // Sly: +50 Chips if contains a Pair -> (10+20+50) x 2 = 160
-        checkScore("Sly +50 chips on pair", scoreWith(kings(), Jokers.SLY_JOKER), 160);
 
         // Half Joker: +20 Mult if <= 3 cards -> pair is 2 cards -> (10+20) x (2+20) = 660
         checkScore("Half +20 mult on 2 cards", scoreWith(kings(), Jokers.HALF_JOKER), 660);

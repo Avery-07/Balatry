@@ -50,7 +50,7 @@ public final class GreedModifier implements SinModifier {
     }
 
     @Override
-    public void onPurchase(Run buyer, Card item) {
+    public void onPurchase(Run buyer, Card item, int pricePaid) {
         Match match = buyer.getMatch();
         if (match == null || buyer.getPlayerId() == null) return;
         String key = identityOf(item);

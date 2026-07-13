@@ -19,6 +19,7 @@ public final class Sins {
         register(Sin.GLUTTONY, new GluttonyModifier());
         register(Sin.GREED, new GreedModifier());
         register(Sin.LUST, new LustModifier());
+        register(Sin.ENVY, new EnvyModifier());
     }
 
     private Sins() { }

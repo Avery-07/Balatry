@@ -32,8 +32,14 @@ public interface SinModifier {
     /** Per seat, after each hand is fully scored and boss after-effects applied (Greed's chips-to-money ladder). */
     default void onHandScored(Run run, java.math.BigDecimal handScore) { }
 
-    /** Per seat, after a completed shop purchase from any row — card, pack, or voucher (Greed's claim propagation). */
-    default void onPurchase(Run buyer, model.cards.Card item) { }
+    /** Per seat, after a completed shop purchase from any row, with the price actually paid (Greed's claims, Envy's log). */
+    default void onPurchase(Run buyer, model.cards.Card item, int pricePaid) { }
+
+    /** Per seat, as its shop closes at the end of the phase (Sloth's empty-visit spectral). */
+    default void onShopClosed(Run run, model.game.shop.Shop shop) { }
+
+    /** At the table, once all seats' shops have closed and before the sin can rotate (Pride's auction resolves). */
+    default void onShopPhaseEnd(Match match) { }
 
     /** Per seat, after its shop's card row rerolls, with the fresh contents in place (Greed re-debuffs claimed items that reappear). */
     default void onShopRerolled(Run run, model.game.shop.Shop shop) { }

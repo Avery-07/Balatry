@@ -39,6 +39,9 @@ public final class SinTests {
         lustMultiplier();
         lustWiring();
         lustShop();
+        slothSpectral();
+        envyCopy();
+        prideAuction();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -51,7 +54,10 @@ public final class SinTests {
         check("Gluttony registered as GluttonyModifier", Sins.modifierFor(Sin.GLUTTONY) instanceof GluttonyModifier);
         check("Greed registered as GreedModifier", Sins.modifierFor(Sin.GREED) instanceof GreedModifier);
         check("Lust registered as LustModifier", Sins.modifierFor(Sin.LUST) instanceof LustModifier);
-        check("unbuilt sin resolves to NONE", Sins.modifierFor(Sin.ENVY) == SinModifier.NONE);
+        check("Envy registered as EnvyModifier", Sins.modifierFor(Sin.ENVY) instanceof EnvyModifier);
+        boolean allRegistered = true;
+        for (Sin sin : Sin.values()) allRegistered &= Sins.modifierFor(sin) != SinModifier.NONE;
+        check("all seven sins resolve to a real modifier", allRegistered);
     }
 
     /** onRoundBegin consults the injected provider and stores the chosen multiplier on each seat's SinState. */
@@ -466,7 +472,7 @@ public final class SinTests {
         var spec = model.cards.jokers.JokerSpec.named("Coveted", model.cards.jokers.Rarity.COMMON).build();
         model.game.shop.ShopPool covetedPool = stream -> new model.cards.jokers.JokerCard(spec, 4);
 
-        new GreedModifier().onPurchase(runA, new model.cards.jokers.JokerCard(spec, 4));   // A claims "Coveted"
+        new GreedModifier().onPurchase(runA, new model.cards.jokers.JokerCard(spec, 4), 4);   // A claims "Coveted"
 
         runB.addMoney(10);
         var shopB = new model.game.shop.Shop(runB, 9, new model.game.shop.ShopSetup(2, covetedPool, 0, null, 0, null));
@@ -619,6 +625,124 @@ public final class SinTests {
         if (ni >= 0) checkThrows("a second purchase this roll is refused", () -> shopA.buy(ni));
         shopA.reroll();
         checkInt("a reroll grants a fresh allowance", shopA.purchasesRemaining(), 1);
+    }
+
+
+    /** Sloth: a shop visit with zero purchases offers a random spectral at close; lost if slots are full. */
+    private static void slothSpectral() {
+        Match m = Match.create(100L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.SLOTH));
+        m.start();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+        for (PlayerId id : m.getSeats()) { m.getRun(id).addMoney(50); m.getRun(id).getRound().finish(); }
+        m.toShop();
+        m.getRun(a).getShop().buyPack(0);   // A buys (inert unopened pack); B buys nothing
+        m.nextBlind();
+        checkInt("a buyer gets no spectral", m.getRun(a).getConsumables().size(), 0);
+        checkInt("an empty visit offers a spectral", m.getRun(b).getConsumables().size(), 1);
+        check("the offer is a spectral", m.getRun(b).getConsumables().get(0).getSpec().getType()
+                == model.cards.consumables.ConsumableType.SPECTRAL);
+
+        // Full consumable area: the offer is silently lost.
+        m.getRun(b).createConsumable(model.cards.consumables.Tarots.THE_HERMIT.spec());   // B now at 2/2
+        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
+        m.toShop();
+        m.nextBlind();   // neither bought anything
+        checkInt("a full area loses the offer", m.getRun(b).getConsumables().size(), 2);
+        checkInt("A's empty visit still pays", m.getRun(a).getConsumables().size(), 1);
+    }
+
+    /** Envy: purchases are logged openly and copyable by others at twice the price paid. */
+    private static void envyCopy() {
+        Match m = Match.create(101L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.ENVY));
+        m.start();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+        for (PlayerId id : m.getSeats()) { m.getRun(id).addMoney(50); m.getRun(id).getRound().finish(); }
+        m.toShop();
+
+        var shopA = m.getRun(a).getShop();
+        int slot = -1;
+        for (int i = 0; i < shopA.getSlotCount(); i++)
+            if (shopA.getSlot(i) != null && m.getRun(a).canAcquire(shopA.getSlot(i))) { slot = i; break; }
+        int price = shopA.slotPrice(slot);
+        shopA.buy(slot);
+        var log = m.getSinTableState().getEnvyLog();
+        checkInt("the purchase is logged", log.size(), 1);
+        check("the log carries buyer and price", log.get(0).buyer().equals(a) && log.get(0).pricePaid() == price);
+
+        int money = m.getRun(b).getMoney();
+        var copy = m.envyCopyPurchase(b, 0);
+        checkInt("the copy costs twice the price paid", money - m.getRun(b).getMoney(), price * 2);
+        check("the copy is a fresh item of the same identity",
+                copy != log.get(0).item() && GreedModifier.identityOf(copy).equals(GreedModifier.identityOf(log.get(0).item())));
+        checkInt("copies never enter the log", m.getSinTableState().getEnvyLog().size(), 1);
+        checkThrows("own purchases cannot be copied", () -> m.envyCopyPurchase(a, 0));
+
+        // Pack copies arrive unopened as a pending pack.
+        shopA.buyPack(0);
+        m.envyCopyPurchase(b, 1);
+        checkInt("a copied pack is pending", m.getRun(b).getPendingPacks().size(), 1);
+
+        m.nextBlind();
+        check("the log dies at round begin", m.getSinTableState().getEnvyLog().isEmpty());
+        checkThrows("copying is shop-phase only", () -> m.envyCopyPurchase(b, 0));
+    }
+
+    /** Pride: the table-rolled legendary goes to the highest valid standing bid; ties mean nobody wins. */
+    private static void prideAuction() {
+        Match m = Match.create(102L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
+        m.start();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+        checkThrows("bids are shop-phase only", () -> m.prideBid(a, 5));
+        for (PlayerId id : m.getSeats()) { m.getRun(id).addMoney(50); m.getRun(id).getRound().finish(); }
+        m.toShop();
+
+        var legendary = m.getSinTableState().getPrideLegendary();
+        check("a legendary is on the block", legendary != null
+                && legendary.getSpec().getRarity() == model.cards.jokers.Rarity.LEGENDARY);
+        Match replay = Match.create(102L, List.of("A", "B"),
+                MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
+        replay.start();
+        for (PlayerId id : replay.getSeats()) replay.getRun(id).getRound().finish();
+        replay.toShop();
+        check("the roll replays with the seed", replay.getSinTableState().getPrideLegendary()
+                .getSpec().getName().equals(legendary.getSpec().getName()));
+
+        checkThrows("cannot bid more than you have", () -> m.prideBid(a, 1000));
+        m.prideBid(a, 12);
+        m.prideBid(b, 8);
+        int moneyA = m.getRun(a).getMoney(), moneyB = m.getRun(b).getMoney(), boardA = m.getRun(a).board().size();
+        m.nextBlind();
+        checkInt("the winner pays the bid", moneyA - m.getRun(a).getMoney(), 12);
+        checkInt("the winner boards the legendary", m.getRun(a).board().size(), boardA + 1);
+        checkInt("losers pay nothing", m.getRun(b).getMoney(), moneyB);
+        check("the auction is consumed", m.getSinTableState().getPrideLegendary() == null);
+
+        // A tie among valid leaders: the joker is too proud to be shared.
+        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
+        m.toShop();
+        m.prideBid(a, 7);
+        m.prideBid(b, 7);
+        int sizeA = m.getRun(a).board().size(), sizeB = m.getRun(b).board().size();
+        int tMoneyA = m.getRun(a).getMoney(), tMoneyB = m.getRun(b).getMoney();
+        m.nextBlind();
+        check("a tie awards nobody and charges nobody",
+                m.getRun(a).board().size() == sizeA && m.getRun(b).board().size() == sizeB
+                        && m.getRun(a).getMoney() == tMoneyA && m.getRun(b).getMoney() == tMoneyB);
+
+        // An insolvent leader is skipped and the next-highest wins.
+        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
+        m.toShop();
+        int allIn = m.getRun(a).getMoney();
+        m.prideBid(a, allIn);
+        m.prideBid(b, 3);
+        m.getRun(a).getShop().reroll();   // A dips below the bid
+        int wMoneyB = m.getRun(b).getMoney(), wBoardB = m.getRun(b).board().size();
+        m.nextBlind();
+        checkInt("the insolvent leader is skipped; next-highest pays", wMoneyB - m.getRun(b).getMoney(), 3);
+        checkInt("and boards the legendary", m.getRun(b).board().size(), wBoardB + 1);
     }
 
     private static void checkInt(String label, int actual, int expected) {

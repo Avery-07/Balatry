@@ -11,7 +11,6 @@ import model.game.sins.SinState;
 import model.game.tags.SkipTag;
 import model.cards.consumables.ConsumableSpec;
 import model.cards.relics.RelicCard;
-import model.cards.relics.RelicSpec;
 import model.modifiers.Sticker;
 import model.cards.consumables.ConsumableType;
 import model.cards.consumables.Tarots;
@@ -55,6 +54,7 @@ public final class Run {
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
     private final BossState bossState = new BossState();     // boss-imposed state (Quartz, Pillar, Crimson Heart, flags)
     private final List<BoosterPack> pendingPacks = new ArrayList<>();   // granted, unopened packs (Wrath, pack tags); cleared at round end
+    private PackOpening currentOpening;                                 // the opening being picked from (action layer)
     private final List<SkipTag> pendingTags = new ArrayList<>();        // NEXT_SHOP / NEXT_BOSS / META tags awaiting their moment
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
@@ -186,6 +186,11 @@ public final class Run {
     /** Grants an unopened pack (Wrath's free Mega Myth Pack, pack tags); openable until the round ends. */
     public void grantPack(BoosterPack pack) { pendingPacks.add(pack); }
 
+    /** The pack currently being picked from, if any (one at a time; starting a new one abandons leftover picks). */
+    public PackOpening getCurrentOpening() { return currentOpening; }
+    public void beginOpening(PackOpening opening) { currentOpening = opening; }
+    public void clearOpening() { currentOpening = null; }
+
     /** Unmodifiable view of granted, unopened packs. */
     public List<BoosterPack> getPendingPacks() { return Collections.unmodifiableList(pendingPacks); }
 
@@ -223,12 +228,6 @@ public final class Run {
 
     /** Whether the first slot of the open shop is debuffed by Limos; read by the shop while filling. */
     public boolean isFirstShopSlotDebuffed() { return afflictions.isFirstSlotDebuffed(); }
-
-    /** Adds a fresh card for {@code spec} to the relic area, if there is room (NEGATIVE relics are free). */
-    public void createRelic(RelicSpec spec) {
-        RelicCard card = new RelicCard(spec);
-        if (canAddRelic(card)) relics.add(card);
-    }
 
     /** Adds {@code card} to the deck only (Marble Joker); it enters play at the next shuffle. */
     public void addCardToDeck(DeckCard card) {
@@ -552,6 +551,7 @@ public final class Run {
         afflictions.endRound();   // clear round-scoped relic debuffs; strip any joker sticker this seat's afflictions added
         bossState.endRound();     // restore Quartz debuffs, re-enable Crimson Heart's joker, drop the boss
         pendingPacks.clear();     // an unopened Wrath pack does not carry past its round
+        clearOpening();           // an unfinished opening dies with its round: no picking across phases
         round = null;
         return result;
     }
@@ -601,6 +601,9 @@ public final class Run {
 
     /** Closes the active shop. */
     public void closeShop() {
+        clearOpening();   // an unfinished shop-pack opening dies with the shop phase
+        if (shop != null && match != null)
+            match.getSinModifier().onShopClosed(this, shop);   // Sloth: the empty-visit spectral lands first
         fire(Trigger.ON_SHOP_END);
         afflictions.endShop();   // a Limos debuff lasts only for this shop visit
         shop = null;

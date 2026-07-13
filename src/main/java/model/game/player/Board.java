@@ -82,6 +82,13 @@ public final class Board {
         return jokers.removeIf(j -> j == joker);
     }
 
+    /** Reorders the board: the joker at {@code from} is reinserted at {@code to} (adjacency-sensitive effects follow it). */
+    public void move(int from, int to) {
+        if (from < 0 || from >= jokers.size() || to < 0 || to >= jokers.size())
+            throw new IllegalArgumentException("move " + from + " -> " + to + " out of range (board size " + jokers.size() + ")");
+        jokers.add(to, jokers.remove(from));
+    }
+
     /** The swap primitive: replaces the joker at {@code index} with {@code incoming}, slot-checked. */
     public JokerCard replaceAt(int index, JokerCard incoming) {
         if (!canReplaceAt(index, incoming))
