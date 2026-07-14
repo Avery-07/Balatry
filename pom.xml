@@ -4,14 +4,98 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.example</groupId>
-    <artifactId>Balatry</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <groupId>fan.balatry</groupId>
+    <artifactId>balatry</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Declared with a default so the harness exec below can always resolve it; -DskipTests overrides. -->
+        <skipTests>false</skipTests>
+        <javafx.version>21.0.5</javafx.version>
+        <jackson.version>2.18.2</jackson.version>
+        <!-- The client's main class, once it exists; wired here so `mvn javafx:run` is ready. -->
+        <client.mainClass>client.BalatryClient</client.mainClass>
+        <server.mainClass>model.game.net.ServerMain</server.mainClass>
     </properties>
 
+    <dependencies>
+        <!-- FX for the client. The model, actions, host, and net layers use no dependency at all. -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- Present for the eventual ActionCodec swap to JSON; not yet referenced by any source. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+
+            <!--
+              Tests are hand-rolled `*Tests` mains, not JUnit. Surefire is disabled and the harness runner
+              takes its place in the `test` phase: it discovers every harness, runs each in a fresh JVM, and
+              fails the build if any exits non-zero. Skip with -DskipTests as usual.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <!-- No JUnit; the harness runner replaces this entirely. -->
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <!-- `mvn test` -> run all harnesses via the discovery runner, in the test phase. -->
+                    <execution>
+                        <id>run-harnesses</id>
+                        <phase>test</phase>
+                        <goals><goal>java</goal></goals>
+                        <configuration>
+                            <skip>${skipTests}</skip>
+                            <mainClass>harness.HarnessRunner</mainClass>
+                            <classpathScope>test</classpathScope>
+                        </configuration>
+                    </execution>
+                    <!-- `mvn exec:java@server` launches the server main. -->
+                    <execution>
+                        <id>server</id>
+                        <goals><goal>java</goal></goals>
+                        <configuration>
+                            <mainClass>${server.mainClass}</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- `mvn javafx:run` launches the client once client.BalatryClient exists. -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>${client.mainClass}</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
