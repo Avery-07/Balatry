@@ -58,6 +58,7 @@ public final class Match {
     private final PointsPolicy pointsPolicy;                // converts settled results into competition points
     private Standings standings;                            // cumulative points; built in create() once seats exist
     private final int anteCount;                            // match length; the ante-anteCount boss is the final blind
+    private final boolean blindSelection;                   // when true, a SELECTION phase precedes every blind
 
     private MatchPhase phase = MatchPhase.LOBBY;
     private int ante = 0;                         // 0 until started
@@ -71,6 +72,7 @@ public final class Match {
     private SkipTag currentTag;                    // the tag this blind offers for skipping (table-level, seeded)
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
     private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
+    private final Map<PlayerId, Boolean> blindChoice = new LinkedHashMap<>();   // SELECTION: seat -> play(true)/skip(false)
 
     private Match(long seed, MatchConfig config) {
         this.seed = seed;
@@ -81,6 +83,7 @@ public final class Match {
         this.sinChoiceProvider = config.sinChoiceProvider();
         this.pointsPolicy = config.pointsPolicy();
         this.anteCount = config.anteCount();
+        this.blindSelection = config.blindSelection();
         this.players = new LinkedHashMap<>();
     }
 
@@ -160,10 +163,26 @@ public final class Match {
         ante = 1;
         blind = Blind.SMALL;
         activeSin = sinSelector.selectFor(ante, rng);
-        phase = MatchPhase.BLIND;
         for (Player p : players.values()) p.run().beginAnte();
         refreshSinForAnte();
-        dealBlind();
+        enterSelectionOrBlind();
+    }
+
+    /**
+     * Enters the next blind: with blind selection enabled, sets up the blind context (boss, tag) and parks in
+     * {@link MatchPhase#SELECTION} awaiting each seat's play-or-skip choice; otherwise deals straight into
+     * {@link MatchPhase#BLIND} as before. A host crosses SELECTION -> BLIND via {@link #enterBlind()} once all
+     * seats have chosen.
+     */
+    private void enterSelectionOrBlind() {
+        if (blindSelection) {
+            setupBlind();
+            blindChoice.clear();
+            phase = MatchPhase.SELECTION;
+        } else {
+            phase = MatchPhase.BLIND;
+            dealBlind();
+        }
     }
 
     /** BLIND -> SHOP: settles every seat's finished round and records the results. */
@@ -234,8 +253,7 @@ public final class Match {
                 refreshSinForAnte();
             }
         }
-        phase = MatchPhase.BLIND;
-        dealBlind();
+        enterSelectionOrBlind();
     }
 
     /** Ends the match. */
@@ -243,8 +261,18 @@ public final class Match {
 
     /** Deals every seat into the current blind on its own seed. */
     private void dealBlind() {
+        setupBlind();
+        dealRounds();
+    }
+
+    /** Picks the blind's table-level context (boss, tag) so its target and reward are known before play. */
+    private void setupBlind() {
         currentBoss = (blind == Blind.BOSS) ? selectBoss() : null;   // table-level: same boss for every seat
         currentTag = selectTag();                                    // table-level: the same skip reward for every seat
+    }
+
+    /** Begins each seat's round on its own seed; runs boss setup once every round exists. */
+    private void dealRounds() {
         long target = getCurrentTarget();
         for (Player p : players.values()) {
             p.run().beginRound(target, currentBoss);
@@ -252,6 +280,19 @@ public final class Match {
         }
         bossBehavior = BossBehaviors.behaviorFor(currentBoss);   // NONE outside boss rounds
         bossBehavior.onBossBegin(this);                          // after every seat's round exists
+    }
+
+    /**
+     * SELECTION -> BLIND: deals every seat into the blind, then resolves the seats that chose to skip (their
+     * rounds settle as SKIPPED and grant the tag). A host calls this once {@link #allChosen()} is true. If every
+     * seat skipped, all rounds are immediately resolved and the host's blind barrier carries on to the shop.
+     */
+    public void enterBlind() {
+        require(MatchPhase.SELECTION, "enterBlind");
+        dealRounds();
+        for (Player p : players.values())
+            if (Boolean.FALSE.equals(blindChoice.get(p.id()))) applySkip(p.run());
+        phase = MatchPhase.BLIND;
     }
 
     /** The current boss's Match-level behaviour ({@link BossBehavior#NONE} outside boss rounds). */
@@ -273,10 +314,41 @@ public final class Match {
         Round round = run.getRound();
         if (round == null || round.getOutcome() != RoundOutcome.IN_PROGRESS)
             throw new IllegalStateException("seat " + id + " has no round to skip");
-        round.skip();
+        applySkip(run);
+    }
+
+    /** Settles one seat's round as skipped and grants the blind's tag(s). Assumes an in-progress round exists. */
+    private void applySkip(Run run) {
+        run.getRound().skip();
         run.getStats().recordBlindSkipped();
         for (int i = 0; i < sinModifier.tagsPerSkip(); i++) run.grantTag(currentTag);
     }
+
+    /** Records a seat's blind-selection choice (play or skip); legal once per seat during SELECTION. */
+    private void recordChoice(PlayerId id, boolean play) {
+        getRun(id);   // seat validation
+        if (!blindSelection || phase != MatchPhase.SELECTION)
+            throw new IllegalStateException("blind selection is not open (phase " + phase + ")");
+        if (blindChoice.containsKey(id))
+            throw new IllegalStateException("seat " + id + " has already chosen");
+        blindChoice.put(id, play);
+    }
+
+    /** SkipBlind routing: a selection choice when selection is on (SELECTION only), else the legacy in-blind skip. */
+    private void chooseSkip(PlayerId id) {
+        if (blindSelection) recordChoice(id, false);   // recordChoice enforces the SELECTION phase
+        else skipBlind(id);
+    }
+
+    /** Whether every seat has made its blind-selection choice (only meaningful during SELECTION). */
+    public boolean allChosen() {
+        if (phase != MatchPhase.SELECTION) return false;
+        for (PlayerId id : getSeats()) if (!blindChoice.containsKey(id)) return false;
+        return true;
+    }
+
+    /** Whether {@code id} has already made its blind-selection choice this SELECTION. */
+    public boolean hasChosenBlind(PlayerId id) { return blindChoice.containsKey(id); }
 
     /** Refreshes the active sin's behaviour after the sin changes and runs its once-per-ante table setup. */
     private void refreshSinForAnte() {
@@ -395,7 +467,8 @@ public final class Match {
             case Action.PlayHand a      -> requireRound(run).play(resolveHand(run, a.handIndices()));
             case Action.DiscardCards a  -> { requireRound(run).discard(resolveHand(run, a.handIndices())); yield null; }
             case Action.FinishRound a   -> { requireRound(run).finish(); yield null; }
-            case Action.SkipBlind a     -> { skipBlind(a.actor()); yield null; }
+            case Action.SkipBlind a     -> { chooseSkip(a.actor()); yield null; }
+            case Action.PlayBlind a     -> { recordChoice(a.actor(), true); yield null; }
 
             case Action.UseConsumable a -> { run.useConsumable(a.consumableIndex(), resolveHand(run, a.targetHandIndices())); yield null; }
             case Action.UseRelic a      -> { useRelic(a.actor(), a.relicIndex(), a.target() != null ? a.target() : RelicTarget.none()); yield null; }

@@ -12,7 +12,8 @@ public record MatchConfig(SinSelector sinSelector,
                           Function<Sin, SinModifier> sinResolver,
                           SinChoiceProvider sinChoiceProvider,
                           PointsPolicy pointsPolicy,
-                          int anteCount) {
+                          int anteCount,
+                          boolean blindSelection) {
 
     /** The standard match length in antes. */
     public static final int DEFAULT_ANTE_COUNT = 7;
@@ -27,12 +28,13 @@ public record MatchConfig(SinSelector sinSelector,
     }
 
     /** All policies at their defaults. */
-    public static MatchConfig defaults() { return new MatchConfig(null, null, null, null, null, 0); }
+    public static MatchConfig defaults() { return new MatchConfig(null, null, null, null, null, 0, false); }
 
-    public MatchConfig withSinSelector(SinSelector s)               { return new MatchConfig(s, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, anteCount); }
-    public MatchConfig withBossSelector(BossSelector b)             { return new MatchConfig(sinSelector, b, sinResolver, sinChoiceProvider, pointsPolicy, anteCount); }
-    public MatchConfig withSinResolver(Function<Sin, SinModifier> r){ return new MatchConfig(sinSelector, bossSelector, r, sinChoiceProvider, pointsPolicy, anteCount); }
-    public MatchConfig withSinChoiceProvider(SinChoiceProvider p)   { return new MatchConfig(sinSelector, bossSelector, sinResolver, p, pointsPolicy, anteCount); }
-    public MatchConfig withPointsPolicy(PointsPolicy p)             { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, p, anteCount); }
-    public MatchConfig withAnteCount(int n)                         { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, n); }
+    public MatchConfig withSinSelector(SinSelector s)               { return new MatchConfig(s, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, anteCount, blindSelection); }
+    public MatchConfig withBossSelector(BossSelector b)             { return new MatchConfig(sinSelector, b, sinResolver, sinChoiceProvider, pointsPolicy, anteCount, blindSelection); }
+    public MatchConfig withSinResolver(Function<Sin, SinModifier> r){ return new MatchConfig(sinSelector, bossSelector, r, sinChoiceProvider, pointsPolicy, anteCount, blindSelection); }
+    public MatchConfig withSinChoiceProvider(SinChoiceProvider p)   { return new MatchConfig(sinSelector, bossSelector, sinResolver, p, pointsPolicy, anteCount, blindSelection); }
+    public MatchConfig withPointsPolicy(PointsPolicy p)             { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, p, anteCount, blindSelection); }
+    public MatchConfig withAnteCount(int n)                         { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, n, blindSelection); }
+    public MatchConfig withBlindSelection(boolean b)               { return new MatchConfig(sinSelector, bossSelector, sinResolver, sinChoiceProvider, pointsPolicy, anteCount, b); }
 }

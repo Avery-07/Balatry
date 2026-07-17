@@ -31,6 +31,9 @@ public final class HostTests {
         host.start();
         Match m = host.getMatch();
         PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+        check("start parks in selection", m.getPhase() == MatchPhase.SELECTION);
+        playInto(host);
+        check("both choosing to play enters the blind", m.getPhase() == MatchPhase.BLIND);
         host.submit(new Action.FinishRound(a));
         check("one resolved round is not enough", m.getPhase() == MatchPhase.BLIND);
         host.submit(new Action.FinishRound(b));
@@ -45,6 +48,7 @@ public final class HostTests {
         Match m = host.getMatch();
         PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
         checkThrows("readiness is shop-phase only", () -> host.submit(new Action.ReadyForNext(a)));
+        playInto(host);
         host.submit(new Action.FinishRound(a));
         host.submit(new Action.FinishRound(b));
 
@@ -57,9 +61,10 @@ public final class HostTests {
         host.submit(new Action.ReadyForNext(b));
         check("acting revoked A's readiness", m.getPhase() == MatchPhase.SHOP);
         host.submit(new Action.ReadyForNext(a));
-        check("all ready crosses the barrier", m.getPhase() == MatchPhase.BLIND && m.getBlind().ordinal() == 1);
+        check("all ready crosses to the next selection", m.getPhase() == MatchPhase.SELECTION && m.getBlind().ordinal() == 1);
 
         // NotReady revokes explicitly; SubmitSinChoice does not revoke.
+        playInto(host);
         host.submit(new Action.FinishRound(a));
         host.submit(new Action.FinishRound(b));
         host.submit(new Action.ReadyForNext(b));
@@ -68,7 +73,7 @@ public final class HostTests {
         check("NotReady revoked B's readiness", m.getPhase() == MatchPhase.SHOP);
         host.submit(new Action.SubmitSinChoice(a, 0));
         host.submit(new Action.ReadyForNext(b));
-        check("a sin choice does not revoke readiness", m.getPhase() == MatchPhase.BLIND);
+        check("a sin choice does not revoke readiness", m.getPhase() == MatchPhase.SELECTION);
     }
 
     /** A rejected action never enters the log and never advances a barrier. */
@@ -76,6 +81,7 @@ public final class HostTests {
         MatchHost host = MatchHost.create(302L, List.of("A", "B"));
         host.start();
         PlayerId a = host.getMatch().getSeats().get(0);
+        playInto(host);
         host.submit(new Action.FinishRound(a));
         int size = host.getLog().size();
         checkThrows("a bad action rejects", () -> host.submit(new Action.PlayHand(a, List.of(0))));
@@ -106,7 +112,9 @@ public final class HostTests {
         Match m = host.getMatch();
         int guard = 0;
         while (m.getPhase() != MatchPhase.FINISHED && guard++ < 500) {
-            if (m.getPhase() == MatchPhase.BLIND) {
+            if (m.getPhase() == MatchPhase.SELECTION) {
+                for (PlayerId id : m.getSeats()) host.submit(new Action.PlayBlind(id));
+            } else if (m.getPhase() == MatchPhase.BLIND) {
                 for (PlayerId id : m.getSeats()) {
                     var round = m.getRun(id).getRound();
                     if (round == null || round.getOutcome() != RoundOutcome.IN_PROGRESS) continue;
@@ -122,6 +130,11 @@ public final class HostTests {
                 for (PlayerId id : m.getSeats()) host.submit(new Action.ReadyForNext(id));
             }
         }
+    }
+
+    /** Every seat chooses to play, crossing SELECTION -> BLIND. */
+    private static void playInto(MatchHost host) {
+        for (PlayerId id : host.getMatch().getSeats()) host.submit(new Action.PlayBlind(id));
     }
 
     private static String fingerprint(Match m) {
