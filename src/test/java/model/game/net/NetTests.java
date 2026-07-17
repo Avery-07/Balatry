@@ -39,6 +39,7 @@ public final class NetTests {
                 new Action.DiscardCards(a, List.of()),
                 new Action.FinishRound(a),
                 new Action.SkipBlind(b),
+                new Action.PlayBlind(a),
                 new Action.UseConsumable(a, 1, List.of(3)),
                 new Action.UseRelic(a, 0, RelicTarget.none()),
                 new Action.UseRelic(a, 2, RelicTarget.rank(b, Rank.KING)),
@@ -73,7 +74,7 @@ public final class NetTests {
             if (!action.equals(back)) { allOk = false; System.out.println("  mismatch: " + action + " -> " + back); }
         }
         check("every action round-trips through the codec", allOk);
-        checkInt("all action types are covered", samples.size(), 29);
+        checkInt("all action types are covered", samples.size(), 30);
     }
 
     private static void codecRejectsGarbage() {
@@ -105,7 +106,10 @@ public final class NetTests {
             int guard = 0;
             while (serverHost.getMatch().getPhase() != MatchPhase.FINISHED && guard++ < 500) {
                 Match m = serverHost.getMatch();
-                if (m.getPhase() == MatchPhase.BLIND) {
+                if (m.getPhase() == MatchPhase.SELECTION) {
+                    for (int seat = 0; seat < 2; seat++)
+                        submitAndSettle(clients[seat], new Action.PlayBlind(m.getSeats().get(seat)), serverHost);
+                } else if (m.getPhase() == MatchPhase.BLIND) {
                     for (int seat = 0; seat < 2; seat++) {
                         var round = m.getRun(m.getSeats().get(seat)).getRound();
                         if (round == null || round.getOutcome() != RoundOutcome.IN_PROGRESS) continue;

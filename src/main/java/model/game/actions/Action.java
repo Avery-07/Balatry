@@ -22,6 +22,7 @@ public sealed interface Action {
     record DiscardCards(PlayerId actor, List<Integer> handIndices) implements Action { }
     record FinishRound(PlayerId actor) implements Action { }
     record SkipBlind(PlayerId actor) implements Action { }
+    record PlayBlind(PlayerId actor) implements Action { }
 
     // --- inventory ---
     record UseConsumable(PlayerId actor, int consumableIndex, List<Integer> targetHandIndices) implements Action { }

@@ -40,7 +40,7 @@ public final class MatchHost {
 
     /** The standard config for action-driven play: defaults plus a {@link RecordedChoiceProvider}. */
     public static MatchConfig networkedConfig() {
-        return MatchConfig.defaults().withSinChoiceProvider(new RecordedChoiceProvider());
+        return MatchConfig.defaults().withSinChoiceProvider(new RecordedChoiceProvider()).withBlindSelection(true);
     }
 
     /** Rebuilds a match by replaying an accepted-action log onto a fresh same-seed host. */
@@ -85,14 +85,17 @@ public final class MatchHost {
             throw new IllegalStateException("readiness applies to the shop phase; phase is " + match.getPhase());
     }
 
-    /** Crosses whichever barrier just became passable: all rounds resolved, or all seats done shopping. */
+    /** Crosses every barrier that just became passable: all seats chose, all rounds resolved, all done shopping. */
     private void advanceIfBarrierMet() {
-        if (match.getPhase() == MatchPhase.BLIND && allRoundsResolved()) {
-            match.toShop();          // may finish the match after the final boss
-            shopReady.clear();
-        } else if (match.getPhase() == MatchPhase.SHOP && shopReady.containsAll(match.getSeats())) {
-            match.nextBlind();
-            shopReady.clear();
+        boolean advanced = true;
+        while (advanced) {
+            advanced = false;
+            switch (match.getPhase()) {
+                case SELECTION -> { if (match.allChosen())                       { match.enterBlind();            advanced = true; } }
+                case BLIND     -> { if (allRoundsResolved())                     { match.toShop(); shopReady.clear(); advanced = true; } }
+                case SHOP      -> { if (shopReady.containsAll(match.getSeats()))  { match.nextBlind(); shopReady.clear(); advanced = true; } }
+                default -> { }
+            }
         }
     }
 

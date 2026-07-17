@@ -4,11 +4,13 @@ import model.cards.DeckCard;
 import model.game.Match;
 import model.game.MatchPhase;
 import model.game.Standings;
+import model.game.player.BlindResult;
 import model.game.net.MatchClient;
 import model.game.player.PlayerId;
 import model.game.player.Round;
 import model.game.player.RoundOutcome;
 import model.game.player.Run;
+import model.game.shop.Shop;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +49,9 @@ public record MatchSnapshot(
         List<String> consumables,
         List<String> relics,
         boolean inShop,
+        ShopView shop,             // null outside the shop phase
+        boolean hasChosen,         // this seat has made its blind-selection choice
+        ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
         List<OpponentView> opponents
 ) {
 
@@ -55,6 +60,17 @@ public record MatchSnapshot(
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
+
+    /** This seat's most recent blind outcome, for the result summary. */
+    public record ResultView(String outcome, String score, long target, String bestHand,
+                             int handsRemaining, int moneyEarned) { }
+
+    /** Shop contents for the local seat, present only during the shop phase. Prices index-align with the lists. */
+    public record ShopView(
+            List<String> slots, List<Integer> slotPrices,
+            List<String> packs, List<Integer> packPrices,
+            List<String> vouchers,
+            int rerollCost, int purchasesRemaining) { }
 
     /** Builds a snapshot from the client's local host. Call on the FX thread. */
     public static MatchSnapshot of(MatchClient client) {
@@ -81,6 +97,19 @@ public record MatchSnapshot(
                     ranking.indexOf(id)));
         }
 
+        boolean hasChosen = match.hasChosenBlind(me);
+        BlindResult br = match.getResult(me);
+        ResultView lastResult = (br == null) ? null
+                : new ResultView(String.valueOf(br.outcome()), String.valueOf(br.score()), br.target(),
+                                 String.valueOf(br.bestHand()), br.handsRemaining(), br.moneyEarned());
+
+        boolean inShop = match.getPhase() == MatchPhase.SHOP;
+        ShopView shopView = null;
+        if (inShop) {
+            Shop shop = run.getShop();
+            if (shop != null) shopView = buildShop(shop);
+        }
+
         return new MatchSnapshot(
                 me.seat(),
                 match.getPlayer(me).name(),
@@ -98,8 +127,32 @@ public record MatchSnapshot(
                 display(run.getJokers()),
                 display(run.getConsumables()),
                 display(run.getRelics()),
-                match.getPhase() == MatchPhase.SHOP,
+                inShop,
+                shopView,
+                hasChosen,
+                lastResult,
                 opponents);
+    }
+
+    private static ShopView buildShop(Shop shop) {
+        List<String> slots = new ArrayList<>();
+        List<Integer> slotPrices = new ArrayList<>();
+        for (int i = 0; i < shop.getSlotCount(); i++) {
+            slots.add(describe(shop.getSlot(i)));
+            slotPrices.add(shop.slotPrice(i));
+        }
+        List<String> packs = new ArrayList<>();
+        List<Integer> packPrices = new ArrayList<>();
+        for (int i = 0; i < shop.getPackCount(); i++) {
+            packs.add(String.valueOf(shop.getPack(i)));
+            packPrices.add(shop.packPrice(i));
+        }
+        List<String> vouchers = new ArrayList<>();
+        for (int i = 0; i < shop.getVoucherCount(); i++) {
+            vouchers.add(String.valueOf(shop.getVoucher(i)));
+        }
+        return new ShopView(slots, slotPrices, packs, packPrices, vouchers,
+                shop.rerollCost(), shop.purchasesRemaining());
     }
 
     private static List<String> display(List<?> items) {

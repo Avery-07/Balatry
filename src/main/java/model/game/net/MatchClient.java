@@ -32,10 +32,10 @@ public final class MatchClient implements AutoCloseable {
     private final MatchHost localHost;
     private final PlayerId seat;
     private final Consumer<String> onError;
-    private final Runnable onApplied;
+    private final Consumer<Action> onApplied;
 
     private MatchClient(Socket socket, PlayerId seat, MatchHost localHost,
-                        Consumer<String> onError, Runnable onApplied) throws IOException {
+                        Consumer<String> onError, Consumer<Action> onApplied) throws IOException {
         this.socket = socket;
         this.seat = seat;
         this.localHost = localHost;
@@ -56,13 +56,14 @@ public final class MatchClient implements AutoCloseable {
 
     /**
      * As {@link #connect(String, int, long, List, Consumer)}, plus an {@code onApplied} hook fired on the
-     * receive thread after each accepted {@code SEQ} frame is replayed into the local host. A UI layer supplies
-     * a body that marshals a refresh onto its own thread (e.g. {@code Platform.runLater(view::refresh)}); this
-     * is the single point where the background receive thread hands work off, so it is the only place model
-     * mutation crosses into view-update territory.
+     * receive thread after each accepted {@code SEQ} frame is replayed into the local host, receiving the
+     * applied {@link Action}. A UI layer supplies a body that marshals a refresh onto its own thread (e.g.
+     * {@code a -> Platform.runLater(view::refresh)}) and may inspect the action for logging; this is the single
+     * point where the background receive thread hands work off, so it is the only place model mutation crosses
+     * into view-update territory.
      */
     public static MatchClient connect(String hostName, int port, long seed, List<String> playerNames,
-                                      Consumer<String> onError, Runnable onApplied) throws IOException {
+                                      Consumer<String> onError, Consumer<Action> onApplied) throws IOException {
         Socket socket = new Socket(hostName, port);
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         String seatLine = in.readLine();
@@ -91,8 +92,9 @@ public final class MatchClient implements AutoCloseable {
     private synchronized void receive(String line) {
         if (line.startsWith("SEQ")) {
             int tab = line.indexOf('\t');
-            localHost.submit(ActionCodec.decode(line.substring(tab + 1)));
-            if (onApplied != null) onApplied.run();
+            Action action = ActionCodec.decode(line.substring(tab + 1));
+            localHost.submit(action);
+            if (onApplied != null) onApplied.accept(action);
         } else if (line.startsWith("ERR") && onError != null) {
             int tab = line.indexOf('\t');
             onError.accept(tab >= 0 ? line.substring(tab + 1) : line);

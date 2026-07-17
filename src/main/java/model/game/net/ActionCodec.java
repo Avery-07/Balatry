@@ -34,6 +34,7 @@ public final class ActionCodec {
             case Action.DiscardCards x   -> join("DISCARD", x.actor(), ints(x.handIndices()));
             case Action.FinishRound x    -> join("FINISH", x.actor());
             case Action.SkipBlind x      -> join("SKIP", x.actor());
+            case Action.PlayBlind x      -> join("PLAYBLIND", x.actor());
             case Action.UseConsumable x  -> join("USECONS", x.actor(), x.consumableIndex(), ints(x.targetHandIndices()));
             case Action.UseRelic x       -> join("USERELIC", x.actor(), x.relicIndex(), target(x.target()));
             case Action.SellJoker x      -> join("SELLJOKER", x.actor(), x.index());
@@ -67,6 +68,7 @@ public final class ActionCodec {
             case "DISCARD"   -> new Action.DiscardCards(actor, indexList(f[2]));
             case "FINISH"    -> new Action.FinishRound(actor);
             case "SKIP"      -> new Action.SkipBlind(actor);
+            case "PLAYBLIND" -> new Action.PlayBlind(actor);
             case "USECONS"   -> new Action.UseConsumable(actor, i(f[2]), indexList(f[3]));
             case "USERELIC"  -> new Action.UseRelic(actor, i(f[2]), target(f, 3));
             case "SELLJOKER" -> new Action.SellJoker(actor, i(f[2]));
