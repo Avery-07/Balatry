@@ -65,4 +65,9 @@ public final class MatchViewModel {
     public void finishRound() {
         client.submit(new Action.FinishRound(client.getSeat()));
     }
+
+    /** Skip this blind for the tag; legal only before the seat has played or discarded. */
+    public void skipBlind() {
+        client.submit(new Action.SkipBlind(client.getSeat()));
+    }
 }

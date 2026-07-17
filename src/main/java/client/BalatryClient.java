@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The Balatry debug client. Connects to a {@link MatchServer}, renders the local seat's {@link MatchSnapshot}
+ * The Balatry debug client. Connects to a server, renders the local seat's {@link MatchSnapshot}
  * as a text status panel, and exposes the BLIND-phase gestures — play, discard, finish — with the hand shown as
  * clickable toggle cards. Selecting cards and pressing Play or Discard submits the chosen hand indices; the
  * result returns as a broadcast frame and repaints through the normal refresh loop.
@@ -53,12 +53,14 @@ public final class BalatryClient extends Application {
         Button play = new Button("Play");
         Button discard = new Button("Discard");
         Button finish = new Button("Finish Round");
+        Button skip = new Button("Skip Blind");
         play.setDisable(true);
         discard.setDisable(true);
         finish.setDisable(true);
+        skip.setDisable(true);
 
         HBox buttons = new HBox(8);
-        buttons.getChildren().addAll(play, discard, finish);
+        buttons.getChildren().addAll(play, discard, finish, skip);
 
         VBox root = new VBox(10);
         root.setStyle("-fx-padding: 12;");
@@ -92,6 +94,7 @@ public final class BalatryClient extends Application {
                 vm.discard(sel);
             });
             finish.setOnAction(e -> vm.finishRound());
+            skip.setOnAction(e -> vm.skipBlind());
 
             vm.snapshotProperty().addListener((obs, old, snap) -> {
                 status.setText(render(snap));
@@ -100,6 +103,7 @@ public final class BalatryClient extends Application {
                 play.setDisable(!inBlind);
                 discard.setDisable(!inBlind);
                 finish.setDisable(!inBlind);
+                skip.setDisable(!(inBlind && snap.round().canSkip()));
             });
             vm.refresh();   // on the FX thread already (start()): seed the initial connected state
         } catch (Exception e) {
@@ -170,7 +174,7 @@ public final class BalatryClient extends Application {
              .append("  points ").append(o.points())
              .append("  rank ").append(o.rank() < 0 ? "-" : (o.rank() + 1)).append("\n");
         }
-        b.append("\nSelect cards above, then Play or Discard.");
+        b.append("\nSelect cards, then Play or Discard \u2014 or Finish Round. Skip Blind (untouched round only) grants the tag above.");
         return b.toString();
     }
 

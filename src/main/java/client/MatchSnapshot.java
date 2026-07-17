@@ -7,6 +7,7 @@ import model.game.Standings;
 import model.game.net.MatchClient;
 import model.game.player.PlayerId;
 import model.game.player.Round;
+import model.game.player.RoundOutcome;
 import model.game.player.Run;
 
 import java.util.ArrayList;
@@ -50,7 +51,7 @@ public record MatchSnapshot(
 ) {
 
     /** Round-scoped counters, present only while a round is in progress. */
-    public record RoundView(int handsRemaining, int discardsRemaining, String score, long roundTarget) { }
+    public record RoundView(int handsRemaining, int discardsRemaining, String score, long roundTarget, boolean canSkip) { }
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
@@ -64,7 +65,8 @@ public record MatchSnapshot(
         Round r = run.getRound();
         RoundView roundView = (r == null) ? null
                 : new RoundView(r.getHandsRemaining(), r.getDiscardsRemaining(),
-                                String.valueOf(r.getScore()), r.getTarget());
+                                String.valueOf(r.getScore()), r.getTarget(),
+                                r.getOutcome() == RoundOutcome.IN_PROGRESS && !r.isActed());
 
         Standings standings = match.getStandings();
         List<PlayerId> ranking = standings.ranking();

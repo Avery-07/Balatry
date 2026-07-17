@@ -262,6 +262,9 @@ public final class Round {
     public DeckCard getForcedCard() { return forcedCard; }
     public RoundOutcome getOutcome()  { return outcome; }
 
+    /** Whether this seat has played or discarded; skipping the blind requires an untouched round. */
+    public boolean isActed() { return acted; }
+
     /** The most recently played hand type, or {@code null} if none yet (used by Blue Seal at cash-out). */
     public HandType getLastPlayedType() { return lastPlayedType; }
 }
