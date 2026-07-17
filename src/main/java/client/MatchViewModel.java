@@ -4,7 +4,10 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import model.game.actions.Action;
 import model.game.net.MatchClient;
+
+import java.util.List;
 
 /**
  * The observable bridge between the networked model and the FX scene graph. It holds one FX property — the
@@ -42,5 +45,24 @@ public final class MatchViewModel {
     /** Receive-thread entry point: the single hand-off from the socket thread to the FX thread. */
     public void onFrameApplied() {
         Platform.runLater(this::refresh);
+    }
+
+    // --- gesture submission -------------------------------------------------
+    // Each stamps the local seat and fires exactly one submit; the result returns as a broadcast frame, never
+    // here. A rejection surfaces via the connect-time onError callback and leaves the model (and view) unchanged.
+
+    /** Play the selected hand cards (1-5). */
+    public void playHand(List<Integer> handIndices) {
+        client.submit(new Action.PlayHand(client.getSeat(), handIndices));
+    }
+
+    /** Discard the selected hand cards. */
+    public void discard(List<Integer> handIndices) {
+        client.submit(new Action.DiscardCards(client.getSeat(), handIndices));
+    }
+
+    /** Voluntarily end the round, banking the current score. */
+    public void finishRound() {
+        client.submit(new Action.FinishRound(client.getSeat()));
     }
 }

@@ -2,30 +2,39 @@ package client;
 
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.scene.Scene;
 import javafx.stage.Stage;
+import model.game.MatchPhase;
 import model.game.net.MatchClient;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The read-only debug client: the safest possible first FX surface. It connects to a {@link MatchServer}, wraps
- * the connection in a {@link MatchViewModel}, and renders the local seat's {@link MatchSnapshot} as a plain
- * text dump that refreshes whenever a frame arrives. There is <em>no input</em> — a view that only reads cannot
- * corrupt the model, and it doubles as a live diagnostic for the whole stack beneath it: if the
- * receive-thread → {@code Platform.runLater} → property → label path is wrong, this is where it shows,
- * with nothing else to blame.
+ * The Balatry debug client. Connects to a {@link MatchServer}, renders the local seat's {@link MatchSnapshot}
+ * as a text status panel, and exposes the BLIND-phase gestures — play, discard, finish — with the hand shown as
+ * clickable toggle cards. Selecting cards and pressing Play or Discard submits the chosen hand indices; the
+ * result returns as a broadcast frame and repaints through the normal refresh loop.
  *
- * <p>Connection setup (the out-of-band lobby) comes from system properties, matching {@code ServerMain}:
- * <pre>
- *   -Dbalatry.host=localhost  -Dbalatry.port=5555  -Dbalatry.seed=42  -Dbalatry.players=P0,P1
- * </pre>
- * The seed and player list <em>must</em> match the server's, since the lockstep model requires an identical
- * starting match on every side. Launch via {@code mvn javafx:run} once per seat.
+ * <p>Selection rules mirror Balatro: one shared selection feeds both Play and Discard, capped at five cards (a
+ * sixth toggle is refused), and it clears on every refresh because the hand redraws after each play or discard.
+ * A rejected action (out-of-range, wrong phase) surfaces as an {@code ERR} line and changes nothing. This is a
+ * debug surface, not the finished game UI.
+ *
+ * <p>Connection setup from system properties, matching {@code ServerMain}:
+ * {@code -Dbalatry.host -Dbalatry.port -Dbalatry.seed -Dbalatry.players}. Seed and roster must match the
+ * server's. Launch via {@code mvn javafx:run}, once per seat.
  */
 public final class BalatryClient extends Application {
+
+    private static final int MAX_SELECTION = 5;
 
     @Override
     public void start(Stage stage) {
@@ -34,37 +43,102 @@ public final class BalatryClient extends Application {
         long seed = Long.parseLong(System.getProperty("balatry.seed", "42"));
         List<String> players = List.of(System.getProperty("balatry.players", "P0,P1").split(","));
 
-        Label view = new Label("Connecting to " + host + ":" + port + " …");
-        view.setStyle("-fx-font-family: monospace; -fx-font-size: 13px; -fx-padding: 12;");
-        view.setWrapText(true);
+        Label status = new Label("Connecting to " + host + ":" + port + " \u2026");
+        status.setStyle("-fx-font-family: monospace; -fx-font-size: 13px;");
+        status.setWrapText(true);
 
-        ScrollPane root = new ScrollPane(view);
-        root.setFitToWidth(true);
+        FlowPane handRow = new FlowPane(6, 6);
+        final List<ToggleButton> cards = new ArrayList<>();
 
-        stage.setTitle("Balatry — debug view");
-        stage.setScene(new Scene(root, 540, 720));
+        Button play = new Button("Play");
+        Button discard = new Button("Discard");
+        Button finish = new Button("Finish Round");
+        play.setDisable(true);
+        discard.setDisable(true);
+        finish.setDisable(true);
+
+        HBox buttons = new HBox(8);
+        buttons.getChildren().addAll(play, discard, finish);
+
+        VBox root = new VBox(10);
+        root.setStyle("-fx-padding: 12;");
+        root.getChildren().addAll(status, handRow, buttons);
+
+        ScrollPane scroller = new ScrollPane(root);
+        scroller.setFitToWidth(true);
+
+        stage.setTitle("Balatry \u2014 debug view");
+        stage.setScene(new Scene(scroller, 560, 780));
         stage.show();
 
-        // vmRef lets the receive callback (wired inside connect) reach the view-model that wraps the client.
-        // A frame arriving before the ref is set is simply skipped; the seeding refresh() below and the next
-        // frame's full rebuild converge the view regardless.
         final MatchViewModel[] vmRef = new MatchViewModel[1];
         try {
             MatchClient client = MatchClient.connect(
                     host, port, seed, players,
-                    err -> Platform.runLater(() -> view.setText("ERR: " + err + "\n\n" + view.getText())),
+                    err -> Platform.runLater(() -> status.setText("ERR: " + err + "\n\n" + status.getText())),
                     () -> { MatchViewModel v = vmRef[0]; if (v != null) v.onFrameApplied(); });
 
             MatchViewModel vm = new MatchViewModel(client);
             vmRef[0] = vm;
-            vm.snapshotProperty().addListener((obs, old, snap) -> view.setText(render(snap)));
+
+            play.setOnAction(e -> {
+                List<Integer> sel = selectedIndices(cards);
+                if (sel.isEmpty()) { hint(status, "Select 1-5 cards to play."); return; }
+                vm.playHand(sel);
+            });
+            discard.setOnAction(e -> {
+                List<Integer> sel = selectedIndices(cards);
+                if (sel.isEmpty()) { hint(status, "Select 1-5 cards to discard."); return; }
+                vm.discard(sel);
+            });
+            finish.setOnAction(e -> vm.finishRound());
+
+            vm.snapshotProperty().addListener((obs, old, snap) -> {
+                status.setText(render(snap));
+                rebuildHand(handRow, cards, snap, status);
+                boolean inBlind = snap != null && snap.phase() == MatchPhase.BLIND && snap.round() != null;
+                play.setDisable(!inBlind);
+                discard.setDisable(!inBlind);
+                finish.setDisable(!inBlind);
+            });
             vm.refresh();   // on the FX thread already (start()): seed the initial connected state
         } catch (Exception e) {
-            view.setText("Failed to connect: " + e.getMessage());
+            status.setText("Failed to connect: " + e.getMessage());
         }
     }
 
-    /** Renders a snapshot as a plain, monospace-friendly text dump. Read-only; no interaction. */
+    /** Rebuilds the hand as fresh toggle cards, clearing any prior selection. Toggle position == hand index. */
+    private static void rebuildHand(FlowPane row, List<ToggleButton> cards, MatchSnapshot snap, Label status) {
+        cards.clear();
+        row.getChildren().clear();
+        if (snap == null) return;
+        List<String> hand = snap.hand();
+        for (int i = 0; i < hand.size(); i++) {
+            ToggleButton tb = new ToggleButton(i + ": " + hand.get(i));
+            tb.setStyle("-fx-font-family: monospace;");
+            tb.setOnAction(e -> {
+                if (tb.isSelected() && selectedIndices(cards).size() > MAX_SELECTION) {
+                    tb.setSelected(false);
+                    hint(status, "At most " + MAX_SELECTION + " cards.");
+                }
+            });
+            cards.add(tb);
+            row.getChildren().add(tb);
+        }
+    }
+
+    /** The hand indices whose toggle is currently selected, in hand order. */
+    private static List<Integer> selectedIndices(List<ToggleButton> cards) {
+        List<Integer> out = new ArrayList<>();
+        for (int i = 0; i < cards.size(); i++) if (cards.get(i).isSelected()) out.add(i);
+        return out;
+    }
+
+    private static void hint(Label status, String msg) {
+        status.setText(msg + "\n\n" + status.getText());
+    }
+
+    /** Renders a snapshot as a plain, monospace-friendly text dump. The hand itself is shown as toggle cards. */
     private static String render(MatchSnapshot s) {
         if (s == null) return "(no state yet)";
         StringBuilder b = new StringBuilder();
@@ -85,8 +159,7 @@ public final class BalatryClient extends Application {
              .append(" / ").append(r.roundTarget()).append("\n");
         }
 
-        b.append("\nhand        : ").append(s.hand()).append("\n");
-        b.append("jokers      : ").append(s.jokers()).append("\n");
+        b.append("\njokers      : ").append(s.jokers()).append("\n");
         b.append("consumables : ").append(s.consumables()).append("\n");
         b.append("relics      : ").append(s.relics()).append("\n");
         if (s.inShop()) b.append("(in shop)\n");
@@ -97,6 +170,7 @@ public final class BalatryClient extends Application {
              .append("  points ").append(o.points())
              .append("  rank ").append(o.rank() < 0 ? "-" : (o.rank() + 1)).append("\n");
         }
+        b.append("\nSelect cards above, then Play or Discard.");
         return b.toString();
     }
 
