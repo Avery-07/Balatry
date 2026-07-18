@@ -120,6 +120,21 @@ public final class MatchViewModel {
         return seats.get(index);
     }
 
+    // --- pack gestures ------------------------------------------------------
+
+    /** Opens the pending pack at {@code index}, replacing any leftover opening. */
+    public void openPack(int index) {
+        submit(new Action.OpenPack(client.getSeat(), index));
+    }
+
+    /**
+     * Takes option {@code optionIndex} from the open pack. A relic option is cast the moment it is taken, so its
+     * target travels with the pick; everything else ignores {@code relicTarget}.
+     */
+    public void pickFromPack(int optionIndex, RelicTarget relicTarget) {
+        submit(new Action.PickFromPack(client.getSeat(), optionIndex, relicTarget));
+    }
+
     // --- shop-phase gestures -----------------------------------------------
 
     public void buyCard(int slotIndex) {
