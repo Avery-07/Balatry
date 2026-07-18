@@ -11,44 +11,44 @@ import java.util.random.RandomGenerator;
 public enum Relics {
 
     /** Debuffs a rank for every seat above the caster, for their next round. */
-    ANATHEMA("Anathema", RelicKind.RIVALS, ctx ->
+    ANATHEMA("Anathema", RelicSelector.RANK, RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armRankDebuff(ctx.selection().rank())),
 
     /** Debuffs a suit for every seat above the caster, for their next round. */
-    MIASMA("Miasma", RelicKind.RIVALS, ctx ->
+    MIASMA("Miasma", RelicSelector.SUIT, RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armSuitDebuff(ctx.selection().suit())),
 
     /** Debuffs a chosen board position for every seat above the caster, for one round (the jokers hit are not shown to the caster). */
-    KATADESMOS("Katadesmos", RelicKind.RIVALS, ctx ->
+    KATADESMOS("Katadesmos", RelicSelector.JOKER_SLOT, RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armJokerDebuff(ctx.selection().jokerIndex())),
 
     /** Destroys a random consumable from a selected opponent. */
-    PYRE("Pyre", RelicKind.OPPONENT, ctx -> {
+    PYRE("Pyre", RelicSelector.NONE, RelicKind.OPPONENT, ctx -> {
         List<ConsumableCard> cs = ctx.target().getConsumables();
         if (!cs.isEmpty()) ctx.target().destroyConsumable(cs.get(ctx.random().nextInt(cs.size())));
     }),
 
     /** Debuffs the first slot of the next shop of one chosen seat above the caster. */
-    LIMOS("Limos", RelicKind.RIVAL, ctx ->
+    LIMOS("Limos", RelicSelector.NONE, RelicKind.RIVAL, ctx ->
             ctx.target().getAfflictions().armFirstSlotDebuff()),
 
     /** Levels down a chosen hand type for every seat above the caster. */
-    KATABASIS("Katabasis", RelicKind.RIVALS, ctx -> {
+    KATABASIS("Katabasis", RelicSelector.HAND_TYPE, RelicKind.RIVALS, ctx -> {
         if (ctx.selection().handType() != null)
             ctx.target().getHandLevels().levelDown(ctx.selection().handType());
     }),
 
     /** Rerolls the shared boss blind of the next ante (a table-level change for every seat). */
-    METABOLE("Metabole", RelicKind.GLOBAL, ctx -> ctx.match().rerollNextBoss()),
+    METABOLE("Metabole", RelicSelector.NONE, RelicKind.GLOBAL, ctx -> ctx.match().rerollNextBoss()),
 
     /** Creates a copy of the last consumable used by any player. */
-    MIMESIS("Mimesis", RelicKind.SELF, ctx -> {
+    MIMESIS("Mimesis", RelicSelector.NONE, RelicKind.SELF, ctx -> {
         ConsumableSpec last = ctx.match().getLastConsumableUsed();
         if (last != null) ctx.source().createConsumable(last);
     }),
 
     /** Steals 20% (rounded down) of the money of one chosen seat above the caster. */
-    HARPAX("Harpax", RelicKind.RIVAL, ctx -> {
+    HARPAX("Harpax", RelicSelector.NONE, RelicKind.RIVAL, ctx -> {
         Run target = ctx.target();
         int amount = Math.max(0, target.getMoney()) / 5;
         if (amount > 0) {
@@ -58,14 +58,14 @@ public enum Relics {
     }),
 
     /** Negates the next hostile effect aimed at the caster this ante. */
-    AEGIS("Aegis", RelicKind.SELF, ctx -> ctx.source().getAfflictions().armAegis());
+    AEGIS("Aegis", RelicSelector.NONE, RelicKind.SELF, ctx -> ctx.source().getAfflictions().armAegis());
 
     private static final int COST = 5;
 
     private final RelicSpec spec;
 
-    Relics(String displayName, RelicKind kind, RelicEffect effect) {
-        this.spec = new RelicSpec(displayName, kind, COST, effect);
+    Relics(String displayName, RelicSelector selector, RelicKind kind, RelicEffect effect) {
+        this.spec = new RelicSpec(displayName, kind, selector, COST, effect);
     }
 
     public RelicSpec spec() { return spec; }

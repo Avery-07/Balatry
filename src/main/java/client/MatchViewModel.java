@@ -7,6 +7,8 @@ import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import model.game.actions.Action;
 import model.game.net.MatchClient;
+import model.game.player.PlayerId;
+import model.cards.relics.RelicTarget;
 
 import java.util.List;
 
@@ -89,6 +91,33 @@ public final class MatchViewModel {
     /** Skip this blind for the tag; legal only before the seat has played or discarded. */
     public void skipBlind() {
         submit(new Action.SkipBlind(client.getSeat()));
+    }
+
+    // --- inventory gestures -------------------------------------------------
+
+    /** Uses a held consumable, applying it to the given hand-card positions (empty when it needs no cards). */
+    public void useConsumable(int index, List<Integer> targetHandIndices) {
+        submit(new Action.UseConsumable(client.getSeat(), index, List.copyOf(targetHandIndices)));
+    }
+
+    /**
+     * Casts a held relic. The caller supplies only what the relic asks for: the standings-driven relics take no
+     * seat at all, so the target carries none and the model derives their victims from the standings.
+     */
+    public void useRelic(int index, RelicTarget target) {
+        submit(new Action.UseRelic(client.getSeat(), index, target == null ? RelicTarget.none() : target));
+    }
+
+    /** Reorders the board, moving the joker at {@code from} to position {@code to}. */
+    public void moveJoker(int from, int to) {
+        submit(new Action.MoveJoker(client.getSeat(), from, to));
+    }
+
+    /** The seat sitting at {@code index} in the match's seat order — for aiming a hand-targeted relic. */
+    public PlayerId seatAt(int index) {
+        List<PlayerId> seats = client.getLocalHost().getMatch().getSeats();
+        if (index < 0 || index >= seats.size()) throw new IllegalArgumentException("no seat " + index);
+        return seats.get(index);
     }
 
     // --- shop-phase gestures -----------------------------------------------

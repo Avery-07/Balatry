@@ -5,6 +5,7 @@ import model.game.Match;
 import model.game.MatchPhase;
 import model.game.Standings;
 import model.game.player.BlindResult;
+import model.cards.relics.RelicCard;
 import model.game.net.MatchClient;
 import model.game.player.PlayerId;
 import model.game.player.Round;
@@ -48,6 +49,7 @@ public record MatchSnapshot(
         List<String> jokers,
         List<String> consumables,
         List<String> relics,
+        List<RelicView> relicCards,   // the same relics, with what each one asks the caster for
         boolean inShop,
         ShopView shop,             // null outside the shop phase
         boolean hasChosen,         // this seat has made its blind-selection choice
@@ -61,6 +63,12 @@ public record MatchSnapshot(
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
+
+    /**
+     * A held relic and its demands. {@code needsSeat} is true only for relics the caster aims by hand; the
+     * standings-driven ones pick their own victims, so the UI must not offer a seat for them.
+     */
+    public record RelicView(String name, String kind, String selector, boolean needsSeat) { }
 
     /** One seat's line in the final standings; {@code isMe} marks the local seat. */
     public record StandingView(int seat, String name, long points, int rank, boolean isMe) { }
@@ -140,6 +148,7 @@ public record MatchSnapshot(
                 display(run.getJokers()),
                 display(run.getConsumables()),
                 display(run.getRelics()),
+                relicViews(run.getRelics()),
                 inShop,
                 shopView,
                 hasChosen,
@@ -167,6 +176,20 @@ public record MatchSnapshot(
         }
         return new ShopView(slots, slotPrices, packs, packPrices, vouchers,
                 shop.rerollCost(), shop.purchasesRemaining());
+    }
+
+    /** Describes each held relic so the client can ask for exactly the choices it needs. */
+    private static List<RelicView> relicViews(List<RelicCard> relics) {
+        List<RelicView> out = new ArrayList<>(relics.size());
+        for (RelicCard r : relics) {
+            var spec = r.getSpec();
+            boolean needsSeat = switch (spec.getKind()) {
+                case OPPONENT, RIVAL -> true;      // aimed by hand
+                case RIVALS, SELF, GLOBAL -> false; // the standings (or nothing) decide
+            };
+            out.add(new RelicView(spec.getName(), spec.getKind().name(), spec.getSelector().name(), needsSeat));
+        }
+        return out;
     }
 
     private static List<String> display(List<?> items) {

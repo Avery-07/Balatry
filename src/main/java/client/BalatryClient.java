@@ -13,8 +13,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import model.cards.DeckCard.Rank;
+import model.cards.DeckCard.Suit;
+import model.cards.relics.RelicTarget;
 import model.game.MatchPhase;
 import model.game.net.MatchClient;
+import model.game.player.PlayerId;
+import model.game.scoring.HandType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +42,7 @@ public final class BalatryClient extends Application {
 
     private static final int MAX_SELECTION = 5;
     private MatchPhase lastPhase;
+    private MatchSnapshot snapshot;   // latest published snapshot; read by gesture handlers on the FX thread
     private boolean resultContinued;   // this seat has hit Continue on the current result screen
 
     @Override
@@ -74,6 +80,34 @@ public final class BalatryClient extends Application {
         VBox resultPanel = new VBox(8);
         resultPanel.getChildren().addAll(continueToShop);
 
+        // --- INVENTORY panel (usable in every playable phase, not just the shop) ---
+        TextField consIndex = new TextField();
+        consIndex.setPromptText("consumable #");
+        Button useCons = new Button("Use Consumable");
+        HBox consRow = new HBox(8);
+        consRow.getChildren().addAll(consIndex, useCons);
+
+        TextField relicIndex = new TextField();
+        relicIndex.setPromptText("relic #");
+        TextField relicSeat = new TextField();
+        relicSeat.setPromptText("seat # (only if aimed)");
+        TextField relicChoice = new TextField();
+        relicChoice.setPromptText("rank / suit / slot / hand");
+        Button useRelic = new Button("Use Relic");
+        HBox relicRow = new HBox(8);
+        relicRow.getChildren().addAll(relicIndex, relicSeat, relicChoice, useRelic);
+
+        TextField moveFrom = new TextField();
+        moveFrom.setPromptText("from");
+        TextField moveTo = new TextField();
+        moveTo.setPromptText("to");
+        Button moveJoker = new Button("Move Joker");
+        HBox moveRow = new HBox(8);
+        moveRow.getChildren().addAll(moveFrom, moveTo, moveJoker);
+
+        VBox inventoryPanel = new VBox(8);
+        inventoryPanel.getChildren().addAll(consRow, relicRow, moveRow);
+
         // --- SHOP panel ---
         TextField shopIndex = new TextField();
         shopIndex.setPromptText("index for buy/sell/voucher");
@@ -95,7 +129,7 @@ public final class BalatryClient extends Application {
 
         VBox root = new VBox(10);
         root.setStyle("-fx-padding: 12;");
-        root.getChildren().addAll(status, selectionPanel, blindPanel, resultPanel, shopPanel);
+        root.getChildren().addAll(status, selectionPanel, blindPanel, resultPanel, inventoryPanel, shopPanel);
 
         ScrollPane scroller = new ScrollPane(root);
         scroller.setFitToWidth(true);
@@ -117,6 +151,15 @@ public final class BalatryClient extends Application {
             skipBlind.setOnAction(e -> vm.skipBlind());
             continueToShop.setOnAction(e -> { resultContinued = true; vm.readyForNext(); });
 
+            useCons.setOnAction(e -> withIndex(consIndex, status,
+                    i -> vm.useConsumable(i, selectedIndices(cards))));   // selected hand cards are the targets
+            useRelic.setOnAction(e -> withIndex(relicIndex, status, i -> {
+                RelicTarget target = buildRelicTarget(vm, i, relicSeat.getText(), relicChoice.getText(), status);
+                if (target != null) vm.useRelic(i, target);
+            }));
+            moveJoker.setOnAction(e -> withIndex(moveFrom, status,
+                    from -> withIndex(moveTo, status, to -> vm.moveJoker(from, to))));
+
             play.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "play")) vm.playHand(s); });
             discard.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "discard")) vm.discard(s); });
             finish.setOnAction(e -> vm.finishRound());
@@ -132,6 +175,7 @@ public final class BalatryClient extends Application {
             notReady.setOnAction(e -> vm.notReady());
 
             vm.snapshotProperty().addListener((obs, old, snap) -> {
+                snapshot = snap;
                 status.setText(render(snap));
                 rebuildHand(handRow, cards, snap, status);
 
@@ -151,6 +195,10 @@ public final class BalatryClient extends Application {
 
                 continueToShop.setDisable(!inResult || resultContinued);
 
+                boolean canUseItems = phase == MatchPhase.SELECTION || phase == MatchPhase.BLIND
+                        || phase == MatchPhase.RESULT || phase == MatchPhase.SHOP;
+                show(inventoryPanel, canUseItems);
+
                 // In selection, buttons are live only until this seat has chosen.
                 boolean canChoose = inSelection && !snap.hasChosen();
                 playBlind.setDisable(!canChoose);
@@ -163,6 +211,52 @@ public final class BalatryClient extends Application {
             vm.refresh();
         } catch (Exception e) {
             status.setText("Failed to connect: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Assembles a {@link RelicTarget} from what the relic itself says it needs. Only relics the caster aims by
+     * hand read the seat box; the standings-driven ones ignore it entirely, so offering a seat there would be a
+     * lie. Returns {@code null} (after explaining) when the caster has not supplied what the relic asks for.
+     */
+    private RelicTarget buildRelicTarget(MatchViewModel vm, int relicIndex, String seatText, String choiceText, Label status) {
+        if (snapshot == null || relicIndex < 0 || relicIndex >= snapshot.relicCards().size()) {
+            hint(status, "No relic at index " + relicIndex + ".");
+            return null;
+        }
+        MatchSnapshot.RelicView relic = snapshot.relicCards().get(relicIndex);
+
+        PlayerId seat = null;
+        if (relic.needsSeat()) {
+            if (seatText == null || seatText.trim().isEmpty()) {
+                hint(status, relic.name() + " must be aimed: enter a seat number.");
+                return null;
+            }
+            try {
+                seat = vm.seatAt(Integer.parseInt(seatText.trim()));
+            } catch (RuntimeException ex) {
+                hint(status, "Bad seat '" + seatText.trim() + "': " + ex.getMessage());
+                return null;
+            }
+        }
+
+        String choice = choiceText == null ? "" : choiceText.trim();
+        boolean needsChoice = !"NONE".equals(relic.selector());
+        if (needsChoice && choice.isEmpty()) {
+            hint(status, relic.name() + " needs a " + relic.selector().toLowerCase().replace('_', ' ') + ".");
+            return null;
+        }
+        try {
+            return switch (relic.selector()) {
+                case "RANK"       -> RelicTarget.rank(seat, Rank.valueOf(choice.toUpperCase()));
+                case "SUIT"       -> RelicTarget.suit(seat, Suit.valueOf(choice.toUpperCase()));
+                case "JOKER_SLOT" -> RelicTarget.joker(seat, Integer.parseInt(choice));
+                case "HAND_TYPE"  -> RelicTarget.hand(seat, HandType.valueOf(choice.toUpperCase()));
+                default           -> seat == null ? RelicTarget.none() : RelicTarget.on(seat);
+            };
+        } catch (RuntimeException ex) {
+            hint(status, "'" + choice + "' is not a valid " + relic.selector().toLowerCase().replace('_', ' ') + ".");
+            return null;
         }
     }
 
@@ -245,7 +339,19 @@ public final class BalatryClient extends Application {
 
         appendIndexed(b, "\njokers", s.jokers());
         appendIndexed(b, "consumables", s.consumables());
-        appendIndexed(b, "relics", s.relics());
+        b.append("relics :");
+        if (s.relicCards().isEmpty()) b.append(" (none)\n");
+        else {
+            b.append("\n");
+            for (int i = 0; i < s.relicCards().size(); i++) {
+                MatchSnapshot.RelicView r = s.relicCards().get(i);
+                b.append("  [").append(i).append("] ").append(r.name())
+                 .append("  \u2014 ").append(targeting(r.kind()));
+                if (!"NONE".equals(r.selector()))
+                    b.append(", choose a ").append(r.selector().toLowerCase().replace('_', ' '));
+                b.append("\n");
+            }
+        }
 
         if (s.phase() == MatchPhase.RESULT && s.lastResult() != null) {
             MatchSnapshot.ResultView r = s.lastResult();
@@ -299,6 +405,18 @@ public final class BalatryClient extends Application {
         else if (s.phase() == MatchPhase.SHOP)
             b.append("\nType an index, then Buy/Sell/Voucher. Reroll and Ready need no index.");
         return b.toString();
+    }
+
+    /** Plain-language description of who a relic lands on, so the panel never implies a choice that isn't real. */
+    private static String targeting(String kind) {
+        return switch (kind) {
+            case "OPPONENT" -> "aim at any seat";
+            case "RIVAL"    -> "aim at a seat above you";
+            case "RIVALS"   -> "hits everyone above you";
+            case "SELF"     -> "affects you";
+            case "GLOBAL"   -> "affects the whole table";
+            default          -> kind;
+        };
     }
 
     private static void appendIndexed(StringBuilder b, String label, List<String> items) {
