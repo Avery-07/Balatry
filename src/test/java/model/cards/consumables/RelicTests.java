@@ -30,6 +30,7 @@ public final class RelicTests {
         roundScopedDebuffs();
         immediateCrossPlayer();
         multiplayerGuards();
+        standingsTargeting();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -68,15 +69,15 @@ public final class RelicTests {
 
     /** Pyre / Katabasis / Harpax / Mimesis resolve immediately against another seat (or the table). */
     private static void immediateCrossPlayer() {
-        // Harpax: steals 25% (floored) of the target's money.
-        Match harpax = started(1L);
-        PlayerId a = harpax.getSeats().get(0), b = harpax.getSeats().get(1);
-        harpax.getRun(a).addMoney(3);
-        harpax.getRun(b).addMoney(20);
+        // Harpax: the underdog steals 20% (floored) from a seat above them.
+        Match harpax = ranked(1L);
+        PlayerId a = harpax.getSeats().get(1), b = harpax.getSeats().get(0);   // b outranks a
+        setMoney(harpax.getRun(a), 3);
+        setMoney(harpax.getRun(b), 20);
         harpax.getRun(a).addRelic(Relics.HARPAX.make());
         harpax.useRelic(a, 0, RelicTarget.on(b));
-        checkInt("Harpax: caster gains the cut", harpax.getRun(a).getMoney(), 8);
-        checkInt("Harpax: target loses the cut", harpax.getRun(b).getMoney(), 15);
+        checkInt("Harpax: caster gains the cut", harpax.getRun(a).getMoney(), 7);
+        checkInt("Harpax: target loses the cut", harpax.getRun(b).getMoney(), 16);
 
         // Pyre: destroys one of the target's consumables.
         Match pyre = started(2L);
@@ -87,13 +88,14 @@ public final class RelicTests {
         pyre.useRelic(pa, 0, RelicTarget.on(pb));
         checkInt("Pyre destroys one consumable", pyre.getRun(pb).getConsumables().size(), 1);
 
-        // Katabasis: levels a hand type down by one.
-        Match kata = started(3L);
-        PlayerId ka = kata.getSeats().get(0), kb = kata.getSeats().get(1);
-        kata.getRun(kb).getHandLevels().levelUp(HandType.PAIR);   // -> level 2
+        // Katabasis: levels a hand type down for everyone above the caster; no seat is chosen.
+        Match kata = ranked(3L);
+        PlayerId ka = kata.getSeats().get(1), kb = kata.getSeats().get(0);   // kb outranks ka
+        int before = kata.getRun(kb).getHandLevels().levelOf(HandType.PAIR);
         kata.getRun(ka).addRelic(Relics.KATABASIS.make());
-        kata.useRelic(ka, 0, RelicTarget.hand(kb, HandType.PAIR));
-        checkInt("Katabasis levels the hand down", kata.getRun(kb).getHandLevels().levelOf(HandType.PAIR), 1);
+        kata.useRelic(ka, 0, RelicTarget.hand(null, HandType.PAIR));
+        checkInt("Katabasis levels the hand down",
+                kata.getRun(kb).getHandLevels().levelOf(HandType.PAIR), before - 1);
 
         // Mimesis: copies the last consumable any seat used.
         Match mim = started(4L);
@@ -110,9 +112,10 @@ public final class RelicTests {
     /** Aegis + Anger, Limos's shop debuff, and Metabole's table-boss reroll. */
     private static void multiplayerGuards() {
         // Aegis negates the first hostile hit this ante; Anger still counts every targeting.
-        Match m = started(5L);
-        PlayerId atk = m.getSeats().get(0), def = m.getSeats().get(1);
-        m.getRun(def).addMoney(20);
+        Match m = ranked(5L);
+        PlayerId atk = m.getSeats().get(1), def = m.getSeats().get(0);   // def outranks atk
+        setMoney(m.getRun(atk), 0);
+        setMoney(m.getRun(def), 20);
         m.getRun(def).addRelic(Relics.AEGIS.make());
         m.useRelic(def, 0, RelicTarget.none());                  // defender arms its own shield (self, not a targeting)
         check("Aegis armed", m.getRun(def).getAfflictions().isAegisArmed());
@@ -127,8 +130,8 @@ public final class RelicTests {
         check("shield consumed", !m.getRun(def).getAfflictions().isAegisArmed());
 
         m.useRelic(atk, 0, RelicTarget.on(def));                 // second hit -> lands
-        checkInt("next hit lands: target -5", m.getRun(def).getMoney(), 15);
-        checkInt("next hit lands: caster +5", m.getRun(atk).getMoney(), 5);
+        checkInt("next hit lands: target -4", m.getRun(def).getMoney(), 16);
+        checkInt("next hit lands: caster +4", m.getRun(atk).getMoney(), 4);
         checkInt("Anger counts the second targeting", m.getRun(def).getStats().getTimesTargeted(), 2);
 
         // Limos: the first slot of the target's next shop is debuffed, for that visit only.
@@ -152,12 +155,107 @@ public final class RelicTests {
                 plain.getCurrentBoss() != meta.getCurrentBoss());
     }
 
+    /** Standings-driven targeting: who a relic can hit, who it fizzles against, and how Aegis applies per seat. */
+    private static void standingsTargeting() {
+        // A three-seat table ranked a > b > c, so every targeting case has a seat to exercise.
+        Match m = ranked3(11L);
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1), c = m.getSeats().get(2);
+        check("fixture is strictly ranked a > b > c",
+                m.seatsAbove(c).size() == 2 && m.seatsAbove(b).size() == 1 && m.seatsAbove(a).isEmpty());
+
+        // RIVALS: the bottom seat's Anathema lands on BOTH seats above it, and never on itself.
+        m.getRun(c).addRelic(Relics.ANATHEMA.make());
+        m.useRelic(c, 0, RelicTarget.rank(null, Rank.KING));
+        m.nextBlind();                                        // deal rounds so the armed debuffs go live
+        DeckCard king = new DeckCard(Rank.KING, Suit.SPADES);
+        check("Anathema hits the first seat above", m.getRun(a).getAfflictions().debuffs(king));
+        check("Anathema hits the second seat above", m.getRun(b).getAfflictions().debuffs(king));
+        check("Anathema spares the caster", !m.getRun(c).getAfflictions().debuffs(king));
+
+        // Fizzle: cast from the top of the standings, the card is spent but nobody is touched.
+        Match top = ranked3(12L);
+        PlayerId ta = top.getSeats().get(0), tb = top.getSeats().get(1);
+        top.getRun(ta).addRelic(Relics.ANATHEMA.make());
+        top.useRelic(ta, 0, RelicTarget.rank(null, Rank.QUEEN));
+        top.nextBlind();
+        DeckCard queen = new DeckCard(Rank.QUEEN, Suit.HEARTS);
+        check("leader's Anathema touches nobody", !top.getRun(tb).getAfflictions().debuffs(queen));
+        check("the fizzled relic is still spent", top.getRun(ta).getRelics().isEmpty());
+
+        // Ties are not "above": at level pegs nobody can be targeted, so a RIVAL relic fizzles too.
+        Match tied = started(13L);
+        PlayerId xa = tied.getSeats().get(0), xb = tied.getSeats().get(1);
+        checkInt("fixture is tied", (int) tied.seatsAbove(xa).size(), 0);
+        setMoney(tied.getRun(xb), 20);
+        tied.getRun(xa).addRelic(Relics.HARPAX.make());
+        tied.useRelic(xa, 0, RelicTarget.on(xb));
+        checkInt("Harpax fizzles against a tied seat", tied.getRun(xb).getMoney(), 20);
+
+        // RIVAL rejects a seat that is not above the caster (aiming downward is a malformed cast).
+        Match aim = ranked3(14L);
+        PlayerId ab = aim.getSeats().get(1), ac = aim.getSeats().get(2);
+        aim.getRun(ab).addRelic(Relics.HARPAX.make());
+        checkThrows("Harpax refuses to aim downward", () -> aim.useRelic(ab, 0, RelicTarget.on(ac)));
+
+        // Aegis is per seat: one shielded victim absorbs its copy while the other still takes the hit.
+        Match shield = ranked3(15L);
+        PlayerId sa = shield.getSeats().get(0), sb = shield.getSeats().get(1), sc = shield.getSeats().get(2);
+        shield.getRun(sa).addRelic(Relics.AEGIS.make());
+        shield.useRelic(sa, 0, RelicTarget.none());
+        shield.getRun(sc).addRelic(Relics.ANATHEMA.make());
+        shield.useRelic(sc, 0, RelicTarget.rank(null, Rank.KING));
+        shield.nextBlind();
+        DeckCard k2 = new DeckCard(Rank.KING, Suit.CLUBS);
+        check("the shielded seat absorbs its copy", !shield.getRun(sa).getAfflictions().debuffs(k2));
+        check("the unshielded seat is still hit", shield.getRun(sb).getAfflictions().debuffs(k2));
+        checkInt("Anger counts a targeting per victim", shield.getRun(sa).getStats().getTimesTargeted(), 1);
+        checkInt("Anger counts the unshielded victim too", shield.getRun(sb).getStats().getTimesTargeted(), 1);
+    }
+
     // --- match helpers ---
 
     private static Match started(long seed) {
         Match m = Match.create(seed, List.of("A", "B"));
         m.start();
         return m;
+    }
+
+    /** Two seats where seat 0 outranks seat 1: seat 0 clears the opening blind, seat 1 scores nothing. */
+    private static Match ranked(long seed) {
+        return rankedTable(seed, List.of("A", "B"), 1);
+    }
+
+    /** Three seats ranked strictly a > b > c, by giving each a different number of scoring cards. */
+    private static Match ranked3(long seed) {
+        return rankedTable(seed, List.of("A", "B", "C"), 2);
+    }
+
+    /**
+     * Plays one blind so the standings separate: every seat except the last plays a hand, and seats earlier in the
+     * list play more cards than later ones, so scores (and therefore awarded points) come out strictly ordered.
+     * Leaves the match in the shop with points recorded.
+     */
+    private static Match rankedTable(long seed, List<String> names, int scorers) {
+        Match m = Match.create(seed, names);
+        for (PlayerId id : m.getSeats()) stackToWin(m.getRun(id));
+        m.start();
+        List<PlayerId> seats = m.getSeats();
+        for (int i = 0; i < seats.size(); i++) {
+            Run run = m.getRun(seats.get(i));
+            if (i < scorers) {                       // earlier seats play wider hands -> strictly higher scores
+                int want = 5 - i;
+                int n = Math.min(want, run.getRound().getHand().size());
+                run.getRound().play(new java.util.ArrayList<>(run.getRound().getHand().subList(0, n)));
+            }
+            run.getRound().finish();
+        }
+        m.toShop();                                  // settles the blind and records the points
+        return m;
+    }
+
+    /** Sets a run's money to exactly {@code amount}, whatever the blind reward left behind. */
+    private static void setMoney(Run run, int amount) {
+        run.addMoney(amount - run.getMoney());
     }
 
     /** Drives a match to the ante-2 boss deal; if {@code useMetabole}, a seat spends Metabole during the first shop. */
@@ -219,6 +317,12 @@ public final class RelicTests {
 
     private static void checkInt(String label, int actual, int expected) {
         check(label + " (" + actual + ")", actual == expected);
+    }
+
+    private static void checkThrows(String label, Runnable body) {
+        boolean threw = false;
+        try { body.run(); } catch (RuntimeException e) { threw = true; }
+        check(label, threw);
     }
 
     private static void check(String label, boolean ok) {

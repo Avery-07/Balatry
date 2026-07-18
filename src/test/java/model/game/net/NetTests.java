@@ -122,7 +122,7 @@ public final class NetTests {
                         if (after != null && after.getOutcome() == RoundOutcome.IN_PROGRESS)
                             submitAndSettle(clients[seat], new Action.FinishRound(id), serverHost);
                     }
-                } else if (m.getPhase() == MatchPhase.SHOP) {
+                } else if (m.getPhase() == MatchPhase.RESULT || m.getPhase() == MatchPhase.SHOP) {
                     for (int seat = 0; seat < 2; seat++)
                         submitAndSettle(clients[seat], new Action.ReadyForNext(m.getSeats().get(seat)), serverHost);
                 }

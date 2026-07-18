@@ -10,16 +10,16 @@ import java.util.random.RandomGenerator;
 /** The ten Relics — Balatry's multiplayer-facing cards. */
 public enum Relics {
 
-    /** Debuffs a rank for one selected opponent for their next round. */
-    ANATHEMA("Anathema", RelicKind.OPPONENT, ctx ->
+    /** Debuffs a rank for every seat above the caster, for their next round. */
+    ANATHEMA("Anathema", RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armRankDebuff(ctx.selection().rank())),
 
-    /** Debuffs a suit for one selected opponent for their next round. */
-    MIASMA("Miasma", RelicKind.OPPONENT, ctx ->
+    /** Debuffs a suit for every seat above the caster, for their next round. */
+    MIASMA("Miasma", RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armSuitDebuff(ctx.selection().suit())),
 
-    /** Debuffs a selected board position of an opponent for their next round (the joker is not shown to the caster). */
-    KATADESMOS("Katadesmos", RelicKind.OPPONENT, ctx ->
+    /** Debuffs a chosen board position for every seat above the caster, for one round (the jokers hit are not shown to the caster). */
+    KATADESMOS("Katadesmos", RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armJokerDebuff(ctx.selection().jokerIndex())),
 
     /** Destroys a random consumable from a selected opponent. */
@@ -28,12 +28,12 @@ public enum Relics {
         if (!cs.isEmpty()) ctx.target().destroyConsumable(cs.get(ctx.random().nextInt(cs.size())));
     }),
 
-    /** Debuffs the first slot of a selected player's next shop. */
-    LIMOS("Limos", RelicKind.PLAYER, ctx ->
+    /** Debuffs the first slot of the next shop of one chosen seat above the caster. */
+    LIMOS("Limos", RelicKind.RIVAL, ctx ->
             ctx.target().getAfflictions().armFirstSlotDebuff()),
 
-    /** Levels down a selected hand type of a selected player. */
-    KATABASIS("Katabasis", RelicKind.PLAYER, ctx -> {
+    /** Levels down a chosen hand type for every seat above the caster. */
+    KATABASIS("Katabasis", RelicKind.RIVALS, ctx -> {
         if (ctx.selection().handType() != null)
             ctx.target().getHandLevels().levelDown(ctx.selection().handType());
     }),
@@ -47,10 +47,10 @@ public enum Relics {
         if (last != null) ctx.source().createConsumable(last);
     }),
 
-    /** Steals 25% (rounded down) of a selected opponent's money. */
-    HARPAX("Harpax", RelicKind.OPPONENT, ctx -> {
+    /** Steals 20% (rounded down) of the money of one chosen seat above the caster. */
+    HARPAX("Harpax", RelicKind.RIVAL, ctx -> {
         Run target = ctx.target();
-        int amount = Math.max(0, target.getMoney()) / 4;
+        int amount = Math.max(0, target.getMoney()) / 5;
         if (amount > 0) {
             target.addMoney(-amount);
             ctx.source().addMoney(amount);

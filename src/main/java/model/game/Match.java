@@ -14,6 +14,7 @@ import model.cards.packs.BoosterPack;
 import model.cards.jokers.JokerCard;
 import model.cards.relics.RelicCard;
 import model.cards.relics.RelicContext;
+import model.cards.relics.RelicKind;
 import model.cards.relics.RelicTarget;
 import model.game.bosses.BossBehavior;
 import model.game.bosses.BossBehaviors;
@@ -186,8 +187,14 @@ public final class Match {
     }
 
     /** BLIND -> SHOP: settles every seat's finished round and records the results. */
-    public void toShop() {
-        require(MatchPhase.BLIND, "toShop");
+    /**
+     * Settles the just-finished blind and lands in {@link MatchPhase#RESULT}: every seat's round is scored into a
+     * {@link BlindResult}, boss end-effects and sin settlement run, and points are awarded. The shops are not yet
+     * open; a host crosses RESULT -> SHOP (or -> FINISHED after the final boss) via {@link #openShopsOrFinish()}
+     * once every seat has continued. Barriered: rejects until every seat's round is resolved.
+     */
+    public void toResult() {
+        require(MatchPhase.BLIND, "toResult");
         for (Player p : players.values()) {                         // barrier: everyone must be done
             Round round = p.run().getRound();
             if (round == null || round.getOutcome() == RoundOutcome.IN_PROGRESS)
@@ -216,12 +223,27 @@ public final class Match {
                         p.run().addMoney(SkipTag.INVESTMENT_PAYOUT);
         if (blind == Blind.BOSS)
             sinModifier.onAnteSettled(this);   // end-of-ante sin resolution (Gluttony's payout) before shops open
+        phase = MatchPhase.RESULT;
+    }
+
+    /**
+     * RESULT -> SHOP (or FINISHED after the final boss): opens each seat's seed-mirrored shop, unless the just
+     * settled blind was the final ante's boss, in which case the match ends with no post-match shop.
+     */
+    public void openShopsOrFinish() {
+        require(MatchPhase.RESULT, "openShopsOrFinish");
         if (blind == Blind.BOSS && ante >= anteCount) {   // final boss settled: the match is over
             phase = MatchPhase.FINISHED;
             return;
         }
         for (Player p : players.values()) p.run().openShop();   // seed-mirrored shop per seat
         phase = MatchPhase.SHOP;
+    }
+
+    /** Settles the blind and opens the shops (or finishes) in one step: the direct BLIND -> SHOP path for tests. */
+    public void toShop() {
+        toResult();
+        openShopsOrFinish();
     }
 
     /** Converts one settled blind's results into standings points: the policy computes the base award, then each seat's Pride point multiplier is applied on top (a met Pride wager mints points above the round's nominal pot). */
@@ -419,27 +441,68 @@ public final class Match {
         castRelic(casterId, relic, target);
     }
 
-    /** The relic cast core: Anger's targeted-count, Aegis negation, then the effect. */
+    /**
+     * The relic cast core. The target set follows from the relic's {@link RelicKind} and the standings, not from
+     * the effect: {@code SELF}/{@code GLOBAL} resolve once untargeted, {@code OPPONENT} takes any chosen seat, and
+     * {@code RIVAL}/{@code RIVALS} hit seats strictly above the caster. Each targeted seat is resolved
+     * independently, so Anger counts one targeting per victim and each victim's own Aegis absorbs only its own
+     * copy. A standings relic cast from the top of the table hits nobody and simply fizzles: the card is spent.
+     */
     private void castRelic(PlayerId casterId, RelicCard relic, RelicTarget target) {
         if (relic.isDebuffed())   // Greed's claim: a debuffed relic is dead until the sticker is removed
             throw new IllegalStateException("a debuffed relic cannot be cast: " + relic.getSpec().getName());
         if (phase == MatchPhase.LOBBY || phase == MatchPhase.FINISHED)
             throw new IllegalStateException("relics cannot be used in phase " + phase);
         Run caster = getRun(casterId);
+        RelicKind kind = relic.getSpec().getKind();
 
-        PlayerId targetId = target.opponent();
-        Run targetRun = (targetId == null) ? null : getRun(targetId);
-        boolean hostile = targetRun != null && !targetId.equals(casterId);
-
-        boolean negated = false;
-        if (hostile) {
-            targetRun.getStats().recordTargeted();              // Anger: the targeting attempt counts
-            negated = targetRun.getAfflictions().consumeAegis(); // Aegis: absorb the next hostile effect this ante
+        if (kind == RelicKind.SELF || kind == RelicKind.GLOBAL) {
+            relic.getSpec().getEffect().resolve(new RelicContext(this, caster, casterId, null, null, target));
+            sinModifier.onConsumableUsed(caster);
+            return;
         }
-        if (!negated)
+
+        for (PlayerId victim : resolveTargets(casterId, kind, target)) {
+            Run victimRun = getRun(victim);
+            victimRun.getStats().recordTargeted();                    // Anger: the targeting attempt counts
+            if (victimRun.getAfflictions().consumeAegis()) continue;   // Aegis: absorbed for this seat only
             relic.getSpec().getEffect().resolve(
-                    new RelicContext(this, caster, casterId, targetRun, targetId, target));
-        sinModifier.onConsumableUsed(caster);   // a relic is a consumable used, even if Aegis absorbed its effect
+                    new RelicContext(this, caster, casterId, victimRun, victim, target));
+        }
+        sinModifier.onConsumableUsed(caster);   // a relic is a consumable used, even if every effect was absorbed
+    }
+
+    /** The seats a hostile relic lands on, given its kind and the caster's chosen seat (empty means it fizzles). */
+    private List<PlayerId> resolveTargets(PlayerId casterId, RelicKind kind, RelicTarget target) {
+        PlayerId chosen = target.opponent();
+        return switch (kind) {
+            case OPPONENT -> {
+                if (chosen == null || chosen.equals(casterId))
+                    throw new IllegalStateException("this relic needs an opponent to aim at");
+                getRun(chosen);   // seat validation
+                yield List.of(chosen);
+            }
+            case RIVAL -> {
+                List<PlayerId> above = seatsAbove(casterId);
+                if (above.isEmpty()) yield List.of();       // nobody outranks the caster: the cast fizzles
+                if (chosen == null)
+                    throw new IllegalStateException("this relic needs a seat above you to aim at");
+                if (!above.contains(chosen))
+                    throw new IllegalStateException("seat " + chosen + " is not above you in the standings");
+                yield List.of(chosen);
+            }
+            case RIVALS -> seatsAbove(casterId);            // the caster picks no seat; may be empty and fizzle
+            default -> List.of();
+        };
+    }
+
+    /** Seats with strictly more points than {@code id}; ties never count as above, so seating cannot decide targets. */
+    public List<PlayerId> seatsAbove(PlayerId id) {
+        long mine = standings.getPoints(id);
+        List<PlayerId> above = new ArrayList<>();
+        for (PlayerId other : getSeats())
+            if (!other.equals(id) && standings.getPoints(other) > mine) above.add(other);
+        return above;
     }
 
     /** Wrath: destroys the caster's own joker at {@code index} — no money, but the next joker purchase is free (grants stack and expire with the ante). */

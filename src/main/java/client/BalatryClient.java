@@ -37,6 +37,7 @@ public final class BalatryClient extends Application {
 
     private static final int MAX_SELECTION = 5;
     private MatchPhase lastPhase;
+    private boolean resultContinued;   // this seat has hit Continue on the current result screen
 
     @Override
     public void start(Stage stage) {
@@ -68,6 +69,11 @@ public final class BalatryClient extends Application {
         VBox blindPanel = new VBox(8);
         blindPanel.getChildren().addAll(handRow, blindButtons);
 
+        // --- RESULT panel ---
+        Button continueToShop = new Button("Continue");
+        VBox resultPanel = new VBox(8);
+        resultPanel.getChildren().addAll(continueToShop);
+
         // --- SHOP panel ---
         TextField shopIndex = new TextField();
         shopIndex.setPromptText("index for buy/sell/voucher");
@@ -89,7 +95,7 @@ public final class BalatryClient extends Application {
 
         VBox root = new VBox(10);
         root.setStyle("-fx-padding: 12;");
-        root.getChildren().addAll(status, selectionPanel, blindPanel, shopPanel);
+        root.getChildren().addAll(status, selectionPanel, blindPanel, resultPanel, shopPanel);
 
         ScrollPane scroller = new ScrollPane(root);
         scroller.setFitToWidth(true);
@@ -109,6 +115,7 @@ public final class BalatryClient extends Application {
 
             playBlind.setOnAction(e -> vm.playBlind());
             skipBlind.setOnAction(e -> vm.skipBlind());
+            continueToShop.setOnAction(e -> { resultContinued = true; vm.readyForNext(); });
 
             play.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "play")) vm.playHand(s); });
             discard.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "discard")) vm.discard(s); });
@@ -131,12 +138,18 @@ public final class BalatryClient extends Application {
                 MatchPhase phase = snap == null ? null : snap.phase();
                 if (phase != lastPhase) { Log.phase(lastPhase, phase); lastPhase = phase; }
 
+                if (phase != MatchPhase.RESULT) resultContinued = false;   // reset when the result screen closes
+
                 boolean inSelection = phase == MatchPhase.SELECTION;
                 boolean inBlind = phase == MatchPhase.BLIND && snap.round() != null;
+                boolean inResult = phase == MatchPhase.RESULT;
                 boolean inShop = phase == MatchPhase.SHOP;
                 show(selectionPanel, inSelection);
                 show(blindPanel, inBlind);
+                show(resultPanel, inResult);
                 show(shopPanel, inShop);
+
+                continueToShop.setDisable(!inResult || resultContinued);
 
                 // In selection, buttons are live only until this seat has chosen.
                 boolean canChoose = inSelection && !snap.hasChosen();
@@ -234,13 +247,14 @@ public final class BalatryClient extends Application {
         appendIndexed(b, "consumables", s.consumables());
         appendIndexed(b, "relics", s.relics());
 
-        if (s.phase() == MatchPhase.SHOP && s.lastResult() != null) {
+        if (s.phase() == MatchPhase.RESULT && s.lastResult() != null) {
             MatchSnapshot.ResultView r = s.lastResult();
             b.append("\n=== BLIND RESULT ===\n");
             b.append("outcome : ").append(r.outcome()).append("\n");
             b.append("score   : ").append(r.score()).append(" / ").append(r.target()).append("\n");
             b.append("best    : ").append(r.bestHand()).append("\n");
             b.append("earned  : $").append(r.moneyEarned()).append("\n");
+            b.append(s.blind().equals("BOSS") ? "Continue to finish the ante.\n" : "Continue to the shop.\n");
         }
 
         if (s.shop() != null) {
@@ -256,6 +270,21 @@ public final class BalatryClient extends Application {
             b.append("vouchers:\n");
             for (int i = 0; i < sh.vouchers().size(); i++)
                 b.append("  [").append(i).append("] ").append(sh.vouchers().get(i)).append("\n");
+        }
+
+        if (s.phase() == MatchPhase.FINISHED) {
+            b.append("\n=== MATCH OVER ===\n");
+            for (MatchSnapshot.StandingView v : s.standings()) {
+                boolean winner = v.rank() == 0;
+                b.append(winner ? "  * " : "    ")
+                 .append(v.rank() + 1).append(". ")
+                 .append(v.name()).append(v.isMe() ? " (you)" : "")
+                 .append("  \u2014 ").append(v.points()).append(" pts\n");
+            }
+            MatchSnapshot.StandingView top = s.standings().isEmpty() ? null : s.standings().get(0);
+            if (top != null)
+                b.append("\n").append(top.isMe() ? "You win!" : top.name() + " wins.").append("\n");
+            return b.toString();
         }
 
         b.append("\n--- opponents (visible only) ---\n");

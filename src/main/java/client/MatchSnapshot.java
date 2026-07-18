@@ -52,6 +52,7 @@ public record MatchSnapshot(
         ShopView shop,             // null outside the shop phase
         boolean hasChosen,         // this seat has made its blind-selection choice
         ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
+        List<StandingView> standings,   // every seat, ranked; for the end-of-match summary
         List<OpponentView> opponents
 ) {
 
@@ -60,6 +61,9 @@ public record MatchSnapshot(
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
+
+    /** One seat's line in the final standings; {@code isMe} marks the local seat. */
+    public record StandingView(int seat, String name, long points, int rank, boolean isMe) { }
 
     /** This seat's most recent blind outcome, for the result summary. */
     public record ResultView(String outcome, String score, long target, String bestHand,
@@ -86,6 +90,15 @@ public record MatchSnapshot(
 
         Standings standings = match.getStandings();
         List<PlayerId> ranking = standings.ranking();
+
+        List<StandingView> table = new ArrayList<>();
+        for (PlayerId id : ranking)
+            table.add(new StandingView(
+                    id.seat(),
+                    match.getPlayer(id).name(),
+                    standings.getPoints(id),
+                    ranking.indexOf(id),
+                    id.seat() == me.seat()));
 
         List<OpponentView> opponents = new ArrayList<>();
         for (PlayerId id : match.getSeats()) {
@@ -131,6 +144,7 @@ public record MatchSnapshot(
                 shopView,
                 hasChosen,
                 lastResult,
+                table,
                 opponents);
     }
 

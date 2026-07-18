@@ -29,7 +29,7 @@ public final class MatchHost {
 
     private final Match match;
     private final List<Action> log = new ArrayList<>();
-    private final Set<PlayerId> shopReady = new HashSet<>();
+    private final Set<PlayerId> readySeats = new HashSet<>();   // ready-to-continue; used for both RESULT and SHOP
 
     public MatchHost(Match match) { this.match = match; }
 
@@ -66,12 +66,12 @@ public final class MatchHost {
     public synchronized Object submit(Action action) {
         Object result;
         switch (action) {
-            case Action.ReadyForNext a -> { requireShopPhase(a.actor()); shopReady.add(a.actor()); result = null; }
-            case Action.NotReady a     -> { requireShopPhase(a.actor()); shopReady.remove(a.actor()); result = null; }
+            case Action.ReadyForNext a -> { requireReadyPhase(a.actor()); readySeats.add(a.actor()); result = null; }
+            case Action.NotReady a     -> { requireReadyPhase(a.actor()); readySeats.remove(a.actor()); result = null; }
             default -> {
                 result = match.apply(action);
                 if (match.getPhase() == MatchPhase.SHOP && !(action instanceof Action.SubmitSinChoice))
-                    shopReady.remove(action.actor());   // acting implies not done
+                    readySeats.remove(action.actor());   // acting implies not done
             }
         }
         log.add(action);
@@ -79,10 +79,11 @@ public final class MatchHost {
         return result;
     }
 
-    private void requireShopPhase(PlayerId actor) {
+    private void requireReadyPhase(PlayerId actor) {
         match.getRun(actor);   // seat validation
-        if (match.getPhase() != MatchPhase.SHOP)
-            throw new IllegalStateException("readiness applies to the shop phase; phase is " + match.getPhase());
+        MatchPhase phase = match.getPhase();
+        if (phase != MatchPhase.RESULT && phase != MatchPhase.SHOP)
+            throw new IllegalStateException("readiness applies to the result or shop phase; phase is " + phase);
     }
 
     /** Crosses every barrier that just became passable: all seats chose, all rounds resolved, all done shopping. */
@@ -91,9 +92,10 @@ public final class MatchHost {
         while (advanced) {
             advanced = false;
             switch (match.getPhase()) {
-                case SELECTION -> { if (match.allChosen())                       { match.enterBlind();            advanced = true; } }
-                case BLIND     -> { if (allRoundsResolved())                     { match.toShop(); shopReady.clear(); advanced = true; } }
-                case SHOP      -> { if (shopReady.containsAll(match.getSeats()))  { match.nextBlind(); shopReady.clear(); advanced = true; } }
+                case SELECTION -> { if (match.allChosen())                        { match.enterBlind();          advanced = true; } }
+                case BLIND     -> { if (allRoundsResolved())                      { match.toResult(); readySeats.clear(); advanced = true; } }
+                case RESULT    -> { if (readySeats.containsAll(match.getSeats()))  { match.openShopsOrFinish(); readySeats.clear(); advanced = true; } }
+                case SHOP      -> { if (readySeats.containsAll(match.getSeats()))  { match.nextBlind(); readySeats.clear(); advanced = true; } }
                 default -> { }
             }
         }

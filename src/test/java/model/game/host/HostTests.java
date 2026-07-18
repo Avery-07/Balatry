@@ -37,7 +37,9 @@ public final class HostTests {
         host.submit(new Action.FinishRound(a));
         check("one resolved round is not enough", m.getPhase() == MatchPhase.BLIND);
         host.submit(new Action.FinishRound(b));
-        check("the last resolution opens the shops", m.getPhase() == MatchPhase.SHOP
+        check("the last resolution shows the result", m.getPhase() == MatchPhase.RESULT);
+        readyInto(host);
+        check("continuing opens the shops", m.getPhase() == MatchPhase.SHOP
                 && m.getRun(a).getShop() != null);
     }
 
@@ -47,10 +49,11 @@ public final class HostTests {
         host.start();
         Match m = host.getMatch();
         PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
-        checkThrows("readiness is shop-phase only", () -> host.submit(new Action.ReadyForNext(a)));
+        checkThrows("readiness needs the result or shop phase", () -> host.submit(new Action.ReadyForNext(a)));
         playInto(host);
         host.submit(new Action.FinishRound(a));
         host.submit(new Action.FinishRound(b));
+        readyInto(host);   // RESULT -> SHOP
 
         m.getRun(a).addMoney(20);
         host.submit(new Action.ReadyForNext(a));
@@ -67,6 +70,7 @@ public final class HostTests {
         playInto(host);
         host.submit(new Action.FinishRound(a));
         host.submit(new Action.FinishRound(b));
+        readyInto(host);   // RESULT -> SHOP
         host.submit(new Action.ReadyForNext(b));
         host.submit(new Action.NotReady(b));
         host.submit(new Action.ReadyForNext(a));
@@ -126,7 +130,7 @@ public final class HostTests {
                             && m.getRun(id).getRound().getOutcome() == RoundOutcome.IN_PROGRESS)
                         host.submit(new Action.FinishRound(id));
                 }
-            } else if (m.getPhase() == MatchPhase.SHOP) {
+            } else if (m.getPhase() == MatchPhase.RESULT || m.getPhase() == MatchPhase.SHOP) {
                 for (PlayerId id : m.getSeats()) host.submit(new Action.ReadyForNext(id));
             }
         }
@@ -135,6 +139,11 @@ public final class HostTests {
     /** Every seat chooses to play, crossing SELECTION -> BLIND. */
     private static void playInto(MatchHost host) {
         for (PlayerId id : host.getMatch().getSeats()) host.submit(new Action.PlayBlind(id));
+    }
+
+    /** Every seat continues, crossing RESULT -> SHOP (or SHOP -> next selection). */
+    private static void readyInto(MatchHost host) {
+        for (PlayerId id : host.getMatch().getSeats()) host.submit(new Action.ReadyForNext(id));
     }
 
     private static String fingerprint(Match m) {
