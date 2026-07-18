@@ -10,41 +10,42 @@ import java.util.random.RandomGenerator;
 /** The Balatry boss blinds. The five vanilla suit/face-debuff blinds (Club, Goad, Window, Plant, Head) are removed; The Water is retuned to −1 discard; and six new blinds are added (The Quartz, The Hivemind, The Commons, The Bandwagon, The Mirage, The Shave). */
 public enum BossBlind {
 
-    THE_HOOK     ("The Hook",      b -> b.afterPlayDiscard(2).playTriggered()),
-    THE_OX       ("The Ox",        b -> b.oxZeroMoney().playTriggered()),
-    THE_HOUSE    ("The House",     b -> b),                         // first hand drawn face down — cosmetic in a model layer
-    THE_WALL     ("The Wall",      b -> b.target(2)),               // 4× base chips (2× a normal boss)
-    THE_WHEEL    ("The Wheel",     b -> b),                         // 1 in 5 cards drawn face down — cosmetic
-    THE_ARM      ("The Arm",       b -> b.levelDownPlayed().playTriggered()),
-    THE_FISH     ("The Fish",      b -> b),                         // cards drawn face down after each hand — cosmetic
-    THE_PSYCHIC  ("The Psychic",   b -> b.mustPlayFive()),
-    THE_WATER    ("The Water",     b -> b.discards(-1)),            // start the round with one fewer discard (Balatry tweak)
-    THE_MANACLE  ("The Manacle",   b -> b.handSize(-1)),
-    THE_EYE      ("The Eye",       b -> b.noRepeatType()),
-    THE_MOUTH    ("The Mouth",     b -> b.singleType()),
-    THE_SERPENT  ("The Serpent",   b -> b.fixedDraw(3)),
-    THE_PILLAR   ("The Pillar",    b -> b.debuffAntePlayed()),      // cards played in this ante's earlier blinds are debuffed
-    THE_NEEDLE   ("The Needle",    b -> b.singleHand()),
-    THE_TOOTH    ("The Tooth",     b -> b.toothLoss().playTriggered()),
-    THE_FLINT    ("The Flint",     b -> b.halveBase()),
-    THE_MARK     ("The Mark",      b -> b),                         // face cards drawn face down (they still score) — cosmetic
+    THE_HOOK     ("The Hook",      "Discards 2 random held cards after each hand played", b -> b.afterPlayDiscard(2).playTriggered()),
+    THE_OX       ("The Ox",        "Playing your most-played hand type sets your money to $0", b -> b.oxZeroMoney().playTriggered()),
+    THE_HOUSE    ("The House",     "First hand is drawn face down", b -> b),
+    THE_WALL     ("The Wall",      "Extra-large blind (4× base chips)", b -> b.target(2)),
+    THE_WHEEL    ("The Wheel",     "1 in 5 cards drawn face down", b -> b),
+    THE_ARM      ("The Arm",       "Levels down the hand type you play", b -> b.levelDownPlayed().playTriggered()),
+    THE_FISH     ("The Fish",      "Cards drawn face down after each hand", b -> b),
+    THE_PSYCHIC  ("The Psychic",   "You must play 5 cards each hand", b -> b.mustPlayFive()),
+    THE_WATER    ("The Water",     "Start the round with 1 fewer discard", b -> b.discards(-1)),
+    THE_MANACLE  ("The Manacle",   "−1 hand size this round", b -> b.handSize(-1)),
+    THE_EYE      ("The Eye",       "No repeat hand types this round", b -> b.noRepeatType()),
+    THE_MOUTH    ("The Mouth",     "Only one hand type may be played", b -> b.singleType()),
+    THE_SERPENT  ("The Serpent",   "Always draw 3 cards after a play or discard", b -> b.fixedDraw(3)),
+    THE_PILLAR   ("The Pillar",    "Cards played in this ante's earlier blinds are debuffed", b -> b.debuffAntePlayed()),
+    THE_NEEDLE   ("The Needle",    "Only one hand", b -> b.singleHand()),
+    THE_TOOTH    ("The Tooth",     "Lose $1 per card played", b -> b.toothLoss().playTriggered()),
+    THE_FLINT    ("The Flint",     "Base chips and mult are halved", b -> b.halveBase()),
+    THE_MARK     ("The Mark",      "Face cards are drawn face down", b -> b),
 
     // New Balatry regular blinds. The Quartz and The Mirage are single-player, resolved in Round/RoundSettlement.
-    THE_QUARTZ   ("The Quartz",    b -> b.randomDebuffOneIn(7)),    // ~1 in 7 of your cards are debuffed this round
-    THE_HIVEMIND ("The Hivemind",  b -> b.crossPlayer()),           // debuff the most-played hand type across all players
-    THE_COMMONS  ("The Commons",   b -> b.crossPlayer()),           // all players share one discard pool (sum of their discards)
-    THE_BANDWAGON("The Bandwagon", b -> b.crossPlayer()),           // debuff the joker owned by the most players
-    THE_MIRAGE   ("The Mirage",    b -> b.dropOwnHighest()),       // your highest-scoring hand is excluded from your final score
-    THE_SHAVE    ("The Shave",     b -> b.crossPlayer().dropGlobalHighest()),  // only the single highest hand across all players is excluded
+    THE_QUARTZ   ("The Quartz",    "~1 in 7 of your cards are debuffed this round", b -> b.randomDebuffOneIn(7)),
+    THE_HIVEMIND ("The Hivemind",  "Debuffs the most-played hand type across all players", b -> b.crossPlayer()),
+    THE_COMMONS  ("The Commons",   "All players share one discard pool", b -> b.crossPlayer()),
+    THE_BANDWAGON("The Bandwagon", "Debuffs the joker owned by the most players", b -> b.crossPlayer()),
+    THE_MIRAGE   ("The Mirage",    "Your highest-scoring hand is excluded from your score", b -> b.dropOwnHighest()),
+    THE_SHAVE    ("The Shave",     "Only the single highest hand across all players is excluded", b -> b.crossPlayer().dropGlobalHighest()),
 
     // Finishers (base game: every 8th ante). Included for completeness; with antes 1-7 they are not selected.
-    AMBER_ACORN  ("Amber Acorn",   b -> b.finisher().shuffleJokers()),   // board order randomized at the deal (the flip is informational)
-    VERDANT_LEAF ("Verdant Leaf",  b -> b.finisher().debuffUntilJokerSold()),
-    VIOLET_VESSEL("Violet Vessel", b -> b.finisher().target(3)),    // 6× base chips (3× a normal boss)
-    CRIMSON_HEART("Crimson Heart", b -> b.finisher().disableJokerPerHand()),   // a different random joker is disabled each hand
-    CERULEAN_BELL("Cerulean Bell", b -> b.finisher().forceCardSelection());    // one card is forced into every play and discard
+    AMBER_ACORN  ("Amber Acorn",   "Joker board order is randomized at the deal", b -> b.finisher().shuffleJokers()),
+    VERDANT_LEAF ("Verdant Leaf",  "All cards are debuffed until a joker is sold", b -> b.finisher().debuffUntilJokerSold()),
+    VIOLET_VESSEL("Violet Vessel", "Extra-large blind (6× base chips)", b -> b.finisher().target(3)),
+    CRIMSON_HEART("Crimson Heart", "A different random joker is disabled each hand", b -> b.finisher().disableJokerPerHand()),
+    CERULEAN_BELL("Cerulean Bell", "One card is forced into every play and discard", b -> b.finisher().forceCardSelection());
 
     private final String displayName;
+    private final String effect;
     private int targetMultiplier = 1;
     private int handSizeDelta = 0;
     private int fixedDraw = 0;
@@ -58,8 +59,9 @@ public enum BossBlind {
     private boolean debuffAntePlayed, jokerPerHand, forcedSelection, shuffleJokers;
     private Predicate<DeckCard> debuff = c -> false;
 
-    BossBlind(String displayName, UnaryOperator<BossBlind> define) {
+    BossBlind(String displayName, String effect, UnaryOperator<BossBlind> define) {
         this.displayName = displayName;
+        this.effect = effect;
         define.apply(this);   // enum constants are singletons; the builder mutates this instance once
     }
 
@@ -92,6 +94,8 @@ public enum BossBlind {
 
     // --- accessors ---
     public String displayName()              { return displayName; }
+    /** A short, human-readable description of this boss's effect, for the blind-selection screen. */
+    public String effect()                   { return effect; }
     public int targetMultiplier()            { return targetMultiplier; }
     public int handSizeDelta()               { return handSizeDelta; }
     public int fixedDraw()                   { return fixedDraw; }

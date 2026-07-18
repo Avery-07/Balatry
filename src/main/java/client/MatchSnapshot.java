@@ -1,6 +1,13 @@
 package client;
 
+import model.cards.Card;
 import model.cards.DeckCard;
+import model.cards.jokers.JokerCard;
+import model.cards.packs.BoosterPack;
+import model.cards.vouchers.Voucher;
+import model.game.Blind;
+import model.game.BlindTargets;
+import model.game.BossBlind;
 import model.game.Match;
 import model.game.MatchPhase;
 import model.game.Standings;
@@ -28,9 +35,10 @@ import java.util.List;
  *       filtering is a <em>policy</em>, not enforcement. A server-authoritative variant that pushes per-seat
  *       filtered frames would make it a real boundary; until then, this class simply declines to read what it
  *       shouldn't show.</li>
- *   <li>Fields are captured as display strings (via {@link String#valueOf}) rather than live model objects, so
- *       a snapshot is a frozen, render-safe value that never dereferences the mutating model after it is built.
- *       {@link #of} must be called on the FX thread (see {@code MatchViewModel}), so it reads a settled model.</li>
+ *   <li>Fields are captured as display values (often via {@link String#valueOf}) rather than live model objects,
+ *       so a snapshot is a frozen, render-safe value that never dereferences the mutating model after it is
+ *       built. {@link #of} must be called on the FX thread (see {@code MatchViewModel}), so it reads a settled
+ *       model.</li>
  * </ul>
  */
 public record MatchSnapshot(
@@ -39,16 +47,20 @@ public record MatchSnapshot(
         MatchPhase phase,
         int ante,
         int anteCount,
+        int roundNumber,           // cumulative blind count across the match (Balatro's "Round")
         String blind,
         long target,
         String activeSin,
         String boss,
         String skipTag,
         long money,
+        int hands,                 // hands available now: the round's remaining, or the base outside a round
+        int discards,              // discards available now: the round's remaining, or the base outside a round
         RoundView round,           // null outside a round
-        List<String> hand,
+        List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
         List<String> jokers,
         List<ItemView> inventory,  // consumables and relics as one indexed area; relics carry their casting demands
+        List<BlindOption> blinds,  // the ante's three blinds, for the selection screen (empty outside SELECTION)
         boolean inShop,
         ShopView shop,             // null outside the shop phase
         boolean hasChosen,         // this seat has made its blind-selection choice
@@ -62,6 +74,19 @@ public record MatchSnapshot(
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
+
+    /** One card in hand, with rank/suit ordinals so the client can offer sort-by-rank and sort-by-suit. */
+    public record HandCardView(String label, int rank, int suit) { }
+
+    /**
+     * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
+     * and — for the boss — its name and effect (locked at ante start, so it is known even on the small blind).
+     * {@code current} marks the blind actually being selected; {@code skipTag} is the tag skipping it would grant
+     * (only the current blind can be skipped, so it is null on the others).
+     */
+    public record BlindOption(String type, long target, int reward,
+                              String bossName, String bossEffect,
+                              boolean current, String skipTag) { }
 
     /**
      * One held inventory item — a consumable or a relic — as the client sees it. Relics and consumables share a
@@ -80,11 +105,17 @@ public record MatchSnapshot(
     public record ResultView(String outcome, String score, long target, String bestHand,
                              int handsRemaining, int moneyEarned) { }
 
-    /** Shop contents for the local seat, present only during the shop phase. Prices index-align with the lists. */
+    /** One purchasable shop card/pack: its name, price, and the hover text (name, category, cost). */
+    public record ShopItem(String label, int price, String tooltip) { }
+
+    /** One offered voucher: name, price, hover text, and whether it can be redeemed now (one per ante). */
+    public record VoucherItem(String label, int price, String tooltip, boolean redeemable) { }
+
+    /** Shop contents for the local seat, present only during the shop phase. */
     public record ShopView(
-            List<String> slots, List<Integer> slotPrices,
-            List<String> packs, List<Integer> packPrices,
-            List<String> vouchers,
+            List<ShopItem> slots,
+            List<ShopItem> packs,
+            List<VoucherItem> vouchers,
             int rerollCost, int purchasesRemaining) { }
 
     /** Builds a snapshot from the client's local host. Call on the FX thread. */
@@ -98,6 +129,10 @@ public record MatchSnapshot(
                 : new RoundView(r.getHandsRemaining(), r.getDiscardsRemaining(),
                                 String.valueOf(r.getScore()), r.getTarget(),
                                 r.getOutcome() == RoundOutcome.IN_PROGRESS && !r.isActed());
+
+        // HUD hands/discards are shown in every phase: the round's live counts during a blind, the base otherwise.
+        int hands    = (r != null) ? r.getHandsRemaining()    : run.getBaseHands();
+        int discards = (r != null) ? r.getDiscardsRemaining() : run.getBaseDiscards();
 
         Standings standings = match.getStandings();
         List<PlayerId> ranking = standings.ranking();
@@ -131,7 +166,7 @@ public record MatchSnapshot(
         ShopView shopView = null;
         if (inShop) {
             Shop shop = run.getShop();
-            if (shop != null) shopView = buildShop(shop);
+            if (shop != null) shopView = buildShop(shop, run);
         }
 
         return new MatchSnapshot(
@@ -140,16 +175,20 @@ public record MatchSnapshot(
                 match.getPhase(),
                 match.getAnte(),
                 match.getAnteCount(),
+                match.getRoundNumber(),
                 String.valueOf(match.getBlind()),
                 match.getCurrentTarget(),
                 String.valueOf(match.getActiveSin()),
                 match.getCurrentBoss() == null ? null : String.valueOf(match.getCurrentBoss()),
                 String.valueOf(match.getCurrentTag()),
                 run.getMoney(),
+                hands,
+                discards,
                 roundView,
-                display(run.getHeld()),
+                hand(run),
                 display(run.getJokers()),
                 inventory(run),
+                blindOptions(match),
                 inShop,
                 shopView,
                 hasChosen,
@@ -158,25 +197,85 @@ public record MatchSnapshot(
                 opponents);
     }
 
-    private static ShopView buildShop(Shop shop) {
-        List<String> slots = new ArrayList<>();
-        List<Integer> slotPrices = new ArrayList<>();
+    /** The seat's hand as structured cards, in model order (index i here is index i in the round's hand). */
+    private static List<HandCardView> hand(Run run) {
+        List<HandCardView> out = new ArrayList<>();
+        for (DeckCard c : run.getHeld())
+            out.add(new HandCardView(describe(c), c.getRank().ordinal(), c.getSuit().ordinal()));
+        return out;
+    }
+
+    /** The ante's three blinds for the selection screen; empty unless the match is in SELECTION. */
+    private static List<BlindOption> blindOptions(Match match) {
+        if (match.getPhase() != MatchPhase.SELECTION) return List.of();
+        List<BlindOption> out = new ArrayList<>();
+        BossBlind anteBoss = match.getAnteBoss();
+        for (Blind b : Blind.values()) {
+            long tgt = BlindTargets.target(match.getAnte(), b);
+            String bossName = null, bossEffect = null;
+            if (b == Blind.BOSS && anteBoss != null) {
+                tgt = tgt * anteBoss.targetMultiplier();
+                bossName = anteBoss.displayName();
+                bossEffect = anteBoss.effect();
+            }
+            boolean current = b == match.getBlind();
+            String tag = current ? String.valueOf(match.getCurrentTag()) : null;
+            out.add(new BlindOption(blindType(b), tgt, b.getReward(), bossName, bossEffect, current, tag));
+        }
+        return out;
+    }
+
+    private static String blindType(Blind b) {
+        return switch (b) {
+            case SMALL -> "Small Blind";
+            case BIG   -> "Big Blind";
+            case BOSS  -> "Boss Blind";
+        };
+    }
+
+    private static ShopView buildShop(Shop shop, Run run) {
+        List<ShopItem> slots = new ArrayList<>();
         for (int i = 0; i < shop.getSlotCount(); i++) {
-            slots.add(describe(shop.getSlot(i)));
-            slotPrices.add(shop.slotPrice(i));
+            Card c = shop.getSlot(i);
+            int price = shop.slotPrice(i);
+            slots.add(new ShopItem(nameOf(c), price, tooltip(nameOf(c), categoryOf(c), price)));
         }
-        List<String> packs = new ArrayList<>();
-        List<Integer> packPrices = new ArrayList<>();
+        List<ShopItem> packs = new ArrayList<>();
         for (int i = 0; i < shop.getPackCount(); i++) {
-            packs.add(String.valueOf(shop.getPack(i)));
-            packPrices.add(shop.packPrice(i));
+            BoosterPack p = shop.getPack(i);
+            int price = shop.packPrice(i);
+            String label = String.valueOf(p);
+            packs.add(new ShopItem(label, price, tooltip(label, "Booster Pack", price)));
         }
-        List<String> vouchers = new ArrayList<>();
+        List<VoucherItem> vouchers = new ArrayList<>();
         for (int i = 0; i < shop.getVoucherCount(); i++) {
-            vouchers.add(String.valueOf(shop.getVoucher(i)));
+            Voucher v = shop.getVoucher(i);
+            int price = v.getSpec().getCost();
+            String label = v.getSpec().getName();
+            vouchers.add(new VoucherItem(label, price, tooltip(label, "Voucher", price), run.canRedeem(v)));
         }
-        return new ShopView(slots, slotPrices, packs, packPrices, vouchers,
-                shop.rerollCost(), shop.purchasesRemaining());
+        return new ShopView(slots, packs, vouchers, shop.rerollCost(), shop.purchasesRemaining());
+    }
+
+    /** Hover text (name, category, cost) — the "for now" description until specs carry authored text. */
+    private static String tooltip(String name, String category, int price) {
+        return name + "\n" + category + "\nCost: $" + price;
+    }
+
+    /** The purchasable card's display name (spec name for jokers/consumables/relics; toString otherwise). */
+    private static String nameOf(Card c) {
+        if (c instanceof JokerCard j)         return j.getSpec().getName();
+        if (c instanceof ConsumableCard con)  return con.getSpec().getName();
+        if (c instanceof RelicCard rel)       return rel.getSpec().getName();
+        return String.valueOf(c);
+    }
+
+    /** A short category label for a shop card, for the hover text. */
+    private static String categoryOf(Card c) {
+        if (c instanceof JokerCard j)         return "Joker · " + j.getSpec().getRarity();
+        if (c instanceof ConsumableCard con)  return String.valueOf(con.getSpec().getType());
+        if (c instanceof RelicCard rel)       return "Relic · " + rel.getSpec().getKind();
+        return "Card";
     }
 
     /**

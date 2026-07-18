@@ -72,6 +72,7 @@ public final class Match {
     private final SinTableState sinTableState = new SinTableState();   // table-level, ante-scoped state owned by the active sin
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
+    private BossBlind anteBoss;                     // the boss that will close the current ante; locked at ante start so its effect shows during blind selection
     private BossBehavior bossBehavior = BossBehavior.NONE;   // the boss's Match-level behaviour; NONE outside boss rounds
     private SkipTag currentTag;                    // the tag this blind offers for skipping (table-level, seeded)
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
@@ -140,6 +141,12 @@ public final class Match {
     /** The boss for the current BOSS blind, or {@code null} on small/big blinds. */
     public BossBlind getCurrentBoss() { return currentBoss; }
 
+    /** The boss that will close the current ante, locked at ante start (visible on every blind's selection screen). */
+    public BossBlind getAnteBoss() { return anteBoss; }
+
+    /** Cumulative blind count across the match: ante 1 Small = 1, Big = 2, Boss = 3, ante 2 Small = 4, and so on. */
+    public int getRoundNumber() { return ante < 1 ? 0 : (ante - 1) * 3 + blind.ordinal() + 1; }
+
     /** The most recent blind's results by seat, empty before the first cash-out. */
     public Map<PlayerId, BlindResult> getResults() { return Map.copyOf(lastResults); }
 
@@ -167,6 +174,7 @@ public final class Match {
         require(MatchPhase.LOBBY, "start");
         ante = 1;
         blind = Blind.SMALL;
+        anteBoss = selectBoss();   // lock this ante's boss up front so its effect is visible during blind selection
         activeSin = sinSelector.selectFor(ante, rng);
         for (Player p : players.values()) p.run().beginAnte();
         refreshSinForAnte();
@@ -274,6 +282,7 @@ public final class Match {
             case BOSS  -> {
                 ante++;
                 blind = Blind.SMALL;
+                anteBoss = selectBoss();   // lock the new ante's boss up front (after any Metabole reroll armed last ante)
                 activeSin = sinSelector.selectFor(ante, rng);
                 for (Player p : players.values()) p.run().beginAnte();
                 refreshSinForAnte();
@@ -293,7 +302,7 @@ public final class Match {
 
     /** Picks the blind's table-level context (boss, tag) so its target and reward are known before play. */
     private void setupBlind() {
-        currentBoss = (blind == Blind.BOSS) ? selectBoss() : null;   // table-level: same boss for every seat
+        currentBoss = (blind == Blind.BOSS) ? anteBoss : null;       // table-level: this ante's boss, locked at ante start
         currentTag = selectTag();                                    // table-level: the same skip reward for every seat
     }
 

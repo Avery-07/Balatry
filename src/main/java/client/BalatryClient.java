@@ -3,11 +3,13 @@ package client;
 import debug.Log;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -22,28 +24,53 @@ import model.game.player.PlayerId;
 import model.game.scoring.HandType;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
- * The Balatry debug client. Connects to a {@link MatchServer} and renders the local seat's {@link MatchSnapshot}
- * as a status panel with phase-appropriate controls, mirroring the four game menus:
+ * The Balatry client. Connects to a {@link MatchServer} and renders the local seat's {@link MatchSnapshot} as a
+ * persistent HUD (always showing hands, discards, money, ante, round, jokers and consumables) plus one
+ * phase-appropriate panel:
  * <ul>
- *   <li><b>Selection</b> ({@code SELECTION}) — Play Blind / Skip Blind, showing the target and skip tag; after
- *       choosing, the seat waits at the enter-blind barrier for the others.</li>
- *   <li><b>Blind</b> ({@code BLIND}) — clickable toggle cards with play / discard / finish.</li>
- *   <li><b>Shop</b> ({@code SHOP}) — indexed listing with buy / sell / reroll / ready, and the just-finished
- *       blind's result summary at the top (the Result menu is folded in here for now).</li>
+ *   <li><b>Selection</b> — the ante's three blinds side by side, each with its type/effect, chip target and cash
+ *       reward; Select and Skip are live only on the current blind.</li>
+ *   <li><b>Blind</b> — the dealt hand as clickable cards, sort-by-rank / sort-by-suit, and play / discard /
+ *       finish.</li>
+ *   <li><b>Shop</b> — clickable item tiles (cards, packs, vouchers) with name and price; hover for details.
+ *       Click an item, then Buy. Reroll and Ready need no selection.</li>
  * </ul>
- * Every gesture routes through {@link MatchViewModel} and returns as a broadcast frame that repaints the panel;
- * the terminal {@link Log} shows the ordered action stream. Connection setup from system properties, matching
- * {@code ServerMain}: {@code -Dbalatry.host -Dbalatry.port -Dbalatry.seed -Dbalatry.players}.
+ * Every gesture routes through {@link MatchViewModel} and returns as a broadcast frame that repaints the panel.
+ * Connection setup from system properties, matching {@code ServerMain}: {@code -Dbalatry.host -Dbalatry.port
+ * -Dbalatry.seed -Dbalatry.players}.
  */
 public final class BalatryClient extends Application {
 
     private static final int MAX_SELECTION = 5;
+
+    private MatchViewModel vm;
+    private MatchSnapshot snapshot;      // latest published snapshot; read by gesture handlers on the FX thread
     private MatchPhase lastPhase;
-    private MatchSnapshot snapshot;   // latest published snapshot; read by gesture handlers on the FX thread
-    private boolean resultContinued;   // this seat has hit Continue on the current result screen
+    private boolean resultContinued;     // this seat has hit Continue on the current result screen
+    private int handSort;                // 0 = dealt order, 1 = by rank, 2 = by suit (kept across repaints)
+
+    // Shop selection: which offered item is armed for the next Buy. kind is "slot" | "pack" | "voucher".
+    private String shopSelKind;
+    private int shopSelIndex = -1;
+
+    // --- persistent nodes updated on every snapshot ---
+    private final Label hudTop = new Label();
+    private final Label hudStats = new Label();
+    private final Label hudJokers = new Label();
+    private final Label hudConsumables = new Label();
+    private final Label hudOpponents = new Label();
+    private final Label status = new Label();
+
+    private final FlowPane selectionTiles = new FlowPane(10, 10);
+    private final FlowPane handRow = new FlowPane(6, 6);
+    private final FlowPane shopSlots = new FlowPane(8, 8);
+    private final FlowPane shopPacks = new FlowPane(8, 8);
+    private final FlowPane shopVouchers = new FlowPane(8, 8);
+    private final List<ToggleButton> cards = new ArrayList<>();
 
     @Override
     public void start(Stage stage) {
@@ -52,36 +79,52 @@ public final class BalatryClient extends Application {
         long seed = Long.parseLong(System.getProperty("balatry.seed", "42"));
         List<String> players = List.of(System.getProperty("balatry.players", "P0,P1").split(","));
 
-        Label status = new Label("Connecting to " + host + ":" + port + " \u2026");
-        status.setStyle("-fx-font-family: monospace; -fx-font-size: 13px;");
+        hudTop.setStyle("-fx-font-family: monospace; -fx-font-size: 14px; -fx-font-weight: bold;");
+        hudStats.setStyle("-fx-font-family: monospace; -fx-font-size: 13px;");
+        hudJokers.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
+        hudConsumables.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
+        hudOpponents.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        status.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
         status.setWrapText(true);
+        for (Label l : List.of(hudJokers, hudConsumables, hudOpponents)) l.setWrapText(true);
+
+        VBox hud = new VBox(3, hudTop, hudStats, hudJokers, hudConsumables);
+        hud.setStyle("-fx-padding: 8; -fx-border-color: #888; -fx-border-width: 1;");
 
         // --- SELECTION panel ---
-        Button playBlind = new Button("Play Blind");
-        Button skipBlind = new Button("Skip Blind");
-        HBox selectionButtons = new HBox(8);
-        selectionButtons.getChildren().addAll(playBlind, skipBlind);
-        VBox selectionPanel = new VBox(8);
-        selectionPanel.getChildren().addAll(selectionButtons);
+        VBox selectionPanel = titled("Blind Selection", selectionTiles);
 
         // --- BLIND panel ---
-        FlowPane handRow = new FlowPane(6, 6);
-        final List<ToggleButton> cards = new ArrayList<>();
+        Button sortRank = new Button("Sort by Rank");
+        Button sortSuit = new Button("Sort by Suit");
         Button play = new Button("Play");
         Button discard = new Button("Discard");
         Button finish = new Button("Finish Round");
-        HBox blindButtons = new HBox(8);
-        blindButtons.getChildren().addAll(play, discard, finish);
-        VBox blindPanel = new VBox(8);
-        blindPanel.getChildren().addAll(handRow, blindButtons);
+        HBox sortButtons = new HBox(8, sortRank, sortSuit);
+        HBox blindButtons = new HBox(8, play, discard, finish);
+        VBox blindPanel = titled("Blind", new VBox(8, handRow, sortButtons, blindButtons));
 
         // --- RESULT panel ---
+        Label resultText = new Label();
+        resultText.setStyle("-fx-font-family: monospace; -fx-font-size: 13px;");
         Button continueToShop = new Button("Continue");
-        VBox resultPanel = new VBox(8);
-        resultPanel.getChildren().addAll(continueToShop);
+        VBox resultPanel = titled("Result", new VBox(8, resultText, continueToShop));
 
-        // --- INVENTORY panel (usable in every playable phase, not just the shop) ---
-        // Consumables and relics are one indexed area; the seat/choice boxes matter only for aimed relics.
+        // --- SHOP panel ---
+        Button buy = new Button("Buy");
+        Button reroll = new Button("Reroll");
+        Button ready = new Button("Ready");
+        Button notReady = new Button("Not Ready");
+        HBox shopButtons = new HBox(8, buy, reroll, ready, notReady);
+        Label rerollLabel = new Label();
+        rerollLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
+        VBox shopPanel = titled("Shop", new VBox(8,
+                new Label("Cards"), shopSlots,
+                new Label("Packs"), shopPacks,
+                new Label("Vouchers"), shopVouchers,
+                rerollLabel, shopButtons));
+
+        // --- INVENTORY actions (use / sell a held consumable or relic; usable in every playable phase) ---
         TextField itemIndex = new TextField();
         itemIndex.setPromptText("item #");
         TextField relicSeat = new TextField();
@@ -89,137 +132,305 @@ public final class BalatryClient extends Application {
         TextField relicChoice = new TextField();
         relicChoice.setPromptText("rank / suit / slot / hand");
         Button useItem = new Button("Use");
-        HBox itemRow = new HBox(8);
-        itemRow.getChildren().addAll(itemIndex, relicSeat, relicChoice, useItem);
-
+        Button sellItem = new Button("Sell");
         TextField moveFrom = new TextField();
         moveFrom.setPromptText("from");
         TextField moveTo = new TextField();
         moveTo.setPromptText("to");
         Button moveJoker = new Button("Move Joker");
-        HBox moveRow = new HBox(8);
-        moveRow.getChildren().addAll(moveFrom, moveTo, moveJoker);
+        VBox inventoryPanel = titled("Inventory Actions", new VBox(8,
+                new HBox(8, itemIndex, relicSeat, relicChoice, useItem, sellItem),
+                new HBox(8, moveFrom, moveTo, moveJoker)));
 
-        VBox inventoryPanel = new VBox(8);
-        inventoryPanel.getChildren().addAll(itemRow, moveRow);
-
-        // --- SHOP panel ---
-        TextField shopIndex = new TextField();
-        shopIndex.setPromptText("index for buy/sell/voucher");
-        Button buyCard = new Button("Buy Card");
-        Button buyPack = new Button("Buy Pack");
-        Button voucher = new Button("Redeem Voucher");
-        Button reroll = new Button("Reroll");
-        Button sellJoker = new Button("Sell Joker");
-        Button sellItem = new Button("Sell Item");
-        Button ready = new Button("Ready");
-        Button notReady = new Button("Not Ready");
-        HBox shopBuy = new HBox(8);
-        shopBuy.getChildren().addAll(buyCard, buyPack, voucher, reroll);
-        HBox shopSell = new HBox(8);
-        shopSell.getChildren().addAll(sellJoker, sellItem, ready, notReady);
-        VBox shopPanel = new VBox(8);
-        shopPanel.getChildren().addAll(shopIndex, shopBuy, shopSell);
-
-        VBox root = new VBox(10);
-        root.setStyle("-fx-padding: 12;");
-        root.getChildren().addAll(status, selectionPanel, blindPanel, resultPanel, inventoryPanel, shopPanel);
+        VBox root = new VBox(10, hud, selectionPanel, blindPanel, resultPanel, shopPanel, inventoryPanel, hudOpponents, status);
+        root.setPadding(new Insets(12));
 
         ScrollPane scroller = new ScrollPane(root);
         scroller.setFitToWidth(true);
-        stage.setTitle("Balatry \u2014 debug view");
-        stage.setScene(new Scene(scroller, 620, 840));
+        stage.setTitle("Balatry — client");
+        stage.setScene(new Scene(scroller, 720, 900));
         stage.show();
 
-        final MatchViewModel[] vmRef = new MatchViewModel[1];
         try {
             MatchClient client = MatchClient.connect(
                     host, port, seed, players,
-                    err -> { Log.error(err); Platform.runLater(() -> status.setText("ERR: " + err + "\n\n" + status.getText())); },
-                    a -> { MatchViewModel v = vmRef[0]; if (v != null) { Log.recv(a, v.seat()); v.onFrameApplied(); } });
+                    err -> { Log.error(err); Platform.runLater(() -> hint("ERR: " + err)); },
+                    a -> { if (vm != null) { Log.recv(a, vm.seat()); vm.onFrameApplied(); } });
 
-            MatchViewModel vm = new MatchViewModel(client);
-            vmRef[0] = vm;
+            vm = new MatchViewModel(client);
 
-            playBlind.setOnAction(e -> vm.playBlind());
-            skipBlind.setOnAction(e -> vm.skipBlind());
-            continueToShop.setOnAction(e -> { resultContinued = true; vm.readyForNext(); });
-
-            useItem.setOnAction(e -> withIndex(itemIndex, status, i -> {
-                MatchSnapshot.ItemView item = itemAt(i, status);
-                if (item == null) return;
-                if (item.isRelic()) {
-                    RelicTarget target = buildRelicTarget(vm, item, relicSeat.getText(), relicChoice.getText(), status);
-                    if (target != null) vm.useRelic(item.modelIndex(), target);
-                } else {
-                    vm.useConsumable(item.modelIndex(), selectedIndices(cards));   // selected hand cards are the targets
-                }
-            }));
-            moveJoker.setOnAction(e -> withIndex(moveFrom, status,
-                    from -> withIndex(moveTo, status, to -> vm.moveJoker(from, to))));
-
-            play.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "play")) vm.playHand(s); });
-            discard.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "discard")) vm.discard(s); });
+            // Blind phase.
+            sortRank.setOnAction(e -> { handSort = 1; rebuildHand(); });
+            sortSuit.setOnAction(e -> { handSort = 2; rebuildHand(); });
+            play.setOnAction(e -> { List<Integer> s = selectedIndices(); if (guardSel(s, "play")) vm.playHand(s); });
+            discard.setOnAction(e -> { List<Integer> s = selectedIndices(); if (guardSel(s, "discard")) vm.discard(s); });
             finish.setOnAction(e -> vm.finishRound());
 
-            buyCard.setOnAction(e -> withIndex(shopIndex, status, vm::buyCard));
-            buyPack.setOnAction(e -> withIndex(shopIndex, status, vm::buyPack));
-            voucher.setOnAction(e -> withIndex(shopIndex, status, vm::redeemVoucher));
+            // Result phase.
+            continueToShop.setOnAction(e -> { resultContinued = true; vm.readyForNext(); });
+
+            // Shop phase.
+            buy.setOnAction(e -> buySelectedShopItem());
             reroll.setOnAction(e -> vm.rerollShop());
-            sellJoker.setOnAction(e -> withIndex(shopIndex, status, vm::sellJoker));
-            sellItem.setOnAction(e -> withIndex(shopIndex, status, i -> {
-                MatchSnapshot.ItemView item = itemAt(i, status);
+            ready.setOnAction(e -> vm.readyForNext());
+            notReady.setOnAction(e -> vm.notReady());
+
+            // Inventory actions.
+            useItem.setOnAction(e -> withIndex(itemIndex, i -> {
+                MatchSnapshot.ItemView item = itemAt(i);
+                if (item == null) return;
+                if (item.isRelic()) {
+                    RelicTarget target = buildRelicTarget(item, relicSeat.getText(), relicChoice.getText());
+                    if (target != null) vm.useRelic(item.modelIndex(), target);
+                } else {
+                    vm.useConsumable(item.modelIndex(), selectedIndices());   // selected hand cards are the targets
+                }
+            }));
+            sellItem.setOnAction(e -> withIndex(itemIndex, i -> {
+                MatchSnapshot.ItemView item = itemAt(i);
                 if (item == null) return;
                 if (item.isRelic()) vm.sellRelic(item.modelIndex());
                 else vm.sellConsumable(item.modelIndex());
             }));
-            ready.setOnAction(e -> vm.readyForNext());
-            notReady.setOnAction(e -> vm.notReady());
+            moveJoker.setOnAction(e -> withIndex(moveFrom, from -> withIndex(moveTo, to -> vm.moveJoker(from, to))));
 
             vm.snapshotProperty().addListener((obs, old, snap) -> {
                 snapshot = snap;
-                status.setText(render(snap));
-                rebuildHand(handRow, cards, snap, status);
+                if (snap == null) return;
 
-                MatchPhase phase = snap == null ? null : snap.phase();
-                if (phase != lastPhase) { Log.phase(lastPhase, phase); lastPhase = phase; }
+                MatchPhase phase = snap.phase();
+                if (phase != lastPhase) { Log.phase(lastPhase, phase); lastPhase = phase; handSort = 0; }
+                if (phase != MatchPhase.RESULT) resultContinued = false;
 
-                if (phase != MatchPhase.RESULT) resultContinued = false;   // reset when the result screen closes
+                updateHud(snap);
+                rebuildSelection(snap);
+                rebuildHand();
+                rebuildShop(snap, rerollLabel);
+                resultText.setText(resultSummary(snap));
 
                 boolean inSelection = phase == MatchPhase.SELECTION;
                 boolean inBlind = phase == MatchPhase.BLIND && snap.round() != null;
                 boolean inResult = phase == MatchPhase.RESULT;
                 boolean inShop = phase == MatchPhase.SHOP;
+                boolean playable = inSelection || inBlind || inResult || inShop;
+
                 show(selectionPanel, inSelection);
                 show(blindPanel, inBlind);
                 show(resultPanel, inResult);
                 show(shopPanel, inShop);
+                show(inventoryPanel, playable);
 
                 continueToShop.setDisable(!inResult || resultContinued);
-
-                boolean canUseItems = phase == MatchPhase.SELECTION || phase == MatchPhase.BLIND
-                        || phase == MatchPhase.RESULT || phase == MatchPhase.SHOP;
-                show(inventoryPanel, canUseItems);
-
-                // In selection, buttons are live only until this seat has chosen.
-                boolean canChoose = inSelection && !snap.hasChosen();
-                playBlind.setDisable(!canChoose);
-                skipBlind.setDisable(!canChoose);
-
                 play.setDisable(!inBlind);
                 discard.setDisable(!inBlind);
                 finish.setDisable(!inBlind);
+                sortRank.setDisable(!inBlind);
+                sortSuit.setDisable(!inBlind);
+                buy.setDisable(!inShop);
+                reroll.setDisable(!inShop);
+                ready.setDisable(!inShop);
+                notReady.setDisable(!inShop);
             });
             vm.refresh();
         } catch (Exception e) {
-            status.setText("Failed to connect: " + e.getMessage());
+            hint("Failed to connect: " + e.getMessage());
         }
     }
 
+    // --- HUD ------------------------------------------------------------------
+
+    private void updateHud(MatchSnapshot s) {
+        hudTop.setText("SEAT " + s.seat() + " (" + s.name() + ")   —   " + s.phase());
+        hudStats.setText(String.format("Ante %d/%d   Round %d   $%d   Hands %d   Discards %d   Sin: %s",
+                s.ante(), s.anteCount(), s.roundNumber(), s.money(), s.hands(), s.discards(), s.activeSin()));
+        hudJokers.setText("Jokers: " + (s.jokers().isEmpty() ? "(none)" : String.join(", ", s.jokers())));
+
+        StringBuilder cons = new StringBuilder("Consumables: ");
+        if (s.inventory().isEmpty()) cons.append("(none)");
+        else for (int i = 0; i < s.inventory().size(); i++) {
+            MatchSnapshot.ItemView it = s.inventory().get(i);
+            if (i > 0) cons.append("   ");
+            cons.append('[').append(i).append("] ").append(it.label());
+            if (it.isRelic()) {
+                cons.append(" — ").append(targeting(it.kind()));
+                if (!"NONE".equals(it.selector()))
+                    cons.append(", ").append(it.selector().toLowerCase().replace('_', ' '));
+            }
+        }
+        hudConsumables.setText(cons.toString());
+
+        StringBuilder opp = new StringBuilder();
+        for (MatchSnapshot.OpponentView o : s.opponents()) {
+            if (opp.length() > 0) opp.append("    ");
+            opp.append('#').append(o.seat()).append(' ').append(o.name())
+               .append(" — ").append(o.points()).append(" pts (rank ")
+               .append(o.rank() < 0 ? "-" : (o.rank() + 1)).append(')');
+        }
+        hudOpponents.setText(s.phase() == MatchPhase.FINISHED ? standingsSummary(s)
+                : "opponents:  " + (opp.length() == 0 ? "(none)" : opp));
+    }
+
+    private static String standingsSummary(MatchSnapshot s) {
+        StringBuilder b = new StringBuilder("=== MATCH OVER ===\n");
+        for (MatchSnapshot.StandingView v : s.standings())
+            b.append(v.rank() == 0 ? "  * " : "    ")
+             .append(v.rank() + 1).append(". ").append(v.name()).append(v.isMe() ? " (you)" : "")
+             .append(" — ").append(v.points()).append(" pts\n");
+        MatchSnapshot.StandingView top = s.standings().isEmpty() ? null : s.standings().get(0);
+        if (top != null) b.append(top.isMe() ? "You win!" : top.name() + " wins.");
+        return b.toString();
+    }
+
+    // --- SELECTION ------------------------------------------------------------
+
+    private void rebuildSelection(MatchSnapshot s) {
+        selectionTiles.getChildren().clear();
+        for (MatchSnapshot.BlindOption b : s.blinds()) {
+            VBox tile = new VBox(4);
+            tile.setPadding(new Insets(8));
+            tile.setStyle("-fx-border-color: " + (b.current() ? "#3a7" : "#999")
+                    + "; -fx-border-width: " + (b.current() ? 2 : 1) + ";");
+            Label type = new Label(b.type());
+            type.setStyle("-fx-font-weight: bold;");
+            tile.getChildren().add(type);
+            if (b.bossName() != null) {
+                Label boss = new Label(b.bossName());
+                Label eff = new Label(b.bossEffect());
+                eff.setWrapText(true);
+                eff.setMaxWidth(200);
+                eff.setStyle("-fx-font-size: 11px;");
+                tile.getChildren().addAll(boss, eff);
+            }
+            tile.getChildren().addAll(
+                    new Label("Target: " + b.target()),
+                    new Label("Reward: $" + b.reward()));
+
+            boolean actionable = b.current() && !s.hasChosen();
+            Button select = new Button("Select");
+            select.setDisable(!actionable);
+            select.setOnAction(e -> vm.playBlind());
+            Button skip = new Button("Skip" + (b.skipTag() != null ? " (" + b.skipTag() + ")" : ""));
+            skip.setDisable(!actionable);
+            skip.setOnAction(e -> vm.skipBlind());
+            tile.getChildren().add(new HBox(6, select, skip));
+
+            if (b.current() && s.hasChosen())
+                tile.getChildren().add(new Label("chosen — waiting…"));
+            selectionTiles.getChildren().add(tile);
+        }
+    }
+
+    // --- BLIND (hand) ---------------------------------------------------------
+
+    /** Rebuilds the hand toggles from the latest snapshot, honoring the current sort choice. */
+    private void rebuildHand() {
+        cards.clear();
+        handRow.getChildren().clear();
+        if (snapshot == null || snapshot.phase() != MatchPhase.BLIND) return;
+        List<MatchSnapshot.HandCardView> hand = snapshot.hand();
+
+        // Display order is a permutation of model indices; each toggle remembers its model index for play/discard.
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < hand.size(); i++) order.add(i);
+        if (handSort == 1)
+            order.sort(Comparator.comparingInt((Integer i) -> hand.get(i).rank()).reversed()
+                    .thenComparingInt(i -> hand.get(i).suit()));
+        else if (handSort == 2)
+            order.sort(Comparator.comparingInt((Integer i) -> hand.get(i).suit())
+                    .thenComparing(Comparator.comparingInt((Integer i) -> hand.get(i).rank()).reversed()));
+
+        for (int modelIndex : order) {
+            ToggleButton tb = new ToggleButton(hand.get(modelIndex).label());
+            tb.setUserData(modelIndex);
+            tb.setStyle("-fx-font-family: monospace;");
+            tb.setOnAction(e -> {
+                if (tb.isSelected() && selectedIndices().size() > MAX_SELECTION) {
+                    tb.setSelected(false);
+                    hint("At most " + MAX_SELECTION + " cards.");
+                }
+            });
+            cards.add(tb);
+            handRow.getChildren().add(tb);
+        }
+    }
+
+    /** The model hand-indices of the currently selected cards, in display order. */
+    private List<Integer> selectedIndices() {
+        List<Integer> out = new ArrayList<>();
+        for (ToggleButton tb : cards) if (tb.isSelected()) out.add((Integer) tb.getUserData());
+        return out;
+    }
+
+    // --- SHOP -----------------------------------------------------------------
+
+    private void rebuildShop(MatchSnapshot s, Label rerollLabel) {
+        shopSlots.getChildren().clear();
+        shopPacks.getChildren().clear();
+        shopVouchers.getChildren().clear();
+        shopSelKind = null; shopSelIndex = -1;     // a fresh shop frame clears any armed selection
+        MatchSnapshot.ShopView shop = s.shop();
+        if (shop == null) { rerollLabel.setText(""); return; }
+
+        for (int i = 0; i < shop.slots().size(); i++) shopSlots.getChildren().add(shopTile("slot", i, shop.slots().get(i), true));
+        for (int i = 0; i < shop.packs().size(); i++) shopPacks.getChildren().add(shopTile("pack", i, shop.packs().get(i), true));
+        for (int i = 0; i < shop.vouchers().size(); i++) {
+            MatchSnapshot.VoucherItem v = shop.vouchers().get(i);
+            ToggleButton t = shopTile("voucher", i, new MatchSnapshot.ShopItem(v.label(), v.price(), v.tooltip()), v.redeemable());
+            shopVouchers.getChildren().add(t);
+        }
+        rerollLabel.setText("reroll $" + shop.rerollCost() + "   purchases left "
+                + (shop.purchasesRemaining() == Integer.MAX_VALUE ? "∞" : shop.purchasesRemaining()));
+    }
+
+    /** A selectable shop tile showing "name $price" with a hover tooltip; disabled tiles can't be armed. */
+    private ToggleButton shopTile(String kind, int index, MatchSnapshot.ShopItem item, boolean enabled) {
+        ToggleButton t = new ToggleButton(item.label() + "  $" + item.price());
+        t.setStyle("-fx-font-family: monospace;");
+        t.setTooltip(new Tooltip(item.tooltip()));
+        t.setDisable(!enabled);
+        t.setOnAction(e -> {
+            if (t.isSelected()) {
+                clearShopSelectionExcept(t);
+                shopSelKind = kind; shopSelIndex = index;
+            } else { shopSelKind = null; shopSelIndex = -1; }
+        });
+        return t;
+    }
+
+    private void clearShopSelectionExcept(ToggleButton keep) {
+        for (FlowPane group : List.of(shopSlots, shopPacks, shopVouchers))
+            for (var node : group.getChildren())
+                if (node instanceof ToggleButton other && other != keep) other.setSelected(false);
+    }
+
+    private void buySelectedShopItem() {
+        if (shopSelKind == null || shopSelIndex < 0) { hint("Click a shop item first, then Buy."); return; }
+        switch (shopSelKind) {
+            case "slot"    -> vm.buyCard(shopSelIndex);
+            case "pack"    -> vm.buyPack(shopSelIndex);
+            case "voucher" -> vm.redeemVoucher(shopSelIndex);
+            default        -> hint("Nothing selected.");
+        }
+    }
+
+    // --- RESULT ---------------------------------------------------------------
+
+    private static String resultSummary(MatchSnapshot s) {
+        if (s.phase() != MatchPhase.RESULT || s.lastResult() == null) return "";
+        MatchSnapshot.ResultView r = s.lastResult();
+        return "outcome : " + r.outcome() + "\n"
+                + "score   : " + r.score() + " / " + r.target() + "\n"
+                + "best    : " + r.bestHand() + "\n"
+                + "earned  : $" + r.moneyEarned() + "\n"
+                + ("BOSS".equals(s.blind()) ? "Continue to finish the ante." : "Continue to the shop.");
+    }
+
+    // --- inventory-action helpers --------------------------------------------
+
     /** The inventory item at merged index {@code i}, or {@code null} (after explaining) if there is none. */
-    private MatchSnapshot.ItemView itemAt(int i, Label status) {
+    private MatchSnapshot.ItemView itemAt(int i) {
         if (snapshot == null || i < 0 || i >= snapshot.inventory().size()) {
-            hint(status, "No item at index " + i + ".");
+            hint("No item at index " + i + ".");
             return null;
         }
         return snapshot.inventory().get(i);
@@ -227,28 +438,27 @@ public final class BalatryClient extends Application {
 
     /**
      * Assembles a {@link RelicTarget} from what the relic itself says it needs. Only relics the caster aims by
-     * hand read the seat box; the standings-driven ones ignore it entirely, so offering a seat there would be a
-     * lie. Returns {@code null} (after explaining) when the caster has not supplied what the relic asks for.
+     * hand read the seat box; the standings-driven ones ignore it. Returns {@code null} (after explaining) when
+     * the caster has not supplied what the relic asks for.
      */
-    private RelicTarget buildRelicTarget(MatchViewModel vm, MatchSnapshot.ItemView relic, String seatText, String choiceText, Label status) {
+    private RelicTarget buildRelicTarget(MatchSnapshot.ItemView relic, String seatText, String choiceText) {
         PlayerId seat = null;
         if (relic.needsSeat()) {
             if (seatText == null || seatText.trim().isEmpty()) {
-                hint(status, relic.label() + " must be aimed: enter a seat number.");
+                hint(relic.label() + " must be aimed: enter a seat number.");
                 return null;
             }
             try {
                 seat = vm.seatAt(Integer.parseInt(seatText.trim()));
             } catch (RuntimeException ex) {
-                hint(status, "Bad seat '" + seatText.trim() + "': " + ex.getMessage());
+                hint("Bad seat '" + seatText.trim() + "': " + ex.getMessage());
                 return null;
             }
         }
-
         String choice = choiceText == null ? "" : choiceText.trim();
         boolean needsChoice = !"NONE".equals(relic.selector());
         if (needsChoice && choice.isEmpty()) {
-            hint(status, relic.label() + " needs a " + relic.selector().toLowerCase().replace('_', ' ') + ".");
+            hint(relic.label() + " needs a " + relic.selector().toLowerCase().replace('_', ' ') + ".");
             return null;
         }
         try {
@@ -260,157 +470,9 @@ public final class BalatryClient extends Application {
                 default           -> seat == null ? RelicTarget.none() : RelicTarget.on(seat);
             };
         } catch (RuntimeException ex) {
-            hint(status, "'" + choice + "' is not a valid " + relic.selector().toLowerCase().replace('_', ' ') + ".");
+            hint("'" + choice + "' is not a valid " + relic.selector().toLowerCase().replace('_', ' ') + ".");
             return null;
         }
-    }
-
-    private static void show(javafx.scene.Node node, boolean visible) {
-        node.setVisible(visible);
-        node.setManaged(visible);
-    }
-
-    private static boolean guardSel(List<Integer> sel, Label status, String verb) {
-        if (sel.isEmpty()) { hint(status, "Select 1-" + MAX_SELECTION + " cards to " + verb + "."); return false; }
-        return true;
-    }
-
-    private static void withIndex(TextField field, Label status, java.util.function.IntConsumer action) {
-        String raw = field.getText();
-        if (raw == null || raw.trim().isEmpty()) { hint(status, "Enter an index first."); return; }
-        try {
-            action.accept(Integer.parseInt(raw.trim()));
-        } catch (NumberFormatException nfe) {
-            hint(status, "Bad index: '" + raw.trim() + "'");
-        }
-    }
-
-    private static void rebuildHand(FlowPane row, List<ToggleButton> cards, MatchSnapshot snap, Label status) {
-        cards.clear();
-        row.getChildren().clear();
-        if (snap == null || snap.phase() != MatchPhase.BLIND) return;
-        List<String> hand = snap.hand();
-        for (int i = 0; i < hand.size(); i++) {
-            ToggleButton tb = new ToggleButton(i + ": " + hand.get(i));
-            tb.setStyle("-fx-font-family: monospace;");
-            tb.setOnAction(e -> {
-                if (tb.isSelected() && selectedIndices(cards).size() > MAX_SELECTION) {
-                    tb.setSelected(false);
-                    hint(status, "At most " + MAX_SELECTION + " cards.");
-                }
-            });
-            cards.add(tb);
-            row.getChildren().add(tb);
-        }
-    }
-
-    private static List<Integer> selectedIndices(List<ToggleButton> cards) {
-        List<Integer> out = new ArrayList<>();
-        for (int i = 0; i < cards.size(); i++) if (cards.get(i).isSelected()) out.add(i);
-        return out;
-    }
-
-    private static void hint(Label status, String msg) {
-        Log.ui(msg);
-        status.setText(msg + "\n\n" + status.getText());
-    }
-
-    private static String render(MatchSnapshot s) {
-        if (s == null) return "(no state yet)";
-        StringBuilder b = new StringBuilder();
-        b.append("SEAT ").append(s.seat()).append("  (").append(s.name()).append(")\n");
-        b.append("phase   : ").append(s.phase()).append("\n");
-        b.append("ante    : ").append(s.ante()).append(" / ").append(s.anteCount()).append("\n");
-        b.append("blind   : ").append(s.blind()).append("   target ").append(s.target()).append("\n");
-        b.append("sin     : ").append(s.activeSin()).append("\n");
-        if (s.boss() != null) b.append("boss    : ").append(s.boss()).append("\n");
-        b.append("tag     : ").append(s.skipTag()).append("\n");
-        b.append("money   : $").append(s.money()).append("\n");
-
-        if (s.phase() == MatchPhase.SELECTION) {
-            b.append("\n=== BLIND SELECTION ===\n");
-            b.append("Play the ").append(s.blind()).append(" blind (target ").append(s.target())
-             .append("), or Skip for the ").append(s.skipTag()).append(".\n");
-            if (s.hasChosen()) b.append("You've chosen \u2014 waiting for the other players\u2026\n");
-        }
-
-        if (s.round() != null) {
-            MatchSnapshot.RoundView r = s.round();
-            b.append("round   : hands ").append(r.handsRemaining())
-             .append(", discards ").append(r.discardsRemaining())
-             .append(", score ").append(r.score())
-             .append(" / ").append(r.roundTarget()).append("\n");
-        }
-
-        appendIndexed(b, "\njokers", s.jokers());
-        b.append("consumables :");
-        if (s.inventory().isEmpty()) b.append(" (none)\n");
-        else {
-            b.append("\n");
-            for (int i = 0; i < s.inventory().size(); i++) {
-                MatchSnapshot.ItemView it = s.inventory().get(i);
-                b.append("  [").append(i).append("] ").append(it.label());
-                if (it.isRelic()) {                      // relics still need aiming info; consumables just list
-                    b.append("  \u2014 ").append(targeting(it.kind()));
-                    if (!"NONE".equals(it.selector()))
-                        b.append(", choose a ").append(it.selector().toLowerCase().replace('_', ' '));
-                }
-                b.append("\n");
-            }
-        }
-
-        if (s.phase() == MatchPhase.RESULT && s.lastResult() != null) {
-            MatchSnapshot.ResultView r = s.lastResult();
-            b.append("\n=== BLIND RESULT ===\n");
-            b.append("outcome : ").append(r.outcome()).append("\n");
-            b.append("score   : ").append(r.score()).append(" / ").append(r.target()).append("\n");
-            b.append("best    : ").append(r.bestHand()).append("\n");
-            b.append("earned  : $").append(r.moneyEarned()).append("\n");
-            b.append(s.blind().equals("BOSS") ? "Continue to finish the ante.\n" : "Continue to the shop.\n");
-        }
-
-        if (s.shop() != null) {
-            MatchSnapshot.ShopView sh = s.shop();
-            b.append("\n=== SHOP ===   reroll $").append(sh.rerollCost())
-             .append("   purchases left ").append(sh.purchasesRemaining() == Integer.MAX_VALUE ? "\u221e" : String.valueOf(sh.purchasesRemaining())).append("\n");
-            b.append("cards:\n");
-            for (int i = 0; i < sh.slots().size(); i++)
-                b.append("  [").append(i).append("] $").append(sh.slotPrices().get(i)).append("  ").append(sh.slots().get(i)).append("\n");
-            b.append("packs:\n");
-            for (int i = 0; i < sh.packs().size(); i++)
-                b.append("  [").append(i).append("] $").append(sh.packPrices().get(i)).append("  ").append(sh.packs().get(i)).append("\n");
-            b.append("vouchers:\n");
-            for (int i = 0; i < sh.vouchers().size(); i++)
-                b.append("  [").append(i).append("] ").append(sh.vouchers().get(i)).append("\n");
-        }
-
-        if (s.phase() == MatchPhase.FINISHED) {
-            b.append("\n=== MATCH OVER ===\n");
-            for (MatchSnapshot.StandingView v : s.standings()) {
-                boolean winner = v.rank() == 0;
-                b.append(winner ? "  * " : "    ")
-                 .append(v.rank() + 1).append(". ")
-                 .append(v.name()).append(v.isMe() ? " (you)" : "")
-                 .append("  \u2014 ").append(v.points()).append(" pts\n");
-            }
-            MatchSnapshot.StandingView top = s.standings().isEmpty() ? null : s.standings().get(0);
-            if (top != null)
-                b.append("\n").append(top.isMe() ? "You win!" : top.name() + " wins.").append("\n");
-            return b.toString();
-        }
-
-        b.append("\n--- opponents (visible only) ---\n");
-        for (MatchSnapshot.OpponentView o : s.opponents()) {
-            b.append("  #").append(o.seat()).append(' ').append(o.name())
-             .append("  points ").append(o.points())
-             .append("  rank ").append(o.rank() < 0 ? "-" : (o.rank() + 1)).append("\n");
-        }
-
-        if (s.phase() == MatchPhase.BLIND)
-            b.append("\nSelect cards, then Play or Discard \u2014 or Finish Round.");
-        else if (s.phase() == MatchPhase.SHOP)
-            b.append("\nType an index, then Buy/Sell/Voucher. Reroll and Ready need no index.");
-        return b.toString();
     }
 
     /** Plain-language description of who a relic lands on, so the panel never implies a choice that isn't real. */
@@ -425,11 +487,39 @@ public final class BalatryClient extends Application {
         };
     }
 
-    private static void appendIndexed(StringBuilder b, String label, List<String> items) {
-        b.append(label).append(" :");
-        if (items.isEmpty()) { b.append(" (none)\n"); return; }
-        b.append("\n");
-        for (int i = 0; i < items.size(); i++) b.append("  [").append(i).append("] ").append(items.get(i)).append("\n");
+    // --- small UI helpers -----------------------------------------------------
+
+    private static VBox titled(String title, javafx.scene.Node body) {
+        Label t = new Label(title);
+        t.setStyle("-fx-font-weight: bold;");
+        VBox box = new VBox(6, t, body);
+        box.setStyle("-fx-padding: 6; -fx-border-color: #bbb; -fx-border-width: 1;");
+        return box;
+    }
+
+    private static void show(javafx.scene.Node node, boolean visible) {
+        node.setVisible(visible);
+        node.setManaged(visible);
+    }
+
+    private boolean guardSel(List<Integer> sel, String verb) {
+        if (sel.isEmpty()) { hint("Select 1-" + MAX_SELECTION + " cards to " + verb + "."); return false; }
+        return true;
+    }
+
+    private void withIndex(TextField field, java.util.function.IntConsumer action) {
+        String raw = field.getText();
+        if (raw == null || raw.trim().isEmpty()) { hint("Enter an index first."); return; }
+        try {
+            action.accept(Integer.parseInt(raw.trim()));
+        } catch (NumberFormatException nfe) {
+            hint("Bad index: '" + raw.trim() + "'");
+        }
+    }
+
+    private void hint(String msg) {
+        Log.ui(msg);
+        status.setText(msg);
     }
 
     public static void main(String[] args) {

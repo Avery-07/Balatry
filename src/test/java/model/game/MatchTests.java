@@ -44,6 +44,9 @@ public final class MatchTests {
         check("blind SMALL", match.getBlind() == Blind.SMALL);
         checkLong("current target 300", match.getCurrentTarget(), 300);
         check("sin selected", match.getActiveSin() != null);
+        checkInt("round number 1 at ante1 small", match.getRoundNumber(), 1);
+        check("ante boss locked at ante start", match.getAnteBoss() != null);
+        check("every seat opens with $4", match.getRun(loser).getMoney() == Match.STARTING_MONEY);
         checkInt("winner dealt 8", match.getRun(winner).getRound().getHand().size(), 8);
         checkInt("loser dealt 8", match.getRun(loser).getRound().getHand().size(), 8);
 
@@ -69,6 +72,7 @@ public final class MatchTests {
         match.nextBlind();
         check("now BIG", match.getBlind() == Blind.BIG);
         checkLong("big target 450", match.getCurrentTarget(), 450);
+        checkInt("round number 2 at ante1 big", match.getRoundNumber(), 2);
 
         advance(match);   // exhaust BIG
         check("now BOSS", match.getBlind() == Blind.BOSS);
@@ -78,6 +82,7 @@ public final class MatchTests {
         advance(match);   // exhaust BOSS -> ante 2
         checkInt("ante rolled to 2", match.getAnte(), 2);
         check("back to SMALL", match.getBlind() == Blind.SMALL);
+        checkInt("round number 4 at ante2 small", match.getRoundNumber(), 4);
         checkLong("ante2 small target 800", match.getCurrentTarget(), 800);
         check("sin reselected at ante rollover", match.getActiveSin() != null);
         check("sin field repopulated", sinAnte1 != null);
