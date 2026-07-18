@@ -62,8 +62,7 @@ public final class Run {
     private int baseHands = 4;
     private int baseDiscards = 3;
     private int interestCap = 5;      // max $ of interest per round (raised by To the Moon / Seed Money)
-    private int consumableSlots = 2;  // capacity for slot-consuming consumables (NEGATIVE are free)
-    private int relicSlots = 2;        // capacity for slot-consuming relics (NEGATIVE are free)
+    private int consumableSlots = 2;  // shared capacity for slot-consuming consumables and relics (NEGATIVE are free)
     private int shopSlots = 3;        // card slots offered per shop
     private int packSlots = 3;        // booster-pack slots offered per shop
     private int voucherSlots = 2;     // voucher slots offered per shop (one redeemable per ante)
@@ -300,17 +299,11 @@ public final class Run {
     /** Jokers occupying a slot (NEGATIVE jokers are free). */
     public int usedJokerSlots() { return board.usedSlots(); }
 
-    /** Consumables occupying a slot (NEGATIVE consumables are free). */
+    /** Consumables and relics occupying a slot — they draw from one shared pool (NEGATIVE cards are free). */
     public int usedConsumableSlots() {
         int n = 0;
         for (ConsumableCard c : consumables) if (c.getEdition() != Edition.NEGATIVE) n++;
-        return n;
-    }
-
-    /** Relics occupying a slot (NEGATIVE relics are free). */
-    public int usedRelicSlots() {
-        int n = 0;
-        for (RelicCard r : relics) if (r.getEdition() != Edition.NEGATIVE) n++;
+        for (RelicCard r : relics)           if (r.getEdition() != Edition.NEGATIVE) n++;
         return n;
     }
 
@@ -321,7 +314,7 @@ public final class Run {
     }
 
     public boolean canAddRelic(RelicCard relic) {
-        return relic.getEdition() == Edition.NEGATIVE || usedRelicSlots() < relicSlots;
+        return relic.getEdition() == Edition.NEGATIVE || usedConsumableSlots() < consumableSlots;
     }
 
     /** Sells the joker at {@code index}; Eternal jokers cannot be sold (see {@link Board#sell}). */
@@ -369,8 +362,6 @@ public final class Run {
     public void setJokerSlots(int n)   { board.setSlots(n); }
     public int getConsumableSlots()    { return consumableSlots; }
     public void setConsumableSlots(int n) { consumableSlots = n; }
-    public int getRelicSlots()         { return relicSlots; }
-    public void setRelicSlots(int n)   { relicSlots = n; }
     public int getShopSlots()          { return shopSlots; }
     public void setShopSlots(int n)    { shopSlots = n; }
     public int getPackSlots()          { return packSlots; }

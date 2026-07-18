@@ -49,6 +49,9 @@ import java.util.function.Function;
 /** Aggregate root for one competitive game. */
 public final class Match {
 
+    /** Every seat's opening balance when a match is dealt. */
+    public static final int STARTING_MONEY = 4;
+
     private final long seed;
     private final Rng rng;                       // table-level randomness
     private final Map<PlayerId, Player> players; // insertion-ordered by seat
@@ -110,6 +113,7 @@ public final class Match {
             PlayerId id = new PlayerId(seat++);
             Run run = new Run(seed);          // same seed -> identical luck per action
             run.resetDeck(Decks.standard());
+            run.addMoney(STARTING_MONEY);     // every seat opens with $4
             run.joinMatch(match, id);
             match.players.put(id, new Player(id, name, run));
         }

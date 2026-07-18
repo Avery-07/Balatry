@@ -5,14 +5,8 @@ import model.game.Match;
 import model.game.MatchPhase;
 import model.game.Standings;
 import model.game.player.BlindResult;
-import model.cards.relics.RelicCard;
-import model.cards.Card;
-import model.cards.packs.BoosterPack;
-import model.cards.jokers.JokerCard;
 import model.cards.consumables.ConsumableCard;
-import model.cards.vouchers.Voucher;
-import model.modifiers.Sticker;
-import model.cards.packs.PackOpening;
+import model.cards.relics.RelicCard;
 import model.game.net.MatchClient;
 import model.game.player.PlayerId;
 import model.game.player.Round;
@@ -54,15 +48,11 @@ public record MatchSnapshot(
         RoundView round,           // null outside a round
         List<String> hand,
         List<String> jokers,
-        List<String> consumables,
-        List<String> relics,
-        List<RelicView> relicCards,   // the same relics, with what each one asks the caster for
+        List<ItemView> inventory,  // consumables and relics as one indexed area; relics carry their casting demands
         boolean inShop,
         ShopView shop,             // null outside the shop phase
         boolean hasChosen,         // this seat has made its blind-selection choice
         ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
-        List<String> pendingPacks,      // bought or granted packs waiting to be opened
-        PackView openPack,              // the pack currently being picked from, or null
         List<StandingView> standings,   // every seat, ranked; for the end-of-match summary
         List<OpponentView> opponents
 ) {
@@ -74,19 +64,14 @@ public record MatchSnapshot(
     public record OpponentView(int seat, String name, long points, int rank) { }
 
     /**
-     * A held relic and its demands. {@code needsSeat} is true only for relics the caster aims by hand; the
-     * standings-driven ones pick their own victims, so the UI must not offer a seat for them.
+     * One held inventory item — a consumable or a relic — as the client sees it. Relics and consumables share a
+     * single indexed area, so {@code isRelic} plus {@code modelIndex} (the item's position within its own model
+     * list) is how a gesture routes to the right verb. The casting fields are meaningful only for relics: {@code
+     * kind} names who it lands on, {@code selector} what choice it needs ("NONE" for consumables), and {@code
+     * needsSeat} is true only for relics the caster aims by hand.
      */
-    public record RelicView(String name, String kind, String selector, boolean needsSeat) { }
-
-    /**
-     * An open booster pack. {@code options} keeps its slot indices — an already-taken option stays in place as
-     * null so the remaining indices never shift under the player mid-pick.
-     */
-    public record PackView(String pack, List<PackOptionView> options, int picksLeft) { }
-
-    /** One offer in an open pack; {@code relic} is non-null when taking it casts a relic on the spot. */
-    public record PackOptionView(String label, boolean taken, RelicView relic) { }
+    public record ItemView(String label, boolean isRelic, int modelIndex,
+                           String kind, String selector, boolean needsSeat) { }
 
     /** One seat's line in the final standings; {@code isMe} marks the local seat. */
     public record StandingView(int seat, String name, long points, int rank, boolean isMe) { }
@@ -96,16 +81,10 @@ public record MatchSnapshot(
                              int handsRemaining, int moneyEarned) { }
 
     /** Shop contents for the local seat, present only during the shop phase. Prices index-align with the lists. */
-    /**
-     * One buyable or holdable item. {@code label} is the human name, {@code detail} the hover text — the model
-     * stores no rules prose, so detail carries the structured facts it does know (kind, rarity, cost, edition).
-     */
-    public record ItemView(String label, String detail, int price, boolean sold) { }
-
     public record ShopView(
-            List<ItemView> slots,
-            List<ItemView> packs,
-            List<ItemView> vouchers,
+            List<String> slots, List<Integer> slotPrices,
+            List<String> packs, List<Integer> packPrices,
+            List<String> vouchers,
             int rerollCost, int purchasesRemaining) { }
 
     /** Builds a snapshot from the client's local host. Call on the FX thread. */
@@ -142,10 +121,6 @@ public record MatchSnapshot(
                     ranking.indexOf(id)));
         }
 
-        List<String> pendingPacks = new ArrayList<>();
-        for (BoosterPack p : run.getPendingPacks()) pendingPacks.add(describe(p));
-        PackView openPack = packView(run.getCurrentOpening());
-
         boolean hasChosen = match.hasChosenBlind(me);
         BlindResult br = match.getResult(me);
         ResultView lastResult = (br == null) ? null
@@ -174,81 +149,56 @@ public record MatchSnapshot(
                 roundView,
                 display(run.getHeld()),
                 display(run.getJokers()),
-                display(run.getConsumables()),
-                display(run.getRelics()),
-                relicViews(run.getRelics()),
+                inventory(run),
                 inShop,
                 shopView,
                 hasChosen,
                 lastResult,
-                pendingPacks,
-                openPack,
                 table,
                 opponents);
     }
 
-    /**
-     * Reads the shop defensively: a bought slot is left empty rather than removed, and the price accessors reject
-     * empty slots outright, so a sold entry is rendered in place as {@code (sold)}. Keeping the empty slots in the
-     * list matters — buy indices address positions, so collapsing them would silently retarget the next purchase.
-     */
     private static ShopView buildShop(Shop shop) {
-        List<ItemView> slots = new ArrayList<>();
+        List<String> slots = new ArrayList<>();
+        List<Integer> slotPrices = new ArrayList<>();
         for (int i = 0; i < shop.getSlotCount(); i++) {
-            Card card = shop.getSlot(i);
-            slots.add(card == null ? sold() : new ItemView(describe(card), detail(card), shop.slotPrice(i), false));
+            slots.add(describe(shop.getSlot(i)));
+            slotPrices.add(shop.slotPrice(i));
         }
-        List<ItemView> packs = new ArrayList<>();
+        List<String> packs = new ArrayList<>();
+        List<Integer> packPrices = new ArrayList<>();
         for (int i = 0; i < shop.getPackCount(); i++) {
-            BoosterPack pack = shop.getPack(i);
-            packs.add(pack == null ? sold() : new ItemView(describe(pack), detail(pack), shop.packPrice(i), false));
+            packs.add(String.valueOf(shop.getPack(i)));
+            packPrices.add(shop.packPrice(i));
         }
-        List<ItemView> vouchers = new ArrayList<>();
+        List<String> vouchers = new ArrayList<>();
         for (int i = 0; i < shop.getVoucherCount(); i++) {
-            Object voucher = shop.getVoucher(i);
-            vouchers.add(voucher == null
-                    ? new ItemView("(redeemed)", "already taken", 0, true)
-                    : new ItemView(describe(voucher), detail(voucher),
-                                   voucher instanceof Card c ? c.getShopValue() : 0, false));
+            vouchers.add(String.valueOf(shop.getVoucher(i)));
         }
-        return new ShopView(slots, packs, vouchers, shop.rerollCost(), shop.purchasesRemaining());
+        return new ShopView(slots, slotPrices, packs, packPrices, vouchers,
+                shop.rerollCost(), shop.purchasesRemaining());
     }
 
-    /** Describes each held relic so the client can ask for exactly the choices it needs. */
-    /** Appends the marks that change how a card plays: its edition and any stickers. */
-    private static String decorate(Card card, String name) {
-        StringBuilder sb = new StringBuilder(name);
-        if (card.getEdition() != null) sb.append('[').append(card.getEdition()).append(']');
-        if (card.isDebuffed()) sb.append("{DEBUFFED}");
-        return sb.toString();
-    }
-
-    private static List<RelicView> relicViews(List<RelicCard> relics) {
-        List<RelicView> out = new ArrayList<>(relics.size());
-        for (RelicCard r : relics) out.add(relicView(r));
+    /**
+     * The seat's held items as one indexed area: consumables first, then relics, each tagged with its own model
+     * index so a gesture can route to {@code useConsumable}/{@code sellConsumable} or {@code useRelic}/{@code
+     * sellRelic}. Relics carry the demands the client needs to prompt for (who they hit, what choice they need).
+     */
+    private static List<ItemView> inventory(Run run) {
+        List<ItemView> out = new ArrayList<>();
+        List<ConsumableCard> consumables = run.getConsumables();
+        for (int i = 0; i < consumables.size(); i++)
+            out.add(new ItemView(describe(consumables.get(i)), false, i, null, "NONE", false));
+        List<RelicCard> relics = run.getRelics();
+        for (int i = 0; i < relics.size(); i++) {
+            var spec = relics.get(i).getSpec();
+            boolean needsSeat = switch (spec.getKind()) {
+                case OPPONENT, RIVAL -> true;      // aimed by hand
+                case RIVALS, SELF, GLOBAL -> false; // the standings (or nothing) decide
+            };
+            out.add(new ItemView(spec.getName(), true, i, spec.getKind().name(), spec.getSelector().name(), needsSeat));
+        }
         return out;
-    }
-
-    /** What one relic demands of its caster: a seat only when it is aimed by hand, plus its selector. */
-    private static RelicView relicView(RelicCard relic) {
-        var spec = relic.getSpec();
-        boolean needsSeat = switch (spec.getKind()) {
-            case OPPONENT, RIVAL -> true;       // aimed by hand
-            case RIVALS, SELF, GLOBAL -> false; // the standings (or nothing) decide
-        };
-        return new RelicView(spec.getName(), spec.getKind().name(), spec.getSelector().name(), needsSeat);
-    }
-
-    /** The open pack, preserving option indices so a taken slot does not shift the ones after it. */
-    private static PackView packView(PackOpening opening) {
-        if (opening == null) return null;
-        List<PackOptionView> options = new ArrayList<>();
-        for (Card option : opening.getOptions()) {
-            if (option == null) options.add(new PackOptionView("(taken)", true, null));
-            else options.add(new PackOptionView(describe(option), false,
-                    option instanceof RelicCard relic ? relicView(relic) : null));
-        }
-        return new PackView(describe(opening.getPack()), options, opening.getPicksLeft());
     }
 
     private static List<String> display(List<?> items) {
@@ -263,47 +213,7 @@ public record MatchSnapshot(
      * (jokers, consumables, relics) rely on their own {@code toString} for now — worth tightening once we can
      * see their real output in the debug view.
      */
-    private static ItemView sold() { return new ItemView("(sold)", "already bought", 0, true); }
-
-    /**
-     * Hover text. The model holds no rules prose — a joker's behaviour is a lambda, not a sentence — so this
-     * reports the facts it can actually answer for: what the card is, its rarity or type, its price, and any
-     * edition or stickers riding on it. Real rules text would have to come from the catalogue document.
-     */
-    private static String detail(Object o) {
-        StringBuilder d = new StringBuilder();
-        if (o instanceof JokerCard j) {
-            d.append("Joker \u2014 ").append(j.getSpec().getRarity()).append(", base $").append(j.getSpec().getCost());
-        } else if (o instanceof ConsumableCard c) {
-            d.append(c.getSpec().getType()).append(" \u2014 base $").append(c.getSpec().getCost());
-        } else if (o instanceof RelicCard r) {
-            d.append("Relic \u2014 ").append(r.getSpec().getKind()).append(", base $").append(r.getSpec().getCost());
-            if (r.getSpec().getSelector() != model.cards.relics.RelicSelector.NONE)
-                d.append(", choose a ").append(r.getSpec().getSelector().name().toLowerCase().replace('_', ' '));
-        } else if (o instanceof Voucher v) {
-            d.append("Voucher \u2014 base $").append(v.getSpec().getCost());
-        } else if (o instanceof BoosterPack p) {
-            d.append("Booster pack \u2014 ").append(p.baseOptionCount()).append(" options, ")
-             .append(p.basePickCount()).append(" pick(s)");
-        } else if (o instanceof DeckCard c) {
-            d.append("Playing card \u2014 ").append(c.getRank()).append(" of ").append(c.getSuit());
-        } else {
-            d.append(String.valueOf(o));
-        }
-        if (o instanceof Card card) {
-            if (card.getEdition() != null) d.append("  \u00b7 ").append(card.getEdition());
-            for (Sticker sticker : card.getStickers().keySet()) d.append("  \u00b7 ").append(sticker);
-        }
-        return d.toString();
-    }
-
     private static String describe(Object o) {
-        if (o instanceof BoosterPack p)   // no toString on the model type; render it as SIZE KIND
-            return p.size() + " " + p.kind();
-        if (o instanceof JokerCard j)       return decorate(j, j.getSpec().getName());
-        if (o instanceof ConsumableCard c)  return decorate(c, c.getSpec().getName());
-        if (o instanceof RelicCard r)       return decorate(r, r.getSpec().getName());
-        if (o instanceof Voucher v)         return decorate(v, v.getSpec().getName());
         if (o instanceof DeckCard c) {
             StringBuilder sb = new StringBuilder(c.getRank().name()).append('-').append(c.getSuit().name());
             if (c.getEnhancement() != null) sb.append('[').append(c.getEnhancement()).append(']');

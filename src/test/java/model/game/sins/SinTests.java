@@ -170,7 +170,7 @@ public final class SinTests {
         checkInt("two destroys bank two grants", run.getSinState().getWrathFreeJokers(), 2);
         checkInt("destroyed jokers leave the board", run.board().size(), 1);
         checkThrows("an Eternal joker cannot be destroyed", () -> m.wrathDestroyJoker(a, 0));
-        check("destroying earns no money", run.getMoney() == 0);
+        check("destroying earns no money", run.getMoney() == Match.STARTING_MONEY);
 
         // The grants survive into the shop and make joker purchases free; a pack purchase is untouched.
         for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();

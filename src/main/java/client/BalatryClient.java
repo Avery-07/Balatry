@@ -8,8 +8,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
-import javafx.scene.control.Tooltip;
-import javafx.util.Duration;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -83,23 +81,16 @@ public final class BalatryClient extends Application {
         resultPanel.getChildren().addAll(continueToShop);
 
         // --- INVENTORY panel (usable in every playable phase, not just the shop) ---
-        TextField consIndex = new TextField();
-        consIndex.setPromptText("consumable #");
-        Button useCons = new Button("Use Consumable");
-        HBox consRow = new HBox(8);
-        consRow.getChildren().addAll(consIndex, useCons);
-
-        TextField relicIndex = new TextField();
-        relicIndex.setPromptText("relic #");
+        // Consumables and relics are one indexed area; the seat/choice boxes matter only for aimed relics.
+        TextField itemIndex = new TextField();
+        itemIndex.setPromptText("item #");
         TextField relicSeat = new TextField();
-        relicSeat.setPromptText("seat # (only if aimed)");
+        relicSeat.setPromptText("seat # (aimed items)");
         TextField relicChoice = new TextField();
         relicChoice.setPromptText("rank / suit / slot / hand");
-        Button useRelic = new Button("Use Relic");
-        HBox relicRow = new HBox(8);
-        relicRow.getChildren().addAll(relicIndex, relicSeat, relicChoice, useRelic);
-
-        FlowPane sellRow = new FlowPane(6, 6);
+        Button useItem = new Button("Use");
+        HBox itemRow = new HBox(8);
+        itemRow.getChildren().addAll(itemIndex, relicSeat, relicChoice, useItem);
 
         TextField moveFrom = new TextField();
         moveFrom.setPromptText("from");
@@ -110,40 +101,29 @@ public final class BalatryClient extends Application {
         moveRow.getChildren().addAll(moveFrom, moveTo, moveJoker);
 
         VBox inventoryPanel = new VBox(8);
-        inventoryPanel.getChildren().addAll(consRow, relicRow, moveRow, new Label("Sell"), sellRow);
+        inventoryPanel.getChildren().addAll(itemRow, moveRow);
 
-        // --- PACK panel (opening a pack, then taking options one pick at a time) ---
-        TextField packIndex = new TextField();
-        packIndex.setPromptText("pending pack #");
-        Button openPack = new Button("Open Pack");
-        TextField optionIndex = new TextField();
-        optionIndex.setPromptText("option #");
-        Button takeOption = new Button("Take Option");
-        HBox packRow = new HBox(8);
-        packRow.getChildren().addAll(packIndex, openPack, optionIndex, takeOption);
-        VBox packPanel = new VBox(8);
-        packPanel.getChildren().addAll(packRow);
-
-        // --- SHOP panel: one button per item, rebuilt each frame ---
-        FlowPane shopCards = new FlowPane(6, 6);
-        FlowPane shopPacks = new FlowPane(6, 6);
-        FlowPane shopVouchers = new FlowPane(6, 6);
+        // --- SHOP panel ---
+        TextField shopIndex = new TextField();
+        shopIndex.setPromptText("index for buy/sell/voucher");
+        Button buyCard = new Button("Buy Card");
+        Button buyPack = new Button("Buy Pack");
+        Button voucher = new Button("Redeem Voucher");
         Button reroll = new Button("Reroll");
+        Button sellJoker = new Button("Sell Joker");
+        Button sellItem = new Button("Sell Item");
         Button ready = new Button("Ready");
         Button notReady = new Button("Not Ready");
-        HBox shopActions = new HBox(8);
-        shopActions.getChildren().addAll(reroll, ready, notReady);
-        VBox shopPanel = new VBox(6);
-        shopPanel.getChildren().addAll(
-                new Label("Cards"), shopCards,
-                new Label("Packs"), shopPacks,
-                new Label("Vouchers"), shopVouchers,
-                shopActions);
+        HBox shopBuy = new HBox(8);
+        shopBuy.getChildren().addAll(buyCard, buyPack, voucher, reroll);
+        HBox shopSell = new HBox(8);
+        shopSell.getChildren().addAll(sellJoker, sellItem, ready, notReady);
+        VBox shopPanel = new VBox(8);
+        shopPanel.getChildren().addAll(shopIndex, shopBuy, shopSell);
 
         VBox root = new VBox(10);
         root.setStyle("-fx-padding: 12;");
-        root.getChildren().addAll(status, selectionPanel, blindPanel, resultPanel,
-                inventoryPanel, packPanel, shopPanel);
+        root.getChildren().addAll(status, selectionPanel, blindPanel, resultPanel, inventoryPanel, shopPanel);
 
         ScrollPane scroller = new ScrollPane(root);
         scroller.setFitToWidth(true);
@@ -165,40 +145,34 @@ public final class BalatryClient extends Application {
             skipBlind.setOnAction(e -> vm.skipBlind());
             continueToShop.setOnAction(e -> { resultContinued = true; vm.readyForNext(); });
 
-            useCons.setOnAction(e -> withIndex(consIndex, status,
-                    i -> vm.useConsumable(i, selectedIndices(cards))));   // selected hand cards are the targets
-            useRelic.setOnAction(e -> withIndex(relicIndex, status, i -> {
-                if (snapshot == null || i < 0 || i >= snapshot.relicCards().size()) {
-                    hint(status, "No relic at index " + i + ".");
-                    return;
+            useItem.setOnAction(e -> withIndex(itemIndex, status, i -> {
+                MatchSnapshot.ItemView item = itemAt(i, status);
+                if (item == null) return;
+                if (item.isRelic()) {
+                    RelicTarget target = buildRelicTarget(vm, item, relicSeat.getText(), relicChoice.getText(), status);
+                    if (target != null) vm.useRelic(item.modelIndex(), target);
+                } else {
+                    vm.useConsumable(item.modelIndex(), selectedIndices(cards));   // selected hand cards are the targets
                 }
-                RelicTarget target = buildRelicTarget(vm, snapshot.relicCards().get(i),
-                        relicSeat.getText(), relicChoice.getText(), status);
-                if (target != null) vm.useRelic(i, target);
             }));
             moveJoker.setOnAction(e -> withIndex(moveFrom, status,
                     from -> withIndex(moveTo, status, to -> vm.moveJoker(from, to))));
-
-            openPack.setOnAction(e -> withIndex(packIndex, status, vm::openPack));
-            takeOption.setOnAction(e -> withIndex(optionIndex, status, i -> {
-                MatchSnapshot.PackView pack = snapshot == null ? null : snapshot.openPack();
-                if (pack == null || i < 0 || i >= pack.options().size()) {
-                    hint(status, "No option at index " + i + " — open a pack first.");
-                    return;
-                }
-                MatchSnapshot.PackOptionView option = pack.options().get(i);
-                if (option.taken()) { hint(status, "Option " + i + " has already been taken."); return; }
-                if (option.relic() == null) { vm.pickFromPack(i, RelicTarget.none()); return; }
-                RelicTarget target = buildRelicTarget(vm, option.relic(),          // a relic pick casts on the spot
-                        relicSeat.getText(), relicChoice.getText(), status);
-                if (target != null) vm.pickFromPack(i, target);
-            }));
 
             play.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "play")) vm.playHand(s); });
             discard.setOnAction(e -> { List<Integer> s = selectedIndices(cards); if (guardSel(s, status, "discard")) vm.discard(s); });
             finish.setOnAction(e -> vm.finishRound());
 
+            buyCard.setOnAction(e -> withIndex(shopIndex, status, vm::buyCard));
+            buyPack.setOnAction(e -> withIndex(shopIndex, status, vm::buyPack));
+            voucher.setOnAction(e -> withIndex(shopIndex, status, vm::redeemVoucher));
             reroll.setOnAction(e -> vm.rerollShop());
+            sellJoker.setOnAction(e -> withIndex(shopIndex, status, vm::sellJoker));
+            sellItem.setOnAction(e -> withIndex(shopIndex, status, i -> {
+                MatchSnapshot.ItemView item = itemAt(i, status);
+                if (item == null) return;
+                if (item.isRelic()) vm.sellRelic(item.modelIndex());
+                else vm.sellConsumable(item.modelIndex());
+            }));
             ready.setOnAction(e -> vm.readyForNext());
             notReady.setOnAction(e -> vm.notReady());
 
@@ -206,8 +180,6 @@ public final class BalatryClient extends Application {
                 snapshot = snap;
                 status.setText(render(snap));
                 rebuildHand(handRow, cards, snap, status);
-                rebuildShop(shopCards, shopPacks, shopVouchers, snap, vm);
-                rebuildSellRow(sellRow, snap, vm);
 
                 MatchPhase phase = snap == null ? null : snap.phase();
                 if (phase != lastPhase) { Log.phase(lastPhase, phase); lastPhase = phase; }
@@ -229,14 +201,6 @@ public final class BalatryClient extends Application {
                         || phase == MatchPhase.RESULT || phase == MatchPhase.SHOP;
                 show(inventoryPanel, canUseItems);
 
-                if (inShop && snap.shop() != null)
-                    reroll.setDisable(snap.money() < snap.shop().rerollCost());
-
-                boolean hasPacks = snap != null && (!snap.pendingPacks().isEmpty() || snap.openPack() != null);
-                show(packPanel, hasPacks);
-                openPack.setDisable(snap == null || snap.pendingPacks().isEmpty());
-                takeOption.setDisable(snap == null || snap.openPack() == null);
-
                 // In selection, buttons are live only until this seat has chosen.
                 boolean canChoose = inSelection && !snap.hasChosen();
                 playBlind.setDisable(!canChoose);
@@ -252,17 +216,25 @@ public final class BalatryClient extends Application {
         }
     }
 
+    /** The inventory item at merged index {@code i}, or {@code null} (after explaining) if there is none. */
+    private MatchSnapshot.ItemView itemAt(int i, Label status) {
+        if (snapshot == null || i < 0 || i >= snapshot.inventory().size()) {
+            hint(status, "No item at index " + i + ".");
+            return null;
+        }
+        return snapshot.inventory().get(i);
+    }
+
     /**
      * Assembles a {@link RelicTarget} from what the relic itself says it needs. Only relics the caster aims by
      * hand read the seat box; the standings-driven ones ignore it entirely, so offering a seat there would be a
      * lie. Returns {@code null} (after explaining) when the caster has not supplied what the relic asks for.
      */
-    private RelicTarget buildRelicTarget(MatchViewModel vm, MatchSnapshot.RelicView relic,
-                                         String seatText, String choiceText, Label status) {
+    private RelicTarget buildRelicTarget(MatchViewModel vm, MatchSnapshot.ItemView relic, String seatText, String choiceText, Label status) {
         PlayerId seat = null;
         if (relic.needsSeat()) {
             if (seatText == null || seatText.trim().isEmpty()) {
-                hint(status, relic.name() + " must be aimed: enter a seat number.");
+                hint(status, relic.label() + " must be aimed: enter a seat number.");
                 return null;
             }
             try {
@@ -276,7 +248,7 @@ public final class BalatryClient extends Application {
         String choice = choiceText == null ? "" : choiceText.trim();
         boolean needsChoice = !"NONE".equals(relic.selector());
         if (needsChoice && choice.isEmpty()) {
-            hint(status, relic.name() + " needs a " + relic.selector().toLowerCase().replace('_', ' ') + ".");
+            hint(status, relic.label() + " needs a " + relic.selector().toLowerCase().replace('_', ' ') + ".");
             return null;
         }
         try {
@@ -332,76 +304,6 @@ public final class BalatryClient extends Application {
         }
     }
 
-    /**
-     * Rebuilds the shop as one button per item. Buttons address positions, so a sold slot keeps its place as a
-     * disabled button rather than vanishing — otherwise the items after it would slide onto different indices.
-     * A button is disabled when the item is sold or the seat cannot afford it, so an illegal buy is unclickable
-     * rather than a rejection after the fact.
-     */
-    private static void rebuildShop(FlowPane cardsRow, FlowPane packsRow, FlowPane vouchersRow,
-                                    MatchSnapshot snap, MatchViewModel vm) {
-        cardsRow.getChildren().clear();
-        packsRow.getChildren().clear();
-        vouchersRow.getChildren().clear();
-        if (snap == null || snap.shop() == null) return;
-        MatchSnapshot.ShopView shop = snap.shop();
-
-        for (int i = 0; i < shop.slots().size(); i++) {
-            int index = i;
-            cardsRow.getChildren().add(itemButton(shop.slots().get(i), snap.money(), () -> vm.buyCard(index)));
-        }
-        for (int i = 0; i < shop.packs().size(); i++) {
-            int index = i;
-            packsRow.getChildren().add(itemButton(shop.packs().get(i), snap.money(), () -> vm.buyPack(index)));
-        }
-        for (int i = 0; i < shop.vouchers().size(); i++) {
-            int index = i;
-            vouchersRow.getChildren().add(
-                    itemButton(shop.vouchers().get(i), snap.money(), () -> vm.redeemVoucher(index)));
-        }
-    }
-
-    /** Sell buttons for everything the seat holds, labelled by name so nothing is addressed by number. */
-    private static void rebuildSellRow(FlowPane row, MatchSnapshot snap, MatchViewModel vm) {
-        row.getChildren().clear();
-        if (snap == null) return;
-        for (int i = 0; i < snap.jokers().size(); i++) {
-            int index = i;
-            row.getChildren().add(sellButton("Joker: " + snap.jokers().get(i), () -> vm.sellJoker(index)));
-        }
-        for (int i = 0; i < snap.consumables().size(); i++) {
-            int index = i;
-            row.getChildren().add(sellButton("Consumable: " + snap.consumables().get(i), () -> vm.sellConsumable(index)));
-        }
-        for (int i = 0; i < snap.relicCards().size(); i++) {
-            int index = i;
-            row.getChildren().add(sellButton("Relic: " + snap.relicCards().get(i).name(), () -> vm.sellRelic(index)));
-        }
-    }
-
-    private static Button sellButton(String label, Runnable action) {
-        Button b = new Button(label);
-        b.setStyle("-fx-font-family: monospace;");
-        b.setOnAction(e -> action.run());
-        return b;
-    }
-
-    /** One shop item: name and price on the face, the structured detail on hover. */
-    private static Button itemButton(MatchSnapshot.ItemView item, long money, Runnable buy) {
-        Button b = new Button(item.sold() ? item.label() : item.label() + "  $" + item.price());
-        b.setStyle("-fx-font-family: monospace;");
-        boolean affordable = money >= item.price();
-        b.setDisable(item.sold() || !affordable);
-        Tooltip tip = new Tooltip(item.sold()
-                ? item.detail()
-                : item.detail() + (affordable ? "" : "\nYou cannot afford this ($" + money + ")"));
-        tip.setWrapText(true);
-        tip.setShowDelay(Duration.millis(200));
-        b.setTooltip(tip);
-        b.setOnAction(e -> buy.run());
-        return b;
-    }
-
     private static List<Integer> selectedIndices(List<ToggleButton> cards) {
         List<Integer> out = new ArrayList<>();
         for (int i = 0; i < cards.size(); i++) if (cards.get(i).isSelected()) out.add(i);
@@ -441,41 +343,20 @@ public final class BalatryClient extends Application {
         }
 
         appendIndexed(b, "\njokers", s.jokers());
-        appendIndexed(b, "consumables", s.consumables());
-        b.append("relics :");
-        if (s.relicCards().isEmpty()) b.append(" (none)\n");
+        b.append("consumables :");
+        if (s.inventory().isEmpty()) b.append(" (none)\n");
         else {
             b.append("\n");
-            for (int i = 0; i < s.relicCards().size(); i++) {
-                MatchSnapshot.RelicView r = s.relicCards().get(i);
-                b.append("  [").append(i).append("] ").append(r.name())
-                 .append("  \u2014 ").append(targeting(r.kind()));
-                if (!"NONE".equals(r.selector()))
-                    b.append(", choose a ").append(r.selector().toLowerCase().replace('_', ' '));
-                b.append("\n");
-            }
-        }
-
-        if (!s.pendingPacks().isEmpty()) {
-            b.append("\npending packs (granted by tags/Wrath; buying a pack opens it at once):\n");
-            for (int i = 0; i < s.pendingPacks().size(); i++)
-                b.append("  [").append(i).append("] ").append(s.pendingPacks().get(i)).append("\n");
-        }
-
-        if (s.openPack() != null) {
-            MatchSnapshot.PackView p = s.openPack();
-            b.append("\n=== OPEN PACK: ").append(p.pack()).append(" ===   picks left ").append(p.picksLeft()).append("\n");
-            for (int i = 0; i < p.options().size(); i++) {
-                MatchSnapshot.PackOptionView o = p.options().get(i);
-                b.append("  [").append(i).append("] ").append(o.label());
-                if (o.relic() != null) {
-                    b.append("  \u2014 casts on pick: ").append(targeting(o.relic().kind()));
-                    if (!"NONE".equals(o.relic().selector()))
-                        b.append(", choose a ").append(o.relic().selector().toLowerCase().replace('_', ' '));
+            for (int i = 0; i < s.inventory().size(); i++) {
+                MatchSnapshot.ItemView it = s.inventory().get(i);
+                b.append("  [").append(i).append("] ").append(it.label());
+                if (it.isRelic()) {                      // relics still need aiming info; consumables just list
+                    b.append("  \u2014 ").append(targeting(it.kind()));
+                    if (!"NONE".equals(it.selector()))
+                        b.append(", choose a ").append(it.selector().toLowerCase().replace('_', ' '));
                 }
                 b.append("\n");
             }
-            b.append("Relic picks read the seat / choice boxes in the inventory row.\n");
         }
 
         if (s.phase() == MatchPhase.RESULT && s.lastResult() != null) {
@@ -492,9 +373,15 @@ public final class BalatryClient extends Application {
             MatchSnapshot.ShopView sh = s.shop();
             b.append("\n=== SHOP ===   reroll $").append(sh.rerollCost())
              .append("   purchases left ").append(sh.purchasesRemaining() == Integer.MAX_VALUE ? "\u221e" : String.valueOf(sh.purchasesRemaining())).append("\n");
-            b.append("cards    : ").append(names(sh.slots())).append("\n");
-            b.append("packs    : ").append(names(sh.packs())).append("\n");
-            b.append("vouchers : ").append(names(sh.vouchers())).append("\n");
+            b.append("cards:\n");
+            for (int i = 0; i < sh.slots().size(); i++)
+                b.append("  [").append(i).append("] $").append(sh.slotPrices().get(i)).append("  ").append(sh.slots().get(i)).append("\n");
+            b.append("packs:\n");
+            for (int i = 0; i < sh.packs().size(); i++)
+                b.append("  [").append(i).append("] $").append(sh.packPrices().get(i)).append("  ").append(sh.packs().get(i)).append("\n");
+            b.append("vouchers:\n");
+            for (int i = 0; i < sh.vouchers().size(); i++)
+                b.append("  [").append(i).append("] ").append(sh.vouchers().get(i)).append("\n");
         }
 
         if (s.phase() == MatchPhase.FINISHED) {
@@ -522,7 +409,7 @@ public final class BalatryClient extends Application {
         if (s.phase() == MatchPhase.BLIND)
             b.append("\nSelect cards, then Play or Discard \u2014 or Finish Round.");
         else if (s.phase() == MatchPhase.SHOP)
-            b.append("\nClick an item to buy it; hover for details. Greyed items are sold or unaffordable.");
+            b.append("\nType an index, then Buy/Sell/Voucher. Reroll and Ready need no index.");
         return b.toString();
     }
 
@@ -536,19 +423,6 @@ public final class BalatryClient extends Application {
             case "GLOBAL"   -> "affects the whole table";
             default          -> kind;
         };
-    }
-
-    /** A compact one-line summary of a shop row; the buttons carry the detail. */
-    private static String names(List<MatchSnapshot.ItemView> items) {
-        if (items.isEmpty()) return "(none)";
-        StringBuilder b = new StringBuilder();
-        for (int i = 0; i < items.size(); i++) {
-            if (i > 0) b.append(", ");
-            MatchSnapshot.ItemView it = items.get(i);
-            b.append(it.label());
-            if (!it.sold()) b.append(" $").append(it.price());
-        }
-        return b.toString();
     }
 
     private static void appendIndexed(StringBuilder b, String label, List<String> items) {
