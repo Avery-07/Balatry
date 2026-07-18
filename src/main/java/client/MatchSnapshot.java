@@ -120,8 +120,11 @@ public record MatchSnapshot(
 
     /** Builds a snapshot from the client's local host. Call on the FX thread. */
     public static MatchSnapshot of(MatchClient client) {
-        Match match = client.getLocalHost().getMatch();
-        PlayerId me = client.getSeat();
+        return of(client.getLocalHost().getMatch(), client.getSeat());
+    }
+
+    /** Builds a seat-relative snapshot directly from a match; the test seam behind {@link #of(MatchClient)}. */
+    public static MatchSnapshot of(Match match, PlayerId me) {
         Run run = match.getRun(me);
 
         Round r = run.getRound();
@@ -234,32 +237,39 @@ public record MatchSnapshot(
     }
 
     private static ShopView buildShop(Shop shop, Run run) {
+        // Bought cards/packs and redeemed vouchers leave a null slot; we keep it as a null entry so tile indices
+        // stay aligned with the model's slot indices (the client renders nulls as spent, unbuyable tiles).
         List<ShopItem> slots = new ArrayList<>();
         for (int i = 0; i < shop.getSlotCount(); i++) {
             Card c = shop.getSlot(i);
+            if (c == null) { slots.add(null); continue; }
             int price = shop.slotPrice(i);
-            slots.add(new ShopItem(nameOf(c), price, tooltip(nameOf(c), categoryOf(c), price)));
+            slots.add(new ShopItem(nameOf(c), price, tooltip(nameOf(c), descriptionOf(c), categoryOf(c), price)));
         }
         List<ShopItem> packs = new ArrayList<>();
         for (int i = 0; i < shop.getPackCount(); i++) {
             BoosterPack p = shop.getPack(i);
+            if (p == null) { packs.add(null); continue; }
             int price = shop.packPrice(i);
             String label = String.valueOf(p);
-            packs.add(new ShopItem(label, price, tooltip(label, "Booster Pack", price)));
+            packs.add(new ShopItem(label, price, tooltip(label, "", "Booster Pack", price)));
         }
         List<VoucherItem> vouchers = new ArrayList<>();
         for (int i = 0; i < shop.getVoucherCount(); i++) {
             Voucher v = shop.getVoucher(i);
+            if (v == null) { vouchers.add(null); continue; }
             int price = v.getSpec().getCost();
             String label = v.getSpec().getName();
-            vouchers.add(new VoucherItem(label, price, tooltip(label, "Voucher", price), run.canRedeem(v)));
+            vouchers.add(new VoucherItem(label, price, tooltip(label, v.getSpec().getDescription(), "Voucher", price), run.canRedeem(v)));
         }
         return new ShopView(slots, packs, vouchers, shop.rerollCost(), shop.purchasesRemaining());
     }
 
-    /** Hover text (name, category, cost) — the "for now" description until specs carry authored text. */
-    private static String tooltip(String name, String category, int price) {
-        return name + "\n" + category + "\nCost: $" + price;
+    /** Hover text: name, the authored effect description when present, then the category and cost line. */
+    private static String tooltip(String name, String description, String category, int price) {
+        StringBuilder sb = new StringBuilder(name);
+        if (description != null && !description.isEmpty()) sb.append('\n').append(description);
+        return sb.append('\n').append(category).append(" · $").append(price).toString();
     }
 
     /** The purchasable card's display name (spec name for jokers/consumables/relics; toString otherwise). */
@@ -268,6 +278,14 @@ public record MatchSnapshot(
         if (c instanceof ConsumableCard con)  return con.getSpec().getName();
         if (c instanceof RelicCard rel)       return rel.getSpec().getName();
         return String.valueOf(c);
+    }
+
+    /** The purchasable card's authored effect description, or empty if none has been written yet. */
+    private static String descriptionOf(Card c) {
+        if (c instanceof JokerCard j)         return j.getSpec().getDescription();
+        if (c instanceof ConsumableCard con)  return con.getSpec().getDescription();
+        if (c instanceof RelicCard rel)       return rel.getSpec().getDescription();
+        return "";
     }
 
     /** A short category label for a shop card, for the hover text. */

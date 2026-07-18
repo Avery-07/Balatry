@@ -9,6 +9,7 @@ import java.util.Set;
 
 public final class JokerSpec {
     private final String name;
+    private final String description;
     private final Rarity rarity;
     private final Map<Trigger, JokerEffect> effects;
     private final Set<JokerTrait> traits;          // special-interaction capabilities (queried, not fired)
@@ -19,6 +20,7 @@ public final class JokerSpec {
 
     private JokerSpec(Builder b) {
         this.name = b.name;
+        this.description = b.description;
         this.rarity = b.rarity;
         this.effects = Map.copyOf(b.effects);
         this.traits = b.traits.isEmpty() ? EnumSet.noneOf(JokerTrait.class) : EnumSet.copyOf(b.traits);
@@ -46,6 +48,7 @@ public final class JokerSpec {
 
     public static final class Builder {
         private final String name;
+        private String description = "";
         private final Rarity rarity;
         private final Map<Trigger, JokerEffect> effects = new EnumMap<>(Trigger.class);
         private final Set<JokerTrait> traits = EnumSet.noneOf(JokerTrait.class);
@@ -54,6 +57,8 @@ public final class JokerSpec {
         private int debtAllowance = 0;
         private int cost = 0;
         private Builder(String name, Rarity rarity) { this.name = name; this.rarity = rarity; }
+        /** Sets the human-readable effect text shown on hover (optional; defaults to none). */
+        public Builder description(String d) { this.description = d; return this; }
         public Builder on(Trigger t, JokerEffect e) { effects.put(t, e); return this; }
         public Builder trait(JokerTrait... ts)          { for (JokerTrait t : ts) traits.add(t); return this; }
         public Builder retriggerPlayed(CardRetrigger r) { this.playedRetrigger = r; return this; }
@@ -64,6 +69,8 @@ public final class JokerSpec {
     }
 
     public String getName() { return name; }
+    /** Human-readable effect text for the UI; empty when none has been authored yet. */
+    public String getDescription() { return description; }
     public Rarity getRarity() { return rarity; }
     public Map<Trigger, JokerEffect> getEffects() { return effects; }
 

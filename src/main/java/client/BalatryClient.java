@@ -371,15 +371,30 @@ public final class BalatryClient extends Application {
         MatchSnapshot.ShopView shop = s.shop();
         if (shop == null) { rerollLabel.setText(""); return; }
 
-        for (int i = 0; i < shop.slots().size(); i++) shopSlots.getChildren().add(shopTile("slot", i, shop.slots().get(i), true));
-        for (int i = 0; i < shop.packs().size(); i++) shopPacks.getChildren().add(shopTile("pack", i, shop.packs().get(i), true));
+        for (int i = 0; i < shop.slots().size(); i++) {
+            MatchSnapshot.ShopItem it = shop.slots().get(i);
+            shopSlots.getChildren().add(it == null ? soldTile() : shopTile("slot", i, it, true));
+        }
+        for (int i = 0; i < shop.packs().size(); i++) {
+            MatchSnapshot.ShopItem it = shop.packs().get(i);
+            shopPacks.getChildren().add(it == null ? soldTile() : shopTile("pack", i, it, true));
+        }
         for (int i = 0; i < shop.vouchers().size(); i++) {
             MatchSnapshot.VoucherItem v = shop.vouchers().get(i);
-            ToggleButton t = shopTile("voucher", i, new MatchSnapshot.ShopItem(v.label(), v.price(), v.tooltip()), v.redeemable());
-            shopVouchers.getChildren().add(t);
+            if (v == null) { shopVouchers.getChildren().add(soldTile()); continue; }
+            shopVouchers.getChildren().add(
+                    shopTile("voucher", i, new MatchSnapshot.ShopItem(v.label(), v.price(), v.tooltip()), v.redeemable()));
         }
         rerollLabel.setText("reroll $" + shop.rerollCost() + "   purchases left "
                 + (shop.purchasesRemaining() == Integer.MAX_VALUE ? "∞" : shop.purchasesRemaining()));
+    }
+
+    /** A spent slot (bought card/pack or redeemed voucher): a disabled placeholder that keeps the row aligned. */
+    private static ToggleButton soldTile() {
+        ToggleButton t = new ToggleButton("(sold)");
+        t.setStyle("-fx-font-family: monospace;");
+        t.setDisable(true);
+        return t;
     }
 
     /** A selectable shop tile showing "name $price" with a hover tooltip; disabled tiles can't be armed. */

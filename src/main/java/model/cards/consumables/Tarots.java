@@ -18,29 +18,29 @@ import java.util.random.RandomGenerator;
 /** The twenty-two Tarot cards. */
 public enum Tarots {
 
-    THE_FOOL("The Fool", (run, self) -> {
+    THE_FOOL("The Fool", "Creates a copy of the last Tarot or Planet you used this run.", (run, self) -> {
         ConsumableSpec last = run.getLastTarotOrPlanet();
         if (last != null) run.createConsumable(last);
     }),
-    THE_MAGICIAN("The Magician", (run, self) -> enhance(run, 2, Enhancement.LUCKY)),
-    THE_HIGH_PRIESTESS("The High Priestess", (run, self) -> {
+    THE_MAGICIAN("The Magician", "Enhances up to 2 selected cards into Lucky cards.", (run, self) -> enhance(run, 2, Enhancement.LUCKY)),
+    THE_HIGH_PRIESTESS("The High Priestess", "Creates 2 random Planet cards (if you have room).", (run, self) -> {
         createRandomPlanet(run);
         createRandomPlanet(run);
     }),
-    THE_EMPRESS("The Empress", (run, self) -> enhance(run, 2, Enhancement.MULT)),
-    THE_EMPEROR("The Emperor", (run, self) -> {
+    THE_EMPRESS("The Empress", "Enhances up to 2 selected cards into Mult cards.", (run, self) -> enhance(run, 2, Enhancement.MULT)),
+    THE_EMPEROR("The Emperor", "Creates 2 random Tarot cards (if you have room).", (run, self) -> {
         createRandomTarot(run);
         createRandomTarot(run);
     }),
-    THE_HIEROPHANT("The Hierophant", (run, self) -> enhance(run, 2, Enhancement.BONUS)),
-    THE_LOVERS("The Lovers", (run, self) -> enhance(run, 2, Enhancement.WILD)),
-    THE_CHARIOT("The Chariot", (run, self) -> enhance(run, 1, Enhancement.STEEL)),
-    JUSTICE("Justice", (run, self) -> enhance(run, 1, Enhancement.GLASS)),
-    THE_HERMIT("The Hermit", (run, self) -> run.addMoney(Math.max(0, Math.min(run.getMoney(), 20)))),
-    THE_WHEEL_OF_FORTUNE("The Wheel of Fortune", (run, self) -> {
+    THE_HIEROPHANT("The Hierophant", "Enhances up to 2 selected cards into Bonus cards.", (run, self) -> enhance(run, 2, Enhancement.BONUS)),
+    THE_LOVERS("The Lovers", "Enhances up to 2 selected cards into Wild cards.", (run, self) -> enhance(run, 2, Enhancement.WILD)),
+    THE_CHARIOT("The Chariot", "Enhances 1 selected card into a Steel card.", (run, self) -> enhance(run, 1, Enhancement.STEEL)),
+    JUSTICE("Justice", "Enhances 1 selected card into a Glass card.", (run, self) -> enhance(run, 1, Enhancement.GLASS)),
+    THE_HERMIT("The Hermit", "Doubles your money (adds up to $20).", (run, self) -> run.addMoney(Math.max(0, Math.min(run.getMoney(), 20)))),
+    THE_WHEEL_OF_FORTUNE("The Wheel of Fortune", "1 in 2 chance to gain $15.", (run, self) -> {
         if (run.roll(RngSource.WHEEL_OF_FORTUNE, 1, 2)) run.addMoney(15);
     }),
-    STRENGTH("Strength", (run, self) -> {
+    STRENGTH("Strength", "Increases the rank of up to 2 selected cards by 1.", (run, self) -> {
         List<DeckCard> targets = run.getDeckCardTargets();
         Rank[] ranks = Rank.values();
         for (int i = 0; i < Math.min(2, targets.size()); i++) {
@@ -48,11 +48,11 @@ public enum Tarots {
             card.setRank(ranks[(card.getRank().ordinal() + 1) % ranks.length]);   // wraps Ace -> Two
         }
     }),
-    THE_HANGED_MAN("The Hanged Man", (run, self) -> {
+    THE_HANGED_MAN("The Hanged Man", "Destroys up to 2 selected cards.", (run, self) -> {
         List<DeckCard> targets = run.getDeckCardTargets();
         run.destroyDeckCards(targets.subList(0, Math.min(2, targets.size())));
     }),
-    DEATH("Death", (run, self) -> {
+    DEATH("Death", "Select 2 cards: the left becomes an exact copy of the right.", (run, self) -> {
         List<DeckCard> targets = run.getDeckCardTargets();
         if (targets.size() < 2) return;
         DeckCard left = targets.get(0), right = targets.get(1);
@@ -62,14 +62,14 @@ public enum Tarots {
         left.apply(right.getSeal());
         left.apply(right.getEdition());
     }),
-    TEMPERANCE("Temperance", (run, self) -> {
+    TEMPERANCE("Temperance", "Gives the total sell value of your jokers, up to $50.", (run, self) -> {
         int sum = 0;
         for (JokerCard joker : run.getJokers()) sum += joker.getSellValue();
         run.addMoney(Math.min(sum, 50));
     }),
-    THE_DEVIL("The Devil", (run, self) -> enhance(run, 1, Enhancement.GOLD)),
-    THE_TOWER("The Tower", (run, self) -> enhance(run, 2, Enhancement.STONE)),
-    THE_STAR("The Star", (run, self) -> {
+    THE_DEVIL("The Devil", "Enhances 1 selected card into a Gold card.", (run, self) -> enhance(run, 1, Enhancement.GOLD)),
+    THE_TOWER("The Tower", "Enhances up to 2 selected cards into Stone cards.", (run, self) -> enhance(run, 2, Enhancement.STONE)),
+    THE_STAR("The Star", "1 in 8 chance to turn a random card, joker or consumable Negative.", (run, self) -> {
         if (!run.roll(RngSource.STAR_NEGATIVE, 1, 8)) return;
         List<Card> pool = new ArrayList<>();
         pool.addAll(run.getHeld());
@@ -80,22 +80,22 @@ public enum Tarots {
         RandomGenerator stream = run.getRng().streamFor(RngSource.STAR_NEGATIVE, run.nextSalt(RngSource.STAR_NEGATIVE));
         pool.get(stream.nextInt(pool.size())).apply(Edition.NEGATIVE);
     }),
-    THE_MOON("The Moon", (run, self) -> {
+    THE_MOON("The Moon", "1 in 4 chance to give a random card in your hand a shiny edition.", (run, self) -> {
         if (!run.roll(RngSource.MOON_EDITION, 1, 4)) return;
         List<DeckCard> held = run.getHeld();
         if (held.isEmpty()) return;
         RandomGenerator stream = run.getRng().streamFor(RngSource.MOON_EDITION, run.nextSalt(RngSource.MOON_EDITION));
         held.get(stream.nextInt(held.size())).apply(randomShinyEdition(stream));
     }),
-    THE_SUN("The Sun", (run, self) -> {
+    THE_SUN("The Sun", "1 in 4 chance to give a random joker a shiny edition.", (run, self) -> {
         if (!run.roll(RngSource.SUN_EDITION, 1, 4)) return;
         List<JokerCard> jokers = run.getJokers();
         if (jokers.isEmpty()) return;
         RandomGenerator stream = run.getRng().streamFor(RngSource.SUN_EDITION, run.nextSalt(RngSource.SUN_EDITION));
         jokers.get(stream.nextInt(jokers.size())).apply(randomShinyEdition(stream));
     }),
-    JUDGEMENT("Judgement", (run, self) -> createRandomJoker(run)),
-    THE_WORLD("The World", (run, self) -> {
+    JUDGEMENT("Judgement", "Creates a random joker (if you have room).", (run, self) -> createRandomJoker(run)),
+    THE_WORLD("The World", "Select 3 cards: the first two take the suit of the third.", (run, self) -> {
         List<DeckCard> targets = run.getDeckCardTargets();
         if (targets.size() < 3) return;
         Suit suit = targets.get(2).getSuit();
@@ -107,8 +107,8 @@ public enum Tarots {
 
     private final ConsumableSpec spec;
 
-    Tarots(String displayName, ConsumableEffect effect) {
-        this.spec = new ConsumableSpec(displayName, ConsumableType.TAROT, COST, effect);
+    Tarots(String displayName, String description, ConsumableEffect effect) {
+        this.spec = new ConsumableSpec(displayName, ConsumableType.TAROT, COST, description, effect);
     }
 
     public ConsumableSpec spec() { return spec; }

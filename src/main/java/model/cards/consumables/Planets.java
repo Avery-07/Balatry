@@ -24,7 +24,9 @@ public enum Planets {
 
     Planets(String displayName, HandType hand) {
         this.hand = hand;
+        String pretty = hand.name().replace('_', ' ').toLowerCase();
         this.spec = new ConsumableSpec(displayName, ConsumableType.PLANET, COST,
+                "Levels up your " + pretty + " (raises its Chips and Mult).",
                 (run, self) -> run.levelUpHand(hand));
     }
 
