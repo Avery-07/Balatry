@@ -75,18 +75,18 @@ public final class RelicTests {
         setMoney(harpax.getRun(a), 3);
         setMoney(harpax.getRun(b), 20);
         harpax.getRun(a).addRelic(Relics.HARPAX.make());
-        harpax.useRelic(a, 0, RelicTarget.on(b));
+        harpax.useRelic(a, 0, RelicTarget.none());   // random rival: b is the only seat above a
         checkInt("Harpax: caster gains the cut", harpax.getRun(a).getMoney(), 7);
         checkInt("Harpax: target loses the cut", harpax.getRun(b).getMoney(), 16);
 
-        // Pyre: destroys one of the target's consumables.
-        Match pyre = started(2L);
-        PlayerId pa = pyre.getSeats().get(0), pb = pyre.getSeats().get(1);
+        // Pyre: destroys a random consumable from every seat above the caster.
+        Match pyre = ranked(2L);
+        PlayerId pb = pyre.getSeats().get(0), pa = pyre.getSeats().get(1);   // pb outranks pa
         pyre.getRun(pb).addConsumable(Planets.MERCURY.make());
         pyre.getRun(pb).addConsumable(Planets.VENUS.make());
         pyre.getRun(pa).addRelic(Relics.PYRE.make());
-        pyre.useRelic(pa, 0, RelicTarget.on(pb));
-        checkInt("Pyre destroys one consumable", pyre.getRun(pb).getConsumables().size(), 1);
+        pyre.useRelic(pa, 0, RelicTarget.none());
+        checkInt("Pyre destroys one consumable from the seat above", pyre.getRun(pb).getConsumables().size(), 1);
 
         // Katabasis: levels a hand type down for everyone above the caster; no seat is chosen.
         Match kata = ranked(3L);
@@ -123,13 +123,13 @@ public final class RelicTests {
 
         m.getRun(atk).addRelic(Relics.HARPAX.make());
         m.getRun(atk).addRelic(Relics.HARPAX.make());
-        m.useRelic(atk, 0, RelicTarget.on(def));                 // first hit -> absorbed
+        m.useRelic(atk, 0, RelicTarget.none());                  // random rival: def is the only seat above -> first hit absorbed
         checkInt("Aegis negates the hit: target intact", m.getRun(def).getMoney(), 20);
         checkInt("Aegis negates the hit: caster unchanged", m.getRun(atk).getMoney(), 0);
         checkInt("Anger counts the blocked targeting", m.getRun(def).getStats().getTimesTargeted(), 1);
         check("shield consumed", !m.getRun(def).getAfflictions().isAegisArmed());
 
-        m.useRelic(atk, 0, RelicTarget.on(def));                 // second hit -> lands
+        m.useRelic(atk, 0, RelicTarget.none());                  // second hit -> lands
         checkInt("next hit lands: target -4", m.getRun(def).getMoney(), 16);
         checkInt("next hit lands: caster +4", m.getRun(atk).getMoney(), 4);
         checkInt("Anger counts the second targeting", m.getRun(def).getStats().getTimesTargeted(), 2);
@@ -182,20 +182,24 @@ public final class RelicTests {
         check("leader's Anathema touches nobody", !top.getRun(tb).getAfflictions().debuffs(queen));
         check("the fizzled relic is still spent", top.getRun(ta).getRelics().isEmpty());
 
-        // Ties are not "above": at level pegs nobody can be targeted, so a RIVAL relic fizzles too.
+        // Ties are not "above": at level pegs nobody can be targeted, so a random-rival relic fizzles too.
         Match tied = started(13L);
         PlayerId xa = tied.getSeats().get(0), xb = tied.getSeats().get(1);
         checkInt("fixture is tied", (int) tied.seatsAbove(xa).size(), 0);
         setMoney(tied.getRun(xb), 20);
         tied.getRun(xa).addRelic(Relics.HARPAX.make());
-        tied.useRelic(xa, 0, RelicTarget.on(xb));
+        tied.useRelic(xa, 0, RelicTarget.none());
         checkInt("Harpax fizzles against a tied seat", tied.getRun(xb).getMoney(), 20);
 
-        // RIVAL rejects a seat that is not above the caster (aiming downward is a malformed cast).
-        Match aim = ranked3(14L);
-        PlayerId ab = aim.getSeats().get(1), ac = aim.getSeats().get(2);
-        aim.getRun(ab).addRelic(Relics.HARPAX.make());
-        checkThrows("Harpax refuses to aim downward", () -> aim.useRelic(ab, 0, RelicTarget.on(ac)));
+        // Random rival: Harpax cast from a mid-ranked seat lands on a seat strictly above it, never below.
+        Match rnd = ranked3(14L);
+        PlayerId ra = rnd.getSeats().get(0), rb = rnd.getSeats().get(1);   // ra outranks rb outranks the third
+        setMoney(rnd.getRun(ra), 50);
+        setMoney(rnd.getRun(rb), 0);
+        rnd.getRun(rb).addRelic(Relics.HARPAX.make());
+        rnd.useRelic(rb, 0, RelicTarget.none());
+        checkInt("Harpax's random victim (a seat above) loses the cut", rnd.getRun(ra).getMoney(), 40);
+        checkInt("the caster gains the cut", rnd.getRun(rb).getMoney(), 10);
 
         // Aegis is per seat: one shielded victim absorbs its copy while the other still takes the hit.
         Match shield = ranked3(15L);

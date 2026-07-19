@@ -495,14 +495,11 @@ public final class Match {
                 getRun(chosen);   // seat validation
                 yield List.of(chosen);
             }
-            case RIVAL -> {
+            case RANDOM_RIVAL -> {
                 List<PlayerId> above = seatsAbove(casterId);
                 if (above.isEmpty()) yield List.of();       // nobody outranks the caster: the cast fizzles
-                if (chosen == null)
-                    throw new IllegalStateException("this relic needs a seat above you to aim at");
-                if (!above.contains(chosen))
-                    throw new IllegalStateException("seat " + chosen + " is not above you in the standings");
-                yield List.of(chosen);
+                long salt = getRun(casterId).nextSalt(RngSource.RELIC_EFFECT);   // deterministic, per-cast random victim
+                yield List.of(above.get(rng.nextInt(RngSource.RELIC_EFFECT, salt, above.size())));
             }
             case RIVALS -> seatsAbove(casterId);            // the caster picks no seat; may be empty and fizzle
             default -> List.of();

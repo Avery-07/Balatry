@@ -30,6 +30,7 @@ public final class SnapshotTests {
         blindSnapshot();
         hudDataSnapshot();
         shopPurchaseSnapshot();
+        packOpeningSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -135,6 +136,49 @@ public final class SnapshotTests {
         int offered = 0;
         for (MatchSnapshot.ShopItem it : after.shop().slots()) if (it != null) offered++;
         checkInt("exactly one slot became spent", offered, before.shop().slots().size() - 1);
+    }
+
+    /** PACK OPENING: buying a pack projects the opening (name, budget, options); spending the budget clears it. */
+    private static void packOpeningSnapshot() {
+        Match m = Match.create(31L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        for (PlayerId id : m.getSeats()) stackToWin(m.getRun(id));
+        m.start();
+        for (PlayerId id : m.getSeats()) {
+            Run run = m.getRun(id);
+            int n = Math.min(5, run.getRound().getHand().size());
+            run.getRound().play(new ArrayList<>(run.getRound().getHand().subList(0, n)));
+            run.getRound().finish();
+        }
+        m.toShop();
+
+        Run run = m.getRun(a);
+        run.addMoney(50);
+        var shop = run.getShop();
+        int packIdx = -1;
+        for (int i = 0; i < shop.getPackCount(); i++) if (shop.getPack(i) != null) { packIdx = i; break; }
+        check("the shop offers a pack", packIdx >= 0);
+
+        // Buy + open, mirroring the model's BuyPack action.
+        run.grantPack(shop.buyPack(packIdx));
+        run.beginOpening(run.openPendingPack(run.getPendingPacks().size() - 1));
+
+        MatchSnapshot s = MatchSnapshot.of(m, a);
+        check("the snapshot exposes the open pack", s.opening() != null);
+        check("the pack names itself", s.opening() != null && !s.opening().packName().isEmpty());
+        check("the pack has a positive pick budget", s.opening() != null && s.opening().picksLeft() >= 1);
+        check("the pack offers options", s.opening() != null && !s.opening().options().isEmpty());
+
+        // Spending the whole budget clears the opening.
+        var op = run.getCurrentOpening();
+        while (op.getPicksLeft() > 0) {
+            int idx = -1;
+            for (int i = 0; i < op.getOptions().size(); i++) if (op.getOptions().get(i) != null) { idx = i; break; }
+            if (idx < 0) break;
+            op.pick(idx);
+        }
+        if (op.getPicksLeft() == 0) run.clearOpening();
+        check("the opening clears once its budget is spent", MatchSnapshot.of(m, a).opening() == null);
     }
 
     /** Eight cycling-suit Aces and every hand type leveled far up: one hand clears any early blind. */

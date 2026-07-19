@@ -16,12 +16,12 @@ public enum RelicKind {
     /** Resolves once on the table as a whole (Metabole). */
     GLOBAL,
 
-    /** One freely chosen opponent, whatever the standings say (Pyre). */
+    /** One freely chosen opponent, whatever the standings say (currently unused; kept for future relics). */
     OPPONENT,
 
-    /** One chosen seat that must be strictly above the caster (Limos, Harpax). */
-    RIVAL,
+    /** One random seat strictly above the caster; the caster chooses nobody (Limos, Harpax). */
+    RANDOM_RIVAL,
 
-    /** Every seat strictly above the caster; the caster chooses no seat (Anathema, Miasma, Katadesmos, Katabasis). */
+    /** Every seat strictly above the caster; the caster chooses no seat (Anathema, Miasma, Katadesmos, Katabasis, Pyre). */
     RIVALS
 }

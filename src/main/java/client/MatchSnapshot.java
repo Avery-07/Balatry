@@ -4,6 +4,7 @@ import model.cards.Card;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
 import model.cards.packs.BoosterPack;
+import model.cards.packs.PackOpening;
 import model.cards.vouchers.Voucher;
 import model.game.Blind;
 import model.game.BlindTargets;
@@ -71,6 +72,7 @@ public record MatchSnapshot(
         List<BlindOption> blinds,  // the ante's three blinds, for the selection screen (empty outside SELECTION)
         boolean inShop,
         ShopView shop,             // null outside the shop phase
+        PackOpeningView opening,   // a booster pack being picked from, or null
         boolean hasChosen,         // this seat has made its blind-selection choice
         ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
         List<StandingView> standings,   // every seat, ranked; for the end-of-match summary
@@ -118,6 +120,9 @@ public record MatchSnapshot(
 
     /** One offered voucher: name, price, hover text, and whether it can be redeemed now (one per ante). */
     public record VoucherItem(String label, int price, String tooltip, boolean redeemable) { }
+
+    /** A booster pack being opened: its name, the remaining pick budget, and each option's label (null = taken). */
+    public record PackOpeningView(String packName, int picksLeft, List<String> options) { }
 
     /** Shop contents for the local seat, present only during the shop phase. */
     public record ShopView(
@@ -217,6 +222,7 @@ public record MatchSnapshot(
                 blindOptions(match),
                 inShop,
                 shopView,
+                packOpening(run),
                 hasChosen,
                 lastResult,
                 table,
@@ -257,6 +263,16 @@ public record MatchSnapshot(
             case BIG   -> "Big Blind";
             case BOSS  -> "Boss Blind";
         };
+    }
+
+    /** The pack the seat is currently picking from, or null. Taken options appear as null entries. */
+    private static PackOpeningView packOpening(Run run) {
+        PackOpening o = run.getCurrentOpening();
+        if (o == null) return null;
+        List<String> options = new ArrayList<>();
+        for (Card c : o.getOptions())
+            options.add(c == null ? null : (c instanceof DeckCard d ? describe(d) : nameOf(c)));
+        return new PackOpeningView(String.valueOf(o.getPack()), o.getPicksLeft(), options);
     }
 
     private static ShopView buildShop(Shop shop, Run run) {
@@ -333,8 +349,8 @@ public record MatchSnapshot(
         for (int i = 0; i < relics.size(); i++) {
             var spec = relics.get(i).getSpec();
             boolean needsSeat = switch (spec.getKind()) {
-                case OPPONENT, RIVAL -> true;      // aimed by hand
-                case RIVALS, SELF, GLOBAL -> false; // the standings (or nothing) decide
+                case OPPONENT -> true;             // a freely-chosen seat (no current relic uses this)
+                case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false; // random / standings-driven / no target
             };
             out.add(new ItemView(spec.getName(), true, i, spec.getKind().name(), spec.getSelector().name(), needsSeat));
         }

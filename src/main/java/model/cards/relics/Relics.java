@@ -25,16 +25,16 @@ public enum Relics {
             RelicSelector.JOKER_SLOT, RelicKind.RIVALS, ctx ->
             ctx.target().getAfflictions().armJokerDebuff(ctx.selection().jokerIndex())),
 
-    /** Destroys a random consumable from a selected opponent. */
-    PYRE("Pyre", "Destroys a random consumable held by a chosen opponent.",
-            RelicSelector.NONE, RelicKind.OPPONENT, ctx -> {
+    /** Destroys a random consumable from every seat above the caster in the standings. */
+    PYRE("Pyre", "Destroys a random consumable held by every player above you in the standings.",
+            RelicSelector.NONE, RelicKind.RIVALS, ctx -> {
         List<ConsumableCard> cs = ctx.target().getConsumables();
         if (!cs.isEmpty()) ctx.target().destroyConsumable(cs.get(ctx.random().nextInt(cs.size())));
     }),
 
-    /** Debuffs the first slot of the next shop of one chosen seat above the caster. */
-    LIMOS("Limos", "Debuffs the first shop slot of a chosen seat above you, next shop only.",
-            RelicSelector.NONE, RelicKind.RIVAL, ctx ->
+    /** Debuffs the first shop slot of one random seat above the caster, for that visit only. */
+    LIMOS("Limos", "Debuffs the first shop slot of a random player above you, next shop only.",
+            RelicSelector.NONE, RelicKind.RANDOM_RIVAL, ctx ->
             ctx.target().getAfflictions().armFirstSlotDebuff()),
 
     /** Levels down a chosen hand type for every seat above the caster. */
@@ -55,9 +55,9 @@ public enum Relics {
         if (last != null) ctx.source().createConsumable(last);
     }),
 
-    /** Steals 20% (rounded down) of the money of one chosen seat above the caster. */
-    HARPAX("Harpax", "Steals 20% (rounded down) of the money of a chosen seat above you.",
-            RelicSelector.NONE, RelicKind.RIVAL, ctx -> {
+    /** Steals 20% (rounded down) of the money of one random seat above the caster. */
+    HARPAX("Harpax", "Steals 20% (rounded down) of the money of a random player above you.",
+            RelicSelector.NONE, RelicKind.RANDOM_RIVAL, ctx -> {
         Run target = ctx.target();
         int amount = Math.max(0, target.getMoney()) / 5;
         if (amount > 0) {

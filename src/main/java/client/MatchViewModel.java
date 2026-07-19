@@ -130,6 +130,11 @@ public final class MatchViewModel {
         submit(new Action.BuyPack(client.getSeat(), packIndex));
     }
 
+    /** Picks the option at {@code optionIndex} from the pack currently being opened. */
+    public void pickFromPack(int optionIndex) {
+        submit(new Action.PickFromPack(client.getSeat(), optionIndex, RelicTarget.none()));
+    }
+
     public void redeemVoucher(int voucherIndex) {
         submit(new Action.RedeemVoucher(client.getSeat(), voucherIndex));
     }
