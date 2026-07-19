@@ -17,7 +17,7 @@
         <javafx.version>21.0.5</javafx.version>
         <jackson.version>2.18.2</jackson.version>
         <!-- The client's main class, once it exists; wired here so `mvn javafx:run` is ready. -->
-        <client.mainClass>client.BalatryClient</client.mainClass>
+        <client.mainClass>client.game.GameClient</client.mainClass>
         <server.mainClass>model.game.net.ServerMain</server.mainClass>
     </properties>
 

@@ -4,6 +4,9 @@ import model.modifiers.Enhancement;
 import model.modifiers.Seal;
 
 public final class DeckCard extends Card {
+    private static final java.util.concurrent.atomic.AtomicInteger IDS = new java.util.concurrent.atomic.AtomicInteger();
+
+    private final int id = IDS.incrementAndGet();   // stable per-card identity; lets the client animate a card across frames
     private Rank rank;
     private Suit suit;
     private Enhancement enhancement;
@@ -13,6 +16,9 @@ public final class DeckCard extends Card {
         this.rank = rank;
         this.suit = suit;
     }
+
+    /** A stable identity unique to this card object; used only by the client to track a card across snapshots. */
+    public int id() { return id; }
 
     public Rank getRank() { return rank; }
     public Suit getSuit() { return suit; }

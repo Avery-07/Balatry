@@ -83,8 +83,8 @@ public record MatchSnapshot(
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
 
-    /** One card in hand, with rank/suit ordinals so the client can offer sort-by-rank and sort-by-suit. */
-    public record HandCardView(String label, int rank, int suit) { }
+    /** One card in hand: a stable {@code id} (for cross-frame animation) plus rank/suit ordinals for sorting. */
+    public record HandCardView(int id, String label, int rank, int suit) { }
 
     /**
      * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
@@ -227,7 +227,7 @@ public record MatchSnapshot(
     private static List<HandCardView> hand(Run run) {
         List<HandCardView> out = new ArrayList<>();
         for (DeckCard c : run.getHeld())
-            out.add(new HandCardView(describe(c), c.getRank().ordinal(), c.getSuit().ordinal()));
+            out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal()));
         return out;
     }
 
