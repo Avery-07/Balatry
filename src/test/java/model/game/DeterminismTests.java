@@ -188,6 +188,10 @@ public final class DeterminismTests {
         for (int i = 0; i < shop.getSlotCount(); i++) {
             Card item = shop.getSlot(i);
             if (item == null || !run.canAcquire(item)) continue;
+            // Seat-coupling jokers (Robin Hood, ...) let two mirrored seats diverge by design; skip them so the
+            // mirror assertion keeps guarding pure determinism, not the coupling these jokers intentionally add.
+            if (item instanceof model.cards.jokers.JokerCard j
+                    && j.getSpec().has(model.cards.jokers.JokerTrait.SEAT_COUPLING)) continue;
             if (run.getMoney() - item.getShopValue() < run.minBalance() + 4) continue;   // conservative: discounts only cheapen
             if (shop.purchasesRemaining() == 0) break;   // Lust: one item per roll state
             shop.buy(i);

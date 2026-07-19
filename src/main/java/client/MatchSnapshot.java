@@ -56,6 +56,14 @@ public record MatchSnapshot(
         long money,
         int hands,                 // hands available now: the round's remaining, or the base outside a round
         int discards,              // discards available now: the round's remaining, or the base outside a round
+        int jokerSlotsUsed,        // top-of-screen joker counter (used / max)
+        int jokerSlotsMax,
+        int consumableSlotsUsed,   // top-of-screen consumable counter (used / max; relics share this pool)
+        int consumableSlotsMax,
+        int deckRemaining,         // deck pile: cards left to draw (draw pile during a round, full deck otherwise)
+        int deckTotal,             // deck pile: total cards in the deck
+        String chips,              // blue chips of the last play this round ("0" before any hand) — the chips×mult readout
+        String mult,               // red mult of the last play this round ("0" before any hand)
         RoundView round,           // null outside a round
         List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
         List<String> jokers,
@@ -137,6 +145,13 @@ public record MatchSnapshot(
         int hands    = (r != null) ? r.getHandsRemaining()    : run.getBaseHands();
         int discards = (r != null) ? r.getDiscardsRemaining() : run.getBaseDiscards();
 
+        // Slot counters (top of screen) and the deck pile (right edge).
+        int deckTotal     = run.getDeck().size();
+        int deckRemaining = (r != null) ? r.getDrawPile().size() : deckTotal;
+        // Blue chips × red mult of the last play this round; "0" before any hand and reset each round.
+        String chips = (r != null) ? r.getLastChips().toBigInteger().toString() : "0";
+        String mult  = (r != null) ? r.getLastMult().toBigInteger().toString()  : "0";
+
         Standings standings = match.getStandings();
         List<PlayerId> ranking = standings.ranking();
 
@@ -187,6 +202,14 @@ public record MatchSnapshot(
                 run.getMoney(),
                 hands,
                 discards,
+                run.usedJokerSlots(),
+                run.getJokerSlots(),
+                run.usedConsumableSlots(),
+                run.getConsumableSlots(),
+                deckRemaining,
+                deckTotal,
+                chips,
+                mult,
                 roundView,
                 hand(run),
                 display(run.getJokers()),

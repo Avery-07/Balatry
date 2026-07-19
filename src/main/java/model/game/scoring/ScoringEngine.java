@@ -23,6 +23,7 @@ public final class ScoringEngine {
                                List<DeckCard> scoringCards, List<DeckCard> heldCards) {
         ScoringSession s = run.beginScoring(baseChips, baseMult);
         s.setHand(hand);
+        s.setScoringCards(scoringCards);
         List<DeckCard> destroyed = new ArrayList<>();
 
         // Phase A — scored cards, left to right; retrigger repeats the sub-sequence in place.
@@ -63,8 +64,10 @@ public final class ScoringEngine {
         }
 
         BigDecimal score = s.finalScore();
+        BigDecimal chips = s.getChips();   // captured before endScoring drops the session (feeds the UI chips×mult readout)
+        BigDecimal mult = s.getMult();
         run.endScoring();
-        return new ScoringResult(score, destroyed);
+        return new ScoringResult(score, chips, mult, destroyed);
     }
 
     /** Fires the given trigger on every non-debuffed joker, in order. Iterates a snapshot, matching {@link Run#fire}. */

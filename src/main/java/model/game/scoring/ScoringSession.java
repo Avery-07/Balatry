@@ -18,6 +18,7 @@ public final class ScoringSession {
 
     private DeckCard currentCard;   // the card being scored right now, or null
     private HandContext hand;       // the hand being scored (its traits); set once per session by the engine
+    private java.util.List<DeckCard> scoringCards = java.util.List.of();   // the played cards that scored, in order
     private int retriggerDepth;     // guards against retrigger cycles (e.g. two jokers retriggering each other)
 
     /** Intended for {@link Run#beginScoring} only. */
@@ -46,6 +47,11 @@ public final class ScoringSession {
     public HandContext getHand() { return hand; }
 
     void setHand(HandContext hand) { this.hand = hand; }   // engine only
+
+    /** The played cards that scored this hand, in order; read by joker effects (Rabbit, Butterfly, 7 Ate 9). */
+    public java.util.List<DeckCard> getScoringCards() { return scoringCards; }
+
+    void setScoringCards(java.util.List<DeckCard> cards) { this.scoringCards = java.util.List.copyOf(cards); }   // engine only
 
     /** Applies an edition's scoring contribution (NEGATIVE contributes nothing here). */
     public void applyEdition(Edition edition) {
