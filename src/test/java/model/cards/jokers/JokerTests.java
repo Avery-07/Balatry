@@ -23,7 +23,9 @@ public final class JokerTests {
     private static final ScoringEngine ENGINE = new ScoringEngine();
 
     public static void main(String[] args) {
-        checkInt("catalog matches the doc's Jokers category (136)", Jokers.values().length, 136);
+        checkInt("catalog: 137 base + 27 new Balatry jokers", Jokers.values().length, 164);
+        for (Jokers j : Jokers.values())
+            check("every joker has a description: " + j.name(), !j.spec().getDescription().isEmpty());
         scoringDeltas();
         slotAndRoundStartHooks();
         retriggerAndEconomy();

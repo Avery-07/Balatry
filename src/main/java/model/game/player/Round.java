@@ -35,6 +35,8 @@ public final class Round {
     private HandType firstTypeThisRound;   // for The Mouth (only this type playable this round)
     private HandType debuffedHandType;     // The Hivemind: this type scores no base chips/mult; set by the boss resolver
     private BigDecimal bestHandScore = BigDecimal.ZERO;   // highest single-hand score this round (Mirage/Shave exclusions)
+    private BigDecimal lastChips = BigDecimal.ZERO;       // chips of the most recent play this round (UI chips×mult readout)
+    private BigDecimal lastMult  = BigDecimal.ZERO;       // mult of the most recent play this round
     private DeckCard forcedCard;           // Cerulean Bell: must be included in every play and discard; null when inactive
     private boolean acted;                 // whether this seat has played or discarded (skipping requires an untouched round)
 
@@ -79,6 +81,8 @@ public final class Round {
                 && (!boss.zerosMoneyOnMostPlayed() || type == run.getStats().getMostPlayedHand()));
 
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
+        lastChips = result.chips();   // for the UI chips×mult readout
+        lastMult  = result.mult();
         BigDecimal handScore = result.score();
         if (run.getMatch() != null)   // Lust: the diversity multiplier transforms the hand's final score
             handScore = run.getMatch().getSinModifier().adjustHandScore(run, type, handScore);
@@ -251,6 +255,11 @@ public final class Round {
 
     /** The highest single-hand score banked this round (feeds the Mirage/Shave exclusions and BlindResult). */
     public BigDecimal getBestHandScore() { return bestHandScore; }
+
+    /** Chips of the most recent play this round (0 before any hand); feeds the UI's blue chips × red mult readout. */
+    public BigDecimal getLastChips() { return lastChips; }
+    /** Mult of the most recent play this round (0 before any hand). */
+    public BigDecimal getLastMult()  { return lastMult; }
 
     /** The hand type debuffed this round (zero base chips/mult when played), or null. Set by the boss resolver. */
     public HandType getDebuffedHandType() { return debuffedHandType; }

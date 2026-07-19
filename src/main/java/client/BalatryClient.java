@@ -242,7 +242,10 @@ public final class BalatryClient extends Application {
     private void updateHud(MatchSnapshot s) {
         hudTop.setText("SEAT " + s.seat() + " (" + s.name() + ")   —   " + s.phase());
         hudStats.setText(String.format("Ante %d/%d   Round %d   $%d   Hands %d   Discards %d   Sin: %s",
-                s.ante(), s.anteCount(), s.roundNumber(), s.money(), s.hands(), s.discards(), s.activeSin()));
+                s.ante(), s.anteCount(), s.roundNumber(), s.money(), s.hands(), s.discards(), s.activeSin())
+                + "\n" + String.format("Jokers %d/%d   Consumables %d/%d   Deck %d/%d   chips %s × mult %s",
+                s.jokerSlotsUsed(), s.jokerSlotsMax(), s.consumableSlotsUsed(), s.consumableSlotsMax(),
+                s.deckRemaining(), s.deckTotal(), s.chips(), s.mult()));
         hudJokers.setText("Jokers: " + (s.jokers().isEmpty() ? "(none)" : String.join(", ", s.jokers())));
 
         StringBuilder cons = new StringBuilder("Consumables: ");

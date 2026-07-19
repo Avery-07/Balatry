@@ -4,9 +4,13 @@ import model.cards.DeckCard;
 import model.cards.DeckCard.Rank;
 import model.cards.consumables.ConsumableCard;
 import model.cards.consumables.ConsumableType;
+import model.cards.consumables.Planets;
 import model.cards.consumables.Spectrals;
 import model.cards.consumables.Tarots;
 import model.game.Blind;
+import model.game.Match;
+import model.game.player.Player;
+import model.game.player.PlayerId;
 import model.game.rng.RngSource;
 import model.game.scoring.HandEvaluator;
 import model.game.scoring.HandType;
@@ -19,7 +23,9 @@ import model.modifiers.Sticker;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.random.RandomGenerator;
 
@@ -164,11 +170,10 @@ public enum Jokers {
     // Jokers 046-050  (skipped : 047 Burglar)
     EGG("Egg", Rarity.COMMON, 4, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> self.setSellValue(self.getSellValue() + 3))),
-    BLACKBOARD("Blackboard", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+    CHEETAH("Cheetah", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                boolean all = true;
-                for (DeckCard c : run.getHeld()) if (!(c.isSpade() || c.isClub())) { all = false; break; }
-                if (all) run.getScoring().multiplyMult(x("3"));
+                if (run.getScoring().getHand().hasStraight()) self.addCounter(15);
+                run.getScoring().addChips(self.getCounter());
             })),
     ICE_CREAM("Ice Cream", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
@@ -255,6 +260,15 @@ public enum Jokers {
             })),
 
     // Jokers 066-070  (skipped : 069 Shortcut)
+    SEANCE("Séance", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                var hand = run.getScoring().getHand();
+                if (hand.hasStraight() && hand.hasFlush()) {   // a straight and a flush together is a straight flush
+                    ConsumableCard card = new ConsumableCard(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
+                    card.apply(Edition.NEGATIVE);
+                    run.addConsumable(card);
+                }
+            })),
     RIFF_RAFF("Riff-Raff", Rarity.COMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
             (run, self) -> {
                 for (int k = 0; k < 2; k++)
@@ -456,18 +470,11 @@ public enum Jokers {
                 if (c != null && c.getRank().ordinal() == self.getCounter() / 4 && matchesSuit(c, self.getCounter() % 4))
                     run.getScoring().multiplyMult(x("2"));
             })),
-    SEEING_DOUBLE("Seeing Double", Rarity.UNCOMMON, 6, b -> b
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> {
-                int hand = run.getStats().getTotalHandsPlayed();
-                int mask = (self.getCounter() >> 2) == hand ? (self.getCounter() & 3) : 0;
-                DeckCard c = scored(run);
-                if (c != null) { if (c.isClub()) mask |= 1; if (c.isSpade() || c.isHeart() || c.isDiamond()) mask |= 2; }
-                self.setCounter((hand << 2) | mask);
-            })
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
-                int hand = run.getStats().getTotalHandsPlayed();
-                int mask = (self.getCounter() >> 2) == hand ? (self.getCounter() & 3) : 0;
-                if (mask == 3) run.getScoring().multiplyMult(x("2"));
+    // Siamese Cat (#98, formerly Spare Trousers): placed here where Seeing Double (removed) used to sit.
+    SIAMESE_CAT("Siamese Cat", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                if (run.getScoring().getHand().hasTwoPair()) self.addCounter(2);
+                run.getScoring().addMult(self.getCounter());
             })),
     MATADOR("Matador", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> { if (run.bossTriggeredThisPlay()) run.addMoney(8); })),
@@ -553,14 +560,149 @@ public enum Jokers {
     TURTLE_BEAN("Turtle Bean", Rarity.UNCOMMON, 6, b -> b),
     INVISIBLE_JOKER("Invisible Joker", Rarity.RARE, 8, b -> b),
     STUNTMAN("Stuntman", Rarity.RARE, 7, b -> b),
-    CANIO("Canio", Rarity.LEGENDARY, 20, b -> b);
+    CANIO("Canio", Rarity.LEGENDARY, 20, b -> b),
+
+    // --- new Balatry jokers (single-player + read-only multiplayer) ---
+    CELESTIAL_7("Celestial 7", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> {
+                DeckCard c = scored(run);
+                if (c != null && c.getRank() == Rank.SEVEN && run.roll(RngSource.MISC, 1, 4))
+                    createEditioned(run, new ConsumableCard(Planets.random(gen(run, RngSource.PLANET_GENERATION)).spec()));
+            })),
+    MATERIALIST("Materialist", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> {
+                DeckCard c = scored(run);
+                if (c == null) return;
+                Enhancement e = c.getEnhancement();
+                if (e == Enhancement.GOLD || e == Enhancement.STONE || e == Enhancement.STEEL) run.getScoring().addMult(7);
+            })),
+    INVESTMENT("Investment", Rarity.COMMON, 5, b -> b.on(Trigger.ON_ROUND_END,
+            (run, self) -> {
+                int value = 0;
+                for (JokerCard j : run.getJokers()) value += j.getSellValue();
+                if (value >= 5) run.addMoney(value / 5);
+            })),
+    MERCHANT("Merchant", Rarity.COMMON, 4, b -> b),   // TODO: +3 consumable slots needs a passive joker-slot-bonus hook in Run
+    THE_VOID("The Void", Rarity.UNCOMMON, 6, b -> b), // TODO: +1 joker slot needs a passive joker-slot-bonus hook in Board/Run
+    CHALLENGER("Challenger", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                int stickers = 0;
+                for (JokerCard j : run.getJokers())      stickers += j.getStickers().size();
+                for (ConsumableCard cc : run.getConsumables()) stickers += cc.getStickers().size();
+                for (DeckCard d : run.getDeck())         stickers += d.getStickers().size();
+                if (stickers > 0) run.getScoring().multiplyMult(onePlus("0.25", stickers));
+            })),
+    MUSHROOM("Mushroom", Rarity.COMMON, 5, b -> b
+            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.addCounter(run.getLastDiscarded().size()))
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                int mult = 4 * (self.getCounter() / 3);
+                if (mult > 0) run.getScoring().addMult(mult);
+                if (mult >= 32) run.destroyJoker(self);   // self-destructs once it would grant +32 Mult
+            })),
+    ALCHEMIST("Alchemist", Rarity.RARE, 7, b -> b.on(Trigger.ON_SHOP_END,
+            (run, self) -> {
+                for (ConsumableCard cc : run.getConsumables())
+                    if (cc.getEdition() == null)
+                        cc.apply(switch (gen(run, RngSource.CARD_EDITION).nextInt(3)) {
+                            case 0 -> Edition.FOIL; case 1 -> Edition.HOLOGRAPHIC; default -> Edition.POLYCHROME; });
+            })),
+    GRUDGE("Grudge", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                int hits = run.getStats().getTimesTargeted();
+                if (hits > 0) run.getScoring().multiplyMult(onePlus("0.2", hits));
+            })),
+    ROBIN_HOOD("Robin Hood", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END,
+            (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                for (Player p : m.getPlayers()) if (p.run() != run && p.run().getMoney() < run.getMoney()) return;
+                run.addMoney(6);   // no one is strictly poorer: this seat is (tied) poorest
+            })),
+    COPYRIGHT("Copyright", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END,
+            (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                int shared = 0;
+                for (JokerCard mine : run.getJokers()) if (otherPlayerOwns(m, run, mine)) shared++;
+                if (shared > 0) run.addMoney(2 * shared);
+            })),
+    ADVENTURER("Adventurer", Rarity.RARE, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                Match m = run.getMatch();
+                int unique = 0;
+                for (JokerCard mine : run.getJokers()) if (!otherPlayerOwns(m, run, mine)) unique++;
+                if (unique > 0) run.getScoring().multiplyMult(onePlus("0.5", unique));
+            })),
+    RABBIT("Rabbit", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                if (run.getScoring().getHand().hasFourOfAKind() && !cards.isEmpty())
+                    run.addCardToHand(copyOf(cards.get(0)));
+            })),
+    BUTTERFLY("Butterfly", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                if (run.getScoring().getHand().type() == HandType.FULL_HOUSE && !cards.isEmpty()) {
+                    Enhancement[] all = Enhancement.values();
+                    cards.get(0).apply(all[gen(run, RngSource.MISC).nextInt(all.length)]);
+                }
+            })),
+    CHAMELEON("Chameleon", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                List<DeckCard> held = run.getHeld();
+                if (run.getScoring().getHand().hasFlush() && !cards.isEmpty() && !held.isEmpty())
+                    held.get(0).setSuit(cards.get(0).getSuit());
+            })),
+    CUCKOO_BIRD("Cuckoo Bird", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> held = run.getHeld();
+                if (run.getScoring().getHand().hasThreeOfAKind() && !held.isEmpty()) {
+                    Rank r = dominantRank(run.getScoring().getScoringCards());
+                    if (r != null) held.get(0).setRank(r);
+                }
+            })),
+    SEVEN_ATE_NINE("7 Ate 9", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                int n = cards.size();
+                if (n >= 3 && cards.get(n - 3).getRank() == Rank.SEVEN && cards.get(n - 2).getRank() == Rank.EIGHT)
+                    run.destroyDeckCards(List.of(cards.get(n - 1)));
+            })),
+    GENERATIONAL_HATER("Generational Hater", Rarity.UNCOMMON, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_BOSS_DEFEATED,
+            (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null || run.getPlayerId() == null) return;
+                List<PlayerId> above = m.seatsAbove(run.getPlayerId());
+                if (above.isEmpty()) return;
+                RandomGenerator g = gen(run, RngSource.MISC);
+                List<JokerCard> theirs = m.getRun(above.get(g.nextInt(above.size()))).getJokers();
+                if (theirs.isEmpty()) return;
+                Sticker[] pool = { Sticker.ETERNAL, Sticker.PERISHABLE, Sticker.RENTAL };
+                theirs.get(g.nextInt(theirs.size())).apply(pool[g.nextInt(pool.length)]);
+            })),
+
+    // New jokers present and described, but whose effects await engine features (like the base-game stubs
+    // Astronomer, Shortcut, Burglar, ...). TODOs name what each still needs.
+    DYSCALCULIE("Dyscalculie", Rarity.UNCOMMON, 7, b -> b),        // TODO: rank-flexibility in HandEvaluator (cf. Shortcut/Four Fingers)
+    CHEF_JOKER("Chef Joker", Rarity.RARE, 8, b -> b),             // TODO: a "food joker" tag + a joker-consumed event
+    STRAWBERRY("StrawBerry", Rarity.UNCOMMON, 6, b -> b),          // TODO: "cleared in a single hand?" round hook + X3 Mult
+    CURATOR("Curator", Rarity.UNCOMMON, 7, b -> b),               // TODO: shop pack-pricing hook (make Standard Packs free)
+    ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b),            // TODO: cross-player debuff of this slot for seats above
+    TRANSPARENT_JOKER("Transparent Joker", Rarity.UNCOMMON, 7, b -> b),   // TODO: sell-to-copy a leader's joker
+    THE_MIMIC("The Mimic", Rarity.RARE, 10, b -> b),             // TODO: copy the same-slot joker of the standings leader
+    VULTURE("Vulture", Rarity.UNCOMMON, 7, b -> b),              // TODO: an "opponent failed a blind" event
+    TELESCOPE("Telescope", Rarity.COMMON, 4, b -> b);             // TODO: cross-player last-hand-type comparison
 
     private final Rarity rarity;
     private final JokerSpec spec;
 
     Jokers(String displayName, Rarity rarity, int cost, UnaryOperator<JokerSpec.Builder> define) {
         this.rarity = rarity;
-        this.spec = define.apply(JokerSpec.named(displayName, rarity).cost(cost)).build();
+        // Descriptions live in a nested holder (keyed by enum name) so their map is not read during enum-constant
+        // construction, when static fields of this enum are not yet initialized.
+        this.spec = define.apply(JokerSpec.named(displayName, rarity).cost(cost)
+                .description(Descriptions.of(name()))).build();
     }
 
     public Rarity rarity()  { return rarity; }
@@ -600,6 +742,186 @@ public enum Jokers {
 
     /** A fresh card for this joker at its shop price. */
     public JokerCard make() { return new JokerCard(spec); }
+
+    /**
+     * Human-readable effect text for every joker, keyed by enum name. Kept in a nested holder so the map is
+     * built on first access (from the constructor) rather than during this enum's own static initialization,
+     * which runs after the constants are constructed. Entries for jokers not yet implemented are harmless.
+     */
+    private static final class Descriptions {
+        static String of(String name) { return MAP.getOrDefault(name, ""); }
+
+        private static final Map<String, String> MAP = new HashMap<>();
+        static {
+            // --- base jokers (document's 137) ---
+            MAP.put("JOKER", "+4 Mult.");
+            MAP.put("GREEDY_JOKER", "Played Diamond cards give +3 Mult when scored.");
+            MAP.put("LUSTY_JOKER", "Played Heart cards give +3 Mult when scored.");
+            MAP.put("WRATHFUL_JOKER", "Played Spade cards give +3 Mult when scored.");
+            MAP.put("GLUTTONOUS_JOKER", "Played Club cards give +3 Mult when scored.");
+            MAP.put("HALF_JOKER", "+20 Mult if the played hand has 3 or fewer cards.");
+            MAP.put("JOKER_STENCIL", "X1 Mult for each empty Joker slot (Joker Stencil included).");
+            MAP.put("FOUR_FINGERS", "All Flushes and Straights can be made with 4 cards.");
+            MAP.put("MIME", "Retriggers all cards held in hand.");
+            MAP.put("CREDIT_CARD", "Go up to -$20 in debt. Gains +1 Mult per $1 spent while in debt; resets when out of debt.");
+            MAP.put("CEREMONIAL_DAGGER", "When Blind selected, destroys the Joker to the right and adds triple its sell value to Mult.");
+            MAP.put("BANNER", "+40 Chips for each remaining discard.");
+            MAP.put("MYSTIC_SUMMIT", "+15 Mult when 0 discards remain.");
+            MAP.put("MARBLE_JOKER", "Adds a Stone card to the deck when Blind is selected (½ chance it has a seal).");
+            MAP.put("LOYALTY_CARD", "Every 4th purchase in the shop is free.");
+            MAP.put("EIGHT_BALL", "1 in 4 chance for each played 8 to create an editioned Tarot card when scored.");
+            MAP.put("MISPRINT", "+0 to +15 Mult (random), then X0.75 to X1.5 Mult (random).");
+            MAP.put("DUSK", "Retriggers all played cards in the final hand of the round.");
+            MAP.put("RAISED_FIST", "Adds double the rank of the lowest card held in hand to Mult.");
+            MAP.put("CHAOS_THE_CLOWN", "1 free reroll per shop.");
+            MAP.put("FIBONACCI", "Each played Ace, 2, 3, 5, or 8 gives +8 Mult when scored.");
+            MAP.put("STEEL_JOKER", "X0.2 Mult for each Steel Card in your full deck.");
+            MAP.put("SCARY_FACE", "Played face cards give +30 Chips when scored.");
+            MAP.put("ABSTRACT_JOKER", "+3 Mult for each Joker and consumable you own.");
+            MAP.put("DELAYED_GRATIFICATION", "Earn $2 per unused discard at the end of the round.");
+            MAP.put("HACK", "Retriggers each played 2, 3, 4, or 5.");
+            MAP.put("PAREIDOLIA", "All cards are considered face cards.");
+            MAP.put("GROS_MICHEL", "+15 Mult; 1 in 6 chance to be destroyed at end of round.");
+            MAP.put("EVEN_STEVEN", "Played even-rank cards give +4 Mult when scored.");
+            MAP.put("ODD_TODD", "Played odd-rank cards give +31 Chips when scored.");
+            MAP.put("SCHOLAR", "Played Aces give +20 Chips and +4 Mult when scored.");
+            MAP.put("BUSINESS_CARD", "Played face cards have a 1 in 2 chance to give $2 when scored.");
+            MAP.put("SUPERNOVA", "Adds the number of times this hand type has been played this run to Mult.");
+            MAP.put("RIDE_THE_BUS", "+1 Mult per consecutive hand played without a scoring face card.");
+            MAP.put("SPACE_JOKER", "1 in 4 chance to upgrade the level of the played poker hand.");
+            MAP.put("EGG", "Gains $3 of sell value at end of round.");
+            MAP.put("BURGLAR", "When Blind selected, gain +3 Hands and lose all discards.");
+            MAP.put("CHEETAH", "Gains +15 Chips if the played hand contains a Straight.");
+            MAP.put("ICE_CREAM", "+100 Chips, -5 Chips for every hand played.");
+            MAP.put("DNA", "If the first hand of the round is a single card, add a permanent copy to the deck and draw it.");
+            MAP.put("SPLASH", "Every played card counts in scoring; cards that wouldn't count are retriggered once.");
+            MAP.put("BLUE_JOKER", "+2 Chips for each card in your deck.");
+            MAP.put("SIXTH_SENSE", "If the first hand of the round is a single 6, destroy it and create a Spectral card.");
+            MAP.put("CONSTELLATION", "Gains X0.1 Mult every time a Planet card is used.");
+            MAP.put("HIKER", "Every played card permanently gains +5 Chips when scored.");
+            MAP.put("FACELESS_JOKER", "Earn $5 if 3 or more face cards are discarded at once.");
+            MAP.put("GREEN_JOKER", "+1 Mult per hand played, -1 Mult per discard.");
+            MAP.put("SUPERPOSITION", "Creates a Tarot card if the played hand contains an Ace and a Straight (wrap-around allowed).");
+            MAP.put("TO_DO_LIST", "Earn $4 if the played poker hand is a set type (changes at end of round).");
+            MAP.put("CAVENDISH", "X3 Mult; 1 in 1000 chance to be destroyed at end of round.");
+            MAP.put("CARD_SHARP", "X3 Mult if this poker hand was already played this round.");
+            MAP.put("RED_JOKER", "Gains +3 Mult when any Booster Pack is skipped.");
+            MAP.put("MADNESS", "When Small/Big Blind selected, gain X0.5 Mult and destroy an adjacent Joker.");
+            MAP.put("SQUARE_JOKER", "Gains +4 Chips if the played hand has exactly 4 cards.");
+            MAP.put("SEANCE", "If the played hand contains a Straight Flush, create a Negative Spectral card.");
+            MAP.put("RIFF_RAFF", "When Blind is selected, create 2 Common Jokers.");
+            MAP.put("VAMPIRE", "Gains X0.1 Mult per scoring Enhanced card played, removing the enhancement.");
+            MAP.put("SHORTCUT", "Allows Straights to be made with gaps of 1 rank.");
+            MAP.put("HOLOGRAM", "Gains X0.25 Mult every time a playing card is added to your deck.");
+            MAP.put("VAGABOND", "Creates a Tarot card if a hand is played with $4 or less.");
+            MAP.put("BARON", "Each King held in hand gives X1.5 Mult.");
+            MAP.put("CLOUD_9", "Earn $1 for each 9 in your full deck at end of round.");
+            MAP.put("ROCKET", "Earn $1 at end of round; payout increases by $2 when a Boss Blind is defeated.");
+            MAP.put("OBELISK", "Gains X0.2 Mult per consecutive hand that differs from your last three hand types.");
+            MAP.put("MIDAS_MASK", "All played face cards become Gold cards when scored.");
+            MAP.put("LUCHADOR", "Sell this card to disable the current Boss Blind for yourself only.");
+            MAP.put("PHOTOGRAPH", "First played face card gives X2 Mult when scored.");
+            MAP.put("GIFT_CARD", "Adds $1 of sell value to every Joker and consumable at end of round.");
+            MAP.put("TURTLE_BEAN", "+5 hand size, reduced by 1 each round.");
+            MAP.put("EROSION", "+4 Mult for each card below the deck's starting size in your full deck.");
+            MAP.put("RESERVED_PARKING", "Each face card held in hand has a 1 in 2 chance to give $1.");
+            MAP.put("MAIL_IN_REBATE", "Earn $4 for each discarded card of a set rank (changes every round).");
+            MAP.put("TO_THE_MOON", "Earn an extra $1 of interest for every $5 you have at end of round.");
+            MAP.put("HALLUCINATION", "1 in 2 chance to create a Tarot card when any Booster Pack is opened.");
+            MAP.put("FORTUNE_TELLER", "+1 Mult per Tarot card used this run.");
+            MAP.put("JUGGLER", "+1 hand size.");
+            MAP.put("DRUNKARD", "+1 discard each round.");
+            MAP.put("STONE_JOKER", "+30 Chips for each Stone Card in your full deck.");
+            MAP.put("YELLOW_JOKER", "Earn $4 at end of round.");
+            MAP.put("LUCKY_CAT", "Gains X0.25 Mult every time a Lucky card successfully triggers.");
+            MAP.put("BASEBALL_CARD", "Uncommon Jokers each give X1.5 Mult.");
+            MAP.put("BULL", "+2 Chips for each $1 you have.");
+            MAP.put("DIET_COLA", "After 1 round, self-destructs and creates a Double Tag.");
+            MAP.put("TRADING_CARD", "If the first discard of the round is a single card, destroy it and earn $3.");
+            MAP.put("FLASH_CARD", "Gains +2 Mult per reroll in the shop.");
+            MAP.put("POPCORN", "+20 Mult, -4 Mult per round played.");
+            MAP.put("SIAMESE_CAT", "Gains +2 Mult if the played hand contains a Two Pair.");
+            MAP.put("ANCIENT_JOKER", "Each played card of a set suit gives X1.5 Mult (suit changes each round).");
+            MAP.put("RAMEN", "X2 Mult, loses X0.01 Mult per card discarded.");
+            MAP.put("WALKIE_TALKIE", "Each played 10 or 4 gives +10 Chips and +4 Mult when scored.");
+            MAP.put("SELTZER", "Retriggers all played cards for the next 10 hands.");
+            MAP.put("CASTLE", "Gains +4 Chips for each played card if all played cards share one suit.");
+            MAP.put("SMILEY_FACE", "Played face cards give +5 Mult when scored.");
+            MAP.put("CAMPFIRE", "Gains X0.25 Mult per card sold; resets when a Boss Blind is defeated.");
+            MAP.put("GOLDEN_TICKET", "Played Gold cards earn $3 when scored; held Gold-sealed cards earn $2.");
+            MAP.put("MR_BONES", "Prevents a blind loss if chips scored are at least 25% of the requirement, then self-destructs.");
+            MAP.put("ACROBAT", "X3 Mult on the final hand of the round.");
+            MAP.put("SOCK_AND_BUSKIN", "Retriggers all played face cards.");
+            MAP.put("SWASHBUCKLER", "Adds the sell value of all your other Jokers to Mult.");
+            MAP.put("TROUBADOUR", "+2 hand size, -1 hand per round.");
+            MAP.put("CERTIFICATE", "When the round begins, add a random playing card with a random seal and enhancement to your hand.");
+            MAP.put("SMEARED_JOKER", "Hearts and Diamonds count as one suit; Spades and Clubs count as one suit.");
+            MAP.put("THROWBACK", "X0.5 Mult for each Blind skipped this run.");
+            MAP.put("HANGING_CHAD", "Retriggers the first scoring card 2 additional times.");
+            MAP.put("ROUGH_GEM", "1 in 2 chance for played Diamond cards to give $2 when scored.");
+            MAP.put("BLOODSTONE", "1 in 2 chance for played Heart cards to give X1.5 Mult when scored.");
+            MAP.put("ARROWHEAD", "1 in 2 chance for played Spade cards to give +75 Chips when scored.");
+            MAP.put("ONYX_AGATE", "1 in 2 chance for played Club cards to give +16 Mult when scored.");
+            MAP.put("GLASS_JOKER", "Gains X0.75 Mult for every Glass Card that is destroyed.");
+            MAP.put("FLOWER_POT", "X1 Mult for every different suit in the played hand.");
+            MAP.put("BLUEPRINT", "Retriggers the Joker to the right.");
+            MAP.put("WEE_JOKER", "Gains +8 Chips when each played 2 is scored.");
+            MAP.put("MERRY_ANDY", "+3 discards each round, -1 hand size.");
+            MAP.put("OOPS_ALL_6S", "Doubles all listed probabilities.");
+            MAP.put("THE_IDOL", "Each played card of a set rank and suit gives X2 Mult (changes every round).");
+            MAP.put("MATADOR", "Earn $8 if the played hand triggers the Boss Blind ability.");
+            MAP.put("HIT_THE_ROAD", "Gains X0.2 Mult for every Jack discarded this round (resets when a Boss Blind is beaten).");
+            MAP.put("THE_DUO", "X2 Mult if the played hand contains a Pair.");
+            MAP.put("THE_TRIO", "X3 Mult if the played hand contains a Three of a Kind.");
+            MAP.put("THE_FAMILY", "X4 Mult if the played hand contains a Four of a Kind.");
+            MAP.put("THE_ORDER", "X3 Mult if the played hand contains a Straight.");
+            MAP.put("THE_TRIBE", "X3 Mult if the played hand contains a Flush.");
+            MAP.put("STUNTMAN", "+250 Chips, -2 hand size.");
+            MAP.put("INVISIBLE_JOKER", "After 2 rounds, sell this card to duplicate a random Joker.");
+            MAP.put("BRAINSTORM", "Retriggers the leftmost Joker.");
+            MAP.put("SATELLITE", "Gives $1 for every three levels of your most-played hand.");
+            MAP.put("SHOOT_THE_MOON", "Each Queen held in hand gives +13 Mult.");
+            MAP.put("DRIVERS_LICENSE", "X3 Mult if you have at least 16 Enhanced cards in your full deck.");
+            MAP.put("CARTOMANCER", "Create a Tarot card when a Blind is selected.");
+            MAP.put("ASTRONOMER", "All Planet cards and Celestial Packs in the shop are free.");
+            MAP.put("BURNT_JOKER", "Upgrades the level of the first discarded poker hand each round.");
+            MAP.put("BOOTSTRAPS", "+2 Mult for every $5 you have.");
+            MAP.put("CANIO", "Gains X1 Mult when a face card is destroyed; X0.25 Mult when a numbered card is destroyed.");
+            MAP.put("TRIBOULET", "Played Kings and Queens each give X2 Mult when scored.");
+            MAP.put("YORICK", "Gains X1 Mult every 23 cards discarded.");
+            MAP.put("CHICOT", "Disables the effect of every Boss Blind.");
+            MAP.put("PERKEO", "Creates a copy of 1 random consumable in your possession at end of shop.");
+
+            // --- new Balatry jokers ---
+            MAP.put("CELESTIAL_7", "1 in 4 chance to create an editioned Planet card when a 7 is played.");
+            MAP.put("RABBIT", "If the played hand contains a Four of a Kind, create a copy of a played card.");
+            MAP.put("BUTTERFLY", "If the played hand is a Full House, add a random enhancement to one of the played cards.");
+            MAP.put("CHAMELEON", "If the played hand contains a Flush, set a held card's suit to the first played card's suit.");
+            MAP.put("CUCKOO_BIRD", "If the played hand contains a Three of a Kind, set a held card's rank to match the hand.");
+            MAP.put("INVESTMENT", "Earn $1 at end of round for every $5 of Joker sell value you own.");
+            MAP.put("MATERIALIST", "All played Gold, Stone, and Steel cards give +7 Mult.");
+            MAP.put("DYSCALCULIE", "Each rank also counts as the rank above it (e.g. an Ace also counts as a 2).");
+            MAP.put("THE_VOID", "+1 Joker slot.");
+            MAP.put("CHEF_JOKER", "Gains X1 Mult every time a food Joker is consumed.");
+            MAP.put("STRAWBERRY", "X3 Mult; consumed if the score isn't reached in one hand.");
+            MAP.put("MUSHROOM", "Gains +4 Mult every 3 cards discarded; self-destructs at +32 Mult.");
+            MAP.put("ALCHEMIST", "On shop exit, gives all held consumables a random edition.");
+            MAP.put("CHALLENGER", "X0.25 Mult for each sticker you own.");
+            MAP.put("MERCHANT", "+3 consumable slots.");
+            MAP.put("CURATOR", "Standard Packs are always free.");
+            MAP.put("SEVEN_ATE_NINE", "If the last three scoring cards are a 7, an 8, and another card, destroy the last card.");
+            MAP.put("COPYRIGHT", "Earn $2 each round for each Joker you own that another player also owns.");
+            MAP.put("ROBIN_HOOD", "Earn $6 at the end of the round if you are the poorest player.");
+            MAP.put("GRUDGE", "Permanently gains X0.2 Mult each time an opponent effect targets you.");
+            MAP.put("ESPIONNAGE", "The Joker in this slot is debuffed for every player above you in the standings.");
+            MAP.put("TRANSPARENT_JOKER", "After 2 rounds, sell to copy a random Joker from the leading player.");
+            MAP.put("THE_MIMIC", "Copies the ability of the Joker in the same slot of the leading player.");
+            MAP.put("GENERATIONAL_HATER", "When a Boss Blind is defeated, adds a random sticker to a random Joker of a player above you.");
+            MAP.put("VULTURE", "Gains X0.25 Mult whenever an opponent fails to beat a blind.");
+            MAP.put("ADVENTURER", "X0.5 Mult for each Joker you own that no other player owns.");
+            MAP.put("TELESCOPE", "Earn $3 if the hand type you play matches one of your opponents' hand types.");
+        }
+    }
 
     // --- effect helpers ---
 
@@ -665,6 +987,29 @@ public enum Jokers {
     /** A keyed sub-stream for an emergent joker draw. */
     private static RandomGenerator gen(model.game.player.Run run, RngSource source) {
         return run.getRng().streamFor(source, run.nextSalt(source));
+    }
+
+    /** The most frequent rank among {@code cards} (the set/trips rank of the played hand), or null if empty. */
+    private static Rank dominantRank(List<DeckCard> cards) {
+        Rank best = null;
+        int bestCount = 0;
+        for (DeckCard c : cards) {
+            int count = 0;
+            for (DeckCard d : cards) if (d.getRank() == c.getRank()) count++;
+            if (count > bestCount) { bestCount = count; best = c.getRank(); }
+        }
+        return best;
+    }
+
+    /** Whether any seat other than {@code owner} holds a joker of {@code joker}'s spec (read-only cross-seat check). */
+    private static boolean otherPlayerOwns(Match match, model.game.player.Run owner, JokerCard joker) {
+        if (match == null) return false;
+        for (Player p : match.getPlayers()) {
+            if (p.run() == owner) continue;
+            for (JokerCard theirs : p.run().getJokers())
+                if (theirs.getSpec() == joker.getSpec()) return true;
+        }
+        return false;
     }
 
     /** A faithful permanent duplicate of a playing card (rank, suit, enhancement, seal, edition). */

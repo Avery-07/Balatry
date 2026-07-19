@@ -28,6 +28,7 @@ public final class SnapshotTests {
     public static void main(String[] args) {
         selectionSnapshot();
         blindSnapshot();
+        hudDataSnapshot();
         shopPurchaseSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
@@ -75,6 +76,31 @@ public final class SnapshotTests {
         check("round view present during a blind", s.round() != null);
         checkInt("hud hands mirror the round", s.hands(), s.round().handsRemaining());
         checkInt("hud discards mirror the round", s.discards(), s.round().discardsRemaining());
+    }
+
+    /** HUD data (Phase 2): slot counters, the deck pile, and the chips×mult readout going non-zero after a play. */
+    private static void hudDataSnapshot() {
+        Match m = Match.create(21L, List.of("A", "B"));   // standard 52-card deck, straight into BLIND
+        PlayerId a = m.getSeats().get(0);
+        m.start();
+
+        MatchSnapshot pre = MatchSnapshot.of(m, a);
+        checkInt("deck total is the standard 52", pre.deckTotal(), 52);
+        checkInt("deck pile is 44 after the deal", pre.deckRemaining(), 44);
+        checkInt("no joker slots used yet", pre.jokerSlotsUsed(), 0);
+        checkInt("joker slot capacity is 5", pre.jokerSlotsMax(), 5);
+        checkInt("no consumable slots used yet", pre.consumableSlotsUsed(), 0);
+        checkInt("consumable capacity is 2", pre.consumableSlotsMax(), 2);
+        check("chips×mult reads 0 before any hand", pre.chips().equals("0") && pre.mult().equals("0"));
+
+        Run run = m.getRun(a);
+        int n = Math.min(5, run.getRound().getHand().size());
+        run.getRound().play(new ArrayList<>(run.getRound().getHand().subList(0, n)));
+
+        MatchSnapshot post = MatchSnapshot.of(m, a);
+        check("chips are non-zero after a play", !post.chips().equals("0"));
+        check("mult is non-zero after a play", !post.mult().equals("0"));
+        check("deck pile shrank as cards were redrawn", post.deckRemaining() < pre.deckRemaining());
     }
 
     /** SHOP: the offer projects, and a purchase leaves a spent (null) slot without crashing the projection. */
