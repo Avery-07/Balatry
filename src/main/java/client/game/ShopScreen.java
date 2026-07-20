@@ -25,6 +25,11 @@ final class ShopScreen implements Screen {
         for (int i = 0; i < shop.slots().size(); i++) {
             MatchSnapshot.ShopItem it = shop.slots().get(i);
             tile(ui, px, cy, it == null ? null : it.label(), it == null ? 0 : it.price(), javafx.scene.paint.Color.web("#c0392b"), it != null, "shopSlot", i);
+            // The drawback strip: a stickered/editioned card announces it on the tile, before the purchase.
+            if (it != null && !it.badge().isEmpty()) {
+                r.panel(px, cy + 16 + 130 - 18, 108, 18, javafx.scene.paint.Color.web("#000a"), null, 6, 0);
+                r.textCenter(it.badge(), px + 54, cy + 16 + 130 - 9, 9, GOLD);
+            }
             px += 118;
         }
         cy += 150;

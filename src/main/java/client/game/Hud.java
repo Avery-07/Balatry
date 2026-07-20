@@ -1,14 +1,30 @@
 package client.game;
 
 import client.MatchSnapshot;
+import client.engine.Counter;
+import client.engine.Easing;
 import client.engine.Layout;
 import javafx.scene.paint.Color;
 import model.game.MatchPhase;
 
 import static client.game.Palette.*;
 
-/** The persistent frame chrome, drawn every phase: left sidebar, top joker/consumable slots, right deck pile. */
+/**
+ * The persistent frame chrome, drawn every phase: left sidebar, top joker/consumable slots, right deck pile.
+ * The score, chips×mult and money readouts are {@link Counter}s — they count up toward the model's value and
+ * thump when it grows, which is most of what makes scoring feel like scoring.
+ */
 final class Hud {
+
+    private final Counter score = new Counter(0, 0.6, Easing.EASE_OUT_CUBIC);
+    private final Counter chips = new Counter(0, 0.3, Easing.EASE_OUT_CUBIC);
+    private final Counter mult  = new Counter(0, 0.3, Easing.EASE_OUT_CUBIC);
+    private final Counter money = new Counter(0, 0.4, Easing.EASE_OUT_CUBIC);
+
+    /** Advanced from the game loop alongside the hand. */
+    void advance(double dt) {
+        score.advance(dt); chips.advance(dt); mult.advance(dt); money.advance(dt);
+    }
 
     void render(Ui ui) {
         drawSidebar(ui, Ui.PAD, Ui.PAD, Ui.SIDEBAR, Ui.H - 2 * Ui.PAD);
@@ -32,12 +48,20 @@ final class Hud {
         r.textCenterBold(hdr, ix + iw / 2, cy + 26, s.phase() == MatchPhase.SHOP ? 26 : 15, s.phase() == MatchPhase.SHOP ? ORANGE : INK);
         cy += 64;
 
-        cy = statBox(r, ix, cy, iw, "Round score", s.round() != null ? s.round().score() : "0");
+        // The juicy readouts: each counter chases the snapshot's value and pops when it grows.
+        score.retarget(numeric(s.round() != null ? s.round().score() : "0"));
+        chips.retarget(numeric(s.chips()));
+        mult.retarget(numeric(s.mult()));
+        money.retarget(s.money());
+
+        cy = statBoxPopped(r, ix, cy, iw, "Round score", score);
 
         double half = (iw - 30) / 2;
-        r.panel(ix, cy, half, 46, BLUE, null, 8, 0); r.textCenterBold(s.chips(), ix + half / 2, cy + 23, 24, INK);
+        r.panel(ix, cy, half, 46, BLUE, null, 8, 0);
+        r.textCenterBold(whole(chips.displayed()), ix + half / 2, cy + 23, 24 * chips.popScale(), INK);
         r.textCenterBold("X", ix + half + 15, cy + 23, 18, RED);
-        r.panel(ix + half + 30, cy, half, 46, RED, null, 8, 0); r.textCenterBold(s.mult(), ix + half + 30 + half / 2, cy + 23, 24, INK);
+        r.panel(ix + half + 30, cy, half, 46, RED, null, 8, 0);
+        r.textCenterBold(whole(mult.displayed()), ix + half + 30 + half / 2, cy + 23, 24 * mult.popScale(), INK);
         cy += 58;
 
         ui.button(ix, cy, 88, 60, "Run Info", RED, INK, () -> ui.showRunInfo = true, true);
@@ -45,7 +69,8 @@ final class Hud {
         cell(r, ix + 98 + (iw - 98 - 10) / 2 + 10, cy, (iw - 98 - 10) / 2, 60, "Discards", String.valueOf(s.discards()), RED);
         cy += 72;
 
-        r.panel(ix, cy, iw, 44, PANEL, EDGE, 8, 2); r.textCenterBold("$" + s.money(), ix + iw / 2, cy + 22, 26, ORANGE);
+        r.panel(ix, cy, iw, 44, PANEL, EDGE, 8, 2);
+        r.textCenterBold("$" + whole(money.displayed()), ix + iw / 2, cy + 22, 26 * money.popScale(), ORANGE);
         cy += 56;
 
         ui.button(ix, cy, 88, 56, "Options", ORANGE, DARK, () -> ui.status = "Options — not wired.", true);
@@ -64,6 +89,22 @@ final class Hud {
         return y + 52;
     }
 
+    /** A statBox whose value is a counting, popping readout. */
+    private double statBoxPopped(Renderer r, double x, double y, double w, String k, Counter c) {
+        r.panel(x, y, w, 40, PANEL, EDGE, 8, 2);
+        r.textLeftBold(k, x + 10, y + 13, 14, DIM);
+        r.textCenterBold(whole(c.displayed()), x + w - 30, y + 20, 20 * c.popScale(), INK);
+        return y + 52;
+    }
+
+    /** Parses a model-supplied numeric string for animation; a value too exotic to parse just snaps to 0 pop. */
+    private static double numeric(String s) {
+        try { return Double.parseDouble(s); } catch (NumberFormatException e) { return 0; }
+    }
+
+    /** Formats a counter's in-flight value as the integer the player should read. */
+    private static String whole(double v) { return String.valueOf(Math.round(v)); }
+
     private void cell(Renderer r, double x, double y, double w, double h, String k, String v, Color vc) {
         r.panel(x, y, w, h, PANEL, EDGE, 8, 2);
         r.textCenter(k, x + w / 2, y + 15, 12, DIM);
@@ -76,8 +117,14 @@ final class Hud {
         r.textLeftBold(s.jokerSlotsUsed() + "/" + s.jokerSlotsMax(), x, y, 18, INK);
         double jx = x;
         for (int j = 0; j < s.jokers().size(); j++) {
+            MatchSnapshot.JokerView jv = s.jokers().get(j);
             Layout.Rect rr = new Layout.Rect(jx, y + 22, 54, Ui.SLOT_H - 30);
-            mini(r, rr, Color.web("#c0392b"), Fmt.shortName(s.jokers().get(j)));
+            // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
+            mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
+            if (!jv.badge().isEmpty()) {
+                r.panel(rr.x(), rr.y() + rr.h() - 16, rr.w(), 16, Color.web("#000a"), null, 6, 0);
+                r.textCenter(jv.badge(), rr.centerX(), rr.y() + rr.h() - 8, 8, GOLD);
+            }
             if (j == ui.jokerTarget) r.panel(rr.x() - 3, rr.y() - 3, rr.w() + 6, rr.h() + 6, null, ORANGE, 10, 3);
             ui.jokerSel.add(new Ui.Sel(rr, "joker", j));
             jx += 62;

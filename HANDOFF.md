@@ -116,11 +116,20 @@ model.*  (pure game logic, deterministic, fully tested)
    `DisconnectTests`, including a real socket close. **Still missing:** reconnect and kicking.
 3. ~~**The 4 missing stickers**~~ / ~~**inert decks & sleeves**~~ — done (see Current content state). Every deck,
    sleeve and stake in the doc now does what it says. `StickerTests` + `LoadoutEffectTests` cover them.
-4. **Juice pass** — score count-up, card fly-out on play/discard (reconciler already supports exit), chip/mult pops.
-   **Do this after the user has eyeballed the new menu/lobby/finished screens** — several hundred lines of drawing
-   are still unverified, and juice iterates on exactly those layouts.
+4. ~~**Juice pass (round 1)**~~ — done, unverified visually:
+   - **Count-ups + pops**: `client.engine.Counter` (tested in `EngineTests`) — displayed value glides to the real
+     one, increases spike a `popScale()` the renderer multiplies into the font size. `Hud` holds four (score,
+     chips, mult, money) and feeds them from the snapshot each frame; `GameClient` advances `hud` in the loop.
+   - **Card fly-outs**: `Hand` keeps entities the snapshot dropped in an `exiting` list (~0.45s, fading via
+     `gc().setGlobalAlpha`) — played cards fly up, discarded fly off right. `BlindScreen` calls
+     `hand.expectExit(PLAYED/DISCARDED)` before submitting so the next reconcile knows which way.
+   - **Sticker/edition visibility**: `ShopItem.badge` + new `JokerView(name, badge, debuffed)` in the snapshot
+     ("Foil · Sticky $4"; Sticky shows its **live** toll). Shop tiles and the top joker bar draw a gold footer
+     strip; debuffed jokers grey out. Tested in `SnapshotTests.jokerBadgeSnapshot`.
+   **Round 2 candidates** (after eyeballing): hand-type + score popup at play position, joker wiggle on trigger,
+   money delta floaters, screen shake on big scores. Sound is still entirely absent.
 5. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would allow Balatro-style skipping.
-6. **Implement the ~11 stub jokers** (multiplayer ones need standings/engine hooks).
+6. **Implement the ~35 stub jokers** (24 base-game + Merchant/The Void + 9 multiplayer ones needing engine events).
 7. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`
    (4 suit rows H/C/D/S, 13 rank cols 2→A) and a pixel font at `src/main/resources/font/game.ttf`. The client
    loads both with fallbacks. See `src/main/resources/README-assets.md`.

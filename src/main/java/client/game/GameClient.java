@@ -80,6 +80,7 @@ public final class GameClient extends Application {
                 double dt = lastNanos == 0 ? 0 : (now - lastNanos) / 1e9;
                 lastNanos = now;
                 hand.advance(dt);
+                hud.advance(dt);
                 render();
             }
         }.start();

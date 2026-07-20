@@ -1,6 +1,7 @@
 package model.engine;
 
 import client.engine.CardEntity;
+import client.engine.Counter;
 import client.engine.Easing;
 import client.engine.Layout;
 import client.engine.Motion;
@@ -27,6 +28,7 @@ public final class EngineTests {
         fanLayout();
         hitTest();
         reconcile();
+        counter();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -132,6 +134,35 @@ public final class EngineTests {
                 new Reconciler.Desired(4, 8, 3, "10-DIAMONDS")), 900, 700, 0.3, Easing.EASE_OUT_CUBIC);
         checkInt("a played card leaves the live set", after.size(), 3);
         check("survivors keep their identity", after.get(0) == next.get(0));
+    }
+
+    /** The count-up readout: it chases its target, pops on an increase, and stays quiet on a decrease. */
+    private static void counter() {
+        Counter c = new Counter(0, 1.0, Easing.LINEAR);
+        near("a fresh counter reads its initial value", c.displayed(), 0);
+        near("a fresh counter is at rest", c.popScale(), 1);
+
+        c.retarget(100);
+        check("an increase pops", c.popScale() > 1);
+        c.advance(0.5);
+        near("halfway through it reads the midpoint", c.displayed(), 50);
+        check("still counting", !c.settled());
+        c.advance(2.0);
+        near("it lands on the target", c.displayed(), 100);
+        check("the pop has decayed", c.popScale() == 1 && c.settled());
+
+        c.retarget(100);
+        check("re-feeding the same value is a no-op", c.popScale() == 1);
+
+        c.retarget(20);
+        near("a decrease does not pop", c.popScale(), 1);
+        c.advance(5);
+        near("but it still glides down", c.displayed(), 20);
+
+        c.retarget(40);
+        c.snap(0);
+        near("snap jumps with no glide", c.displayed(), 0);
+        near("snap kills the pop", c.popScale(), 1);
     }
 
     private static void checkInt(String label, int actual, int expected) { check(label + " (" + actual + ")", actual == expected); }

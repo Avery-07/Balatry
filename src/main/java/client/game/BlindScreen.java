@@ -23,11 +23,15 @@ final class BlindScreen implements Screen {
 
     private void play(Ui ui) {
         List<Integer> sel = ui.hand.selectedModelIndices(ui.s.hand());
-        if (sel.isEmpty()) ui.status = "Select 1-" + Ui.MAX_SELECTION + " cards to play."; else ui.vm.playHand(sel);
+        if (sel.isEmpty()) { ui.status = "Select 1-" + Ui.MAX_SELECTION + " cards to play."; return; }
+        ui.hand.expectExit(Hand.Exit.PLAYED);   // the cards about to vanish fly up, not off
+        ui.vm.playHand(sel);
     }
 
     private void discard(Ui ui) {
         List<Integer> sel = ui.hand.selectedModelIndices(ui.s.hand());
-        if (sel.isEmpty()) ui.status = "Select 1-" + Ui.MAX_SELECTION + " cards to discard."; else ui.vm.discard(sel);
+        if (sel.isEmpty()) { ui.status = "Select 1-" + Ui.MAX_SELECTION + " cards to discard."; return; }
+        ui.hand.expectExit(Hand.Exit.DISCARDED);
+        ui.vm.discard(sel);
     }
 }

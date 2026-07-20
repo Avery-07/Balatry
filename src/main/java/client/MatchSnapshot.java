@@ -71,7 +71,7 @@ public record MatchSnapshot(
         String mult,               // red mult of the last play this round ("0" before any hand)
         RoundView round,           // null outside a round
         List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
-        List<String> jokers,
+        List<JokerView> jokers,
         List<ItemView> inventory,  // consumables and relics as one indexed area; relics carry their casting demands
         List<BlindOption> blinds,  // the ante's three blinds, for the selection screen (empty outside SELECTION)
         boolean inShop,
@@ -91,6 +91,14 @@ public record MatchSnapshot(
 
     /** One card in hand: a stable {@code id} (for cross-frame animation) plus rank/suit ordinals for sorting. */
     public record HandCardView(int id, String label, int rank, int suit) { }
+
+    /**
+     * One held joker as the top bar shows it: its name, a short {@code badge} naming its edition and stickers
+     * ("Foil · Sticky $4", empty when it has neither), and whether it is currently doing nothing. The badge
+     * exists because stickers are drawbacks the player agreed to — they have to stay visible after the purchase,
+     * not just in the shop.
+     */
+    public record JokerView(String name, String badge, boolean debuffed) { }
 
     /**
      * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
@@ -119,8 +127,12 @@ public record MatchSnapshot(
     public record ResultView(String outcome, String score, long target, String bestHand,
                              int handsRemaining, int moneyEarned) { }
 
-    /** One purchasable shop card/pack: its name, price, and the hover text (name, category, cost). */
-    public record ShopItem(String label, int price, String tooltip) { }
+    /**
+     * One purchasable shop card/pack: its name, price, the hover text (name, category, cost), and a short
+     * {@code badge} naming its edition and stickers — empty for a plain card, but a Sticky or Perishable roll is
+     * a real drawback, so the buyer must see it on the tile <em>before</em> paying.
+     */
+    public record ShopItem(String label, int price, String tooltip, String badge) { }
 
     /** One offered voucher: name, price, hover text, and whether it can be redeemed now (one per ante). */
     public record VoucherItem(String label, int price, String tooltip, boolean redeemable) { }
@@ -225,7 +237,7 @@ public record MatchSnapshot(
                 mult,
                 roundView,
                 hand(run),
-                display(run.getJokers()),
+                jokerViews(run),
                 inventory(run),
                 blindOptions(match, run.getStake()),
                 inShop,
@@ -294,7 +306,10 @@ public record MatchSnapshot(
             Card c = shop.getSlot(i);
             if (c == null) { slots.add(null); continue; }
             int price = shop.slotPrice(i);
-            slots.add(new ShopItem(nameOf(c), price, tooltip(nameOf(c), descriptionOf(c), categoryOf(c), price)));
+            String badge = badgeOf(c);
+            slots.add(new ShopItem(nameOf(c), price,
+                    tooltip(nameOf(c), descriptionOf(c), categoryOf(c) + (badge.isEmpty() ? "" : " · " + badge), price),
+                    badge));
         }
         List<ShopItem> packs = new ArrayList<>();
         for (int i = 0; i < shop.getPackCount(); i++) {
@@ -302,7 +317,7 @@ public record MatchSnapshot(
             if (p == null) { packs.add(null); continue; }
             int price = shop.packPrice(i);
             String label = String.valueOf(p);
-            packs.add(new ShopItem(label, price, tooltip(label, "", "Booster Pack", price)));
+            packs.add(new ShopItem(label, price, tooltip(label, "", "Booster Pack", price), ""));
         }
         List<VoucherItem> vouchers = new ArrayList<>();
         for (int i = 0; i < shop.getVoucherCount(); i++) {
@@ -313,6 +328,28 @@ public record MatchSnapshot(
             vouchers.add(new VoucherItem(label, price, tooltip(label, v.getSpec().getDescription(), "Voucher", price), run.canRedeem(v)));
         }
         return new ShopView(slots, packs, vouchers, shop.rerollCost(), shop.purchasesRemaining());
+    }
+
+    /**
+     * The visible drawbacks-and-shine summary for one card: its edition and each sticker, dot-separated —
+     * "Foil · Sticky $4" — or empty for a plain card. Sticky shows its current sell toll since that is the
+     * number the player is actually agreeing to.
+     */
+    private static String badgeOf(Card c) {
+        List<String> parts = new ArrayList<>();
+        if (c.getEdition() != null) parts.add(title(c.getEdition().name()));
+        for (var sticker : c.getStickers().keySet()) {
+            if (sticker == model.modifiers.Sticker.STICKY)
+                parts.add("Sticky $" + c.getStickySellCost());
+            else parts.add(title(sticker.name()));
+        }
+        return String.join(" · ", parts);
+    }
+
+    /** {@code PERISHABLE} → {@code Perishable}. */
+    private static String title(String enumName) {
+        String lower = enumName.toLowerCase().replace('_', ' ');
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
     /** Hover text: name, the authored effect description when present, then the category and cost line. */
@@ -368,9 +405,11 @@ public record MatchSnapshot(
         return out;
     }
 
-    private static List<String> display(List<?> items) {
-        List<String> out = new ArrayList<>(items.size());
-        for (Object o : items) out.add(describe(o));
+    /** The board as the top bar shows it: each joker's name, its edition/sticker badge, and whether it is live. */
+    private static List<JokerView> jokerViews(Run run) {
+        List<JokerView> out = new ArrayList<>();
+        for (JokerCard j : run.getJokers())
+            out.add(new JokerView(j.getSpec().getName(), badgeOf(j), j.isDebuffed()));
         return out;
     }
 

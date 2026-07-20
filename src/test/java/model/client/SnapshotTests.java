@@ -31,6 +31,7 @@ public final class SnapshotTests {
         hudDataSnapshot();
         shopPurchaseSnapshot();
         packOpeningSnapshot();
+        jokerBadgeSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -182,6 +183,33 @@ public final class SnapshotTests {
     }
 
     /** Eight cycling-suit Aces and every hand type leveled far up: one hand clears any early blind. */
+    /** The top-bar joker views: name, the edition/sticker badge (Sticky shows its live toll), and the grey-out. */
+    private static void jokerBadgeSnapshot() {
+        Match m = Match.create(33L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        Run run = m.getRun(a);
+
+        var plain = model.cards.jokers.Jokers.JOKER.make();
+        var laden = model.cards.jokers.Jokers.GREEDY_JOKER.make();
+        laden.apply(model.modifiers.Edition.FOIL);
+        laden.apply(model.modifiers.Sticker.STICKY);
+        laden.tickStickers();   // the toll grows a round, so the badge must show the *current* cost
+        var dead = model.cards.jokers.Jokers.LUSTY_JOKER.make();
+        dead.apply(model.modifiers.Sticker.DEBUFFED);
+        run.acquire(plain);
+        run.acquire(laden);
+        run.acquire(dead);
+        m.start();
+
+        MatchSnapshot s = MatchSnapshot.of(m, a);
+        checkInt("all three jokers project", s.jokers().size(), 3);
+        check("a plain joker has no badge", s.jokers().get(0).badge().isEmpty());
+        check("the badge names the edition", s.jokers().get(1).badge().contains("Foil"));
+        check("the badge shows Sticky's live toll", s.jokers().get(1).badge().contains("Sticky $4"));
+        check("a live joker is not greyed", !s.jokers().get(0).debuffed());
+        check("a debuffed joker is greyed", s.jokers().get(2).debuffed());
+    }
+
     private static void stackToWin(Run run) {
         run.resetDeck(new ArrayList<>());
         Suit[] suits = Suit.values();
