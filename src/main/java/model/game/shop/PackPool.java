@@ -1,6 +1,6 @@
 package model.game.shop;
 
-import model.cards.packs.BoosterPack;
+import model.items.packs.BoosterPack;
 
 import java.util.random.RandomGenerator;
 

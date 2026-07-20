@@ -1,10 +1,10 @@
 package model.game;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.Decks;
-import model.cards.jokers.Jokers;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.Decks;
+import model.items.jokers.Jokers;
 import model.game.player.Round;
 import model.game.player.RoundOutcome;
 import model.game.player.Run;

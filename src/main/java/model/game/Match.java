@@ -1,22 +1,22 @@
 package model.game;
 
-import model.cards.DeckType;
-import model.cards.Decks;
-import model.cards.consumables.ConsumableSpec;
-import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.consumables.ConsumableCard;
-import model.cards.packs.PackOpening;
+import model.items.DeckType;
+import model.items.Decks;
+import model.items.consumables.ConsumableSpec;
+import model.items.Card;
+import model.items.DeckCard;
+import model.items.consumables.ConsumableCard;
+import model.items.packs.PackOpening;
 import model.game.actions.Action;
 import model.game.actions.RecordedChoiceProvider;
 import model.game.player.Round;
 import model.game.shop.Shop;
-import model.cards.packs.BoosterPack;
-import model.cards.jokers.JokerCard;
-import model.cards.relics.RelicCard;
-import model.cards.relics.RelicContext;
-import model.cards.relics.RelicKind;
-import model.cards.relics.RelicTarget;
+import model.items.packs.BoosterPack;
+import model.items.jokers.JokerCard;
+import model.items.relics.RelicCard;
+import model.items.relics.RelicContext;
+import model.items.relics.RelicKind;
+import model.items.relics.RelicTarget;
 import model.game.bosses.BossBehavior;
 import model.game.bosses.BossBehaviors;
 import model.game.player.BlindResult;
@@ -26,13 +26,11 @@ import model.game.player.Player;
 import model.game.player.PlayerId;
 import model.game.player.SeatConfig;
 import model.game.player.Sleeves;
-import model.game.player.Round;
 import model.game.player.RoundOutcome;
 import model.game.rng.DeterministicRng;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.player.Run;
-import model.game.shop.Shop;
 import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
 import model.game.sins.SinTableState;
@@ -726,11 +724,11 @@ public final class Match {
             if (j.getEdition() != null) copy.apply(j.getEdition());
             return copy;
         }
-        if (item instanceof model.cards.consumables.ConsumableCard c)
-            return new model.cards.consumables.ConsumableCard(c.getSpec());
+        if (item instanceof model.items.consumables.ConsumableCard c)
+            return new model.items.consumables.ConsumableCard(c.getSpec());
         if (item instanceof RelicCard r) return new RelicCard(r.getSpec());
         if (item instanceof BoosterPack p) return new BoosterPack(p.kind(), p.size());
-        if (item instanceof model.cards.DeckCard d) return new model.cards.DeckCard(d.getRank(), d.getSuit());
+        if (item instanceof model.items.DeckCard d) return new model.items.DeckCard(d.getRank(), d.getSuit());
         throw new IllegalStateException("uncopyable item: " + item);
     }
 

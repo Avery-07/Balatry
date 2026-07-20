@@ -1,7 +1,7 @@
 package model.game.shop;
 import model.game.player.Run;
 
-import model.cards.vouchers.Voucher;
+import model.items.vouchers.Voucher;
 
 import java.util.random.RandomGenerator;
 

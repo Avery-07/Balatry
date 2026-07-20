@@ -1,6 +1,6 @@
 package model.game.player;
 
-import model.cards.DeckCard;
+import model.items.DeckCard;
 import model.game.BossBlind;
 import model.game.bosses.SharedDiscardPool;
 import model.game.rng.RngSource;

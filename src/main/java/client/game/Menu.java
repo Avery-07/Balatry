@@ -2,7 +2,7 @@ package client.game;
 
 import client.engine.Layout;
 import javafx.scene.paint.Color;
-import model.cards.DeckType;
+import model.items.DeckType;
 import model.game.Stake;
 import model.game.net.MatchSetup;
 import model.game.player.SeatConfig;

@@ -1,11 +1,11 @@
 package model.game.tags;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.jokers.Jokers;
-import model.cards.packs.PackKind;
-import model.cards.packs.PackSize;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.jokers.Jokers;
+import model.items.packs.PackKind;
+import model.items.packs.PackSize;
 import model.game.player.Run;
 import model.game.scoring.HandType;
 

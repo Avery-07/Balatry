@@ -1,6 +1,6 @@
 package model.game.net;
 
-import model.cards.DeckType;
+import model.items.DeckType;
 import model.game.Stake;
 import model.game.player.SeatConfig;
 import model.game.player.Sleeve;

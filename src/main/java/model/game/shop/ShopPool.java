@@ -1,6 +1,6 @@
 package model.game.shop;
 
-import model.cards.Card;
+import model.items.Card;
 import model.game.player.Run;
 
 import java.util.random.RandomGenerator;

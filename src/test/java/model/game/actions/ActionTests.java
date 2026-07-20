@@ -1,11 +1,11 @@
 package model.game.actions;
 
-import model.cards.jokers.JokerCard;
-import model.cards.jokers.JokerSpec;
-import model.cards.jokers.Rarity;
-import model.cards.packs.BoosterPack;
-import model.cards.packs.PackKind;
-import model.cards.packs.PackSize;
+import model.items.jokers.JokerCard;
+import model.items.jokers.JokerSpec;
+import model.items.jokers.Rarity;
+import model.items.packs.BoosterPack;
+import model.items.packs.PackKind;
+import model.items.packs.PackSize;
 import model.game.Match;
 import model.game.MatchConfig;
 import model.game.Sin;

@@ -8,7 +8,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import model.game.actions.Action;
 import model.game.net.MatchClient;
 import model.game.player.PlayerId;
-import model.cards.relics.RelicTarget;
+import model.items.relics.RelicTarget;
 
 import java.util.List;
 

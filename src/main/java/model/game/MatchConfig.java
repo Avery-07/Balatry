@@ -1,6 +1,6 @@
 package model.game;
 
-import model.cards.DeckType;
+import model.items.DeckType;
 import model.game.sins.SinChoiceProvider;
 import model.game.sins.SinModifier;
 import model.game.sins.Sins;

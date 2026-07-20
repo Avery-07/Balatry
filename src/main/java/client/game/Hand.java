@@ -77,7 +77,8 @@ final class Hand {
     void setSort(int s)     { this.sort = s; }
 
     /** Fans the hand out (honoring the sort and a lift on selected cards), animates toward it, and draws it. */
-    void render(Renderer r, double x, double y, double w, double h) {
+    void render(Ui ui, double x, double y, double w, double h) {
+        Renderer r = ui.r;
         // Leaving cards draw first (under the live hand), fading as they age.
         for (int i = 0; i < exiting.size(); i++) {
             CardEntity e = exiting.get(i).card();
@@ -101,6 +102,8 @@ final class Hand {
         for (int k = 0; k < ordered.size(); k++) {
             CardEntity e = ordered.get(k);
             r.card(e.rank(), e.suit(), e.x(), e.y(), CARD_W, CARD_H, fan.get(k).rotationDeg(), e.selected());
+            ui.tip(new Layout.Rect(e.x() - CARD_W / 2, e.y() - CARD_H / 2, CARD_W, CARD_H),
+                    Fmt.cardTip(e.label(), e.rank(), e.suit()));
         }
         int sel = selectedCount();
         r.textCenter(sel > 0 ? sel + " selected" : cards.size() + " cards",
@@ -117,6 +120,13 @@ final class Hand {
     }
 
     int selectedCount() { int n = 0; for (CardEntity e : cards) if (e.selected()) n++; return n; }
+
+    /** The selected entities in hand order — what the HUD's play preview evaluates. */
+    List<CardEntity> selectedCards() {
+        List<CardEntity> out = new ArrayList<>();
+        for (CardEntity e : cards) if (e.selected()) out.add(e);
+        return out;
+    }
 
     /** The model hand-indices of the selected cards, mapped through the snapshot by stable id. */
     List<Integer> selectedModelIndices(List<MatchSnapshot.HandCardView> snapHand) {

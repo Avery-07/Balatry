@@ -1,6 +1,6 @@
 package model.game.scoring;
 
-import model.cards.DeckCard;
+import model.items.DeckCard;
 
 import java.util.List;
 

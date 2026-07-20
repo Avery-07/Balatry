@@ -1,12 +1,12 @@
 package model.game.sins;
 
-import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.consumables.ConsumableCard;
-import model.cards.jokers.JokerCard;
-import model.cards.packs.BoosterPack;
-import model.cards.relics.RelicCard;
-import model.cards.vouchers.Voucher;
+import model.items.Card;
+import model.items.DeckCard;
+import model.items.consumables.ConsumableCard;
+import model.items.jokers.JokerCard;
+import model.items.packs.BoosterPack;
+import model.items.relics.RelicCard;
+import model.items.vouchers.Voucher;
 import model.game.Match;
 import model.game.player.PlayerId;
 import model.game.player.Run;

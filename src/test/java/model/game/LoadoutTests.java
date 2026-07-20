@@ -1,9 +1,9 @@
 package model.game;
 
-import model.cards.DeckCard;
-import model.cards.DeckType;
-import model.cards.Decks;
-import model.cards.vouchers.Vouchers;
+import model.items.DeckCard;
+import model.items.DeckType;
+import model.items.Decks;
+import model.items.vouchers.Vouchers;
 import model.game.net.MatchSetup;
 import model.game.player.PlayerId;
 import model.game.player.Run;

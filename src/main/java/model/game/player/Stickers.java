@@ -1,7 +1,7 @@
 package model.game.player;
 
-import model.cards.Card;
-import model.cards.jokers.JokerCard;
+import model.items.Card;
+import model.items.jokers.JokerCard;
 import model.game.Stake;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;

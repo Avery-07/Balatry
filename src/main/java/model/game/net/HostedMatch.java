@@ -1,6 +1,6 @@
 package model.game.net;
 
-import model.cards.DeckType;
+import model.items.DeckType;
 import model.game.player.SeatConfig;
 
 import java.io.IOException;

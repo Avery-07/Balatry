@@ -1,8 +1,8 @@
 package model.game.player;
 
-import model.cards.DeckType;
-import model.cards.jokers.Jokers;
-import model.cards.vouchers.Vouchers;
+import model.items.DeckType;
+import model.items.jokers.Jokers;
+import model.items.vouchers.Vouchers;
 
 /**
  * The starting grants a {@link DeckType} hands each seat beyond the cards themselves. Deck <em>composition</em>

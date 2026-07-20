@@ -1,8 +1,8 @@
 package model.game.shop;
 
-import model.cards.packs.BoosterPack;
-import model.cards.packs.PackKind;
-import model.cards.packs.PackSize;
+import model.items.packs.BoosterPack;
+import model.items.packs.PackKind;
+import model.items.packs.PackSize;
 
 import java.util.random.RandomGenerator;
 

@@ -1,11 +1,17 @@
 package client.game;
 
 import client.MatchSnapshot;
+import client.engine.CardEntity;
 import client.engine.Counter;
 import client.engine.Easing;
 import client.engine.Layout;
 import javafx.scene.paint.Color;
+import model.items.DeckCard;
 import model.game.MatchPhase;
+import model.game.scoring.HandEvaluator;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static client.game.Palette.*;
 
@@ -48,13 +54,22 @@ final class Hud {
         r.textCenterBold(hdr, ix + iw / 2, cy + 26, s.phase() == MatchPhase.SHOP ? 26 : 15, s.phase() == MatchPhase.SHOP ? ORANGE : INK);
         cy += 64;
 
-        // The juicy readouts: each counter chases the snapshot's value and pops when it grows.
+        // The play preview: with cards selected, the chips×mult boxes price the hand the selection would score
+        // (at this seat's levels) and its name appears above them; with nothing selected they show the last play.
+        MatchSnapshot.HandLevelView preview = detectSelection(ui);
+
+        // The juicy readouts: each counter chases its value and pops when it grows.
         score.retarget(numeric(s.round() != null ? s.round().score() : "0"));
-        chips.retarget(numeric(s.chips()));
-        mult.retarget(numeric(s.mult()));
+        chips.retarget(preview != null ? preview.chips() : numeric(s.chips()));
+        mult.retarget(preview != null ? preview.mult() : numeric(s.mult()));
         money.retarget(s.money());
 
         cy = statBoxPopped(r, ix, cy, iw, "Round score", score);
+
+        r.textCenterBold(preview == null ? " "
+                        : Fmt.handName(preview.type()) + "  lv." + preview.level(),
+                ix + iw / 2, cy + 6, 14, preview == null ? DIM : ORANGE);
+        cy += 16;
 
         double half = (iw - 30) / 2;
         r.panel(ix, cy, half, 46, BLUE, null, 8, 0);
@@ -97,6 +112,24 @@ final class Hud {
         return y + 52;
     }
 
+    /**
+     * The hand the current selection would score, at this seat's levels — or null when nothing is selected (or
+     * outside a blind). Evaluation runs client-side on the selected ranks/suits ({@link HandEvaluator} is pure
+     * and deterministic, the same evaluator the model scores with), and the pricing comes from the snapshot's
+     * {@code handLevels} table, so the preview always matches what a play would actually earn.
+     */
+    private static MatchSnapshot.HandLevelView detectSelection(Ui ui) {
+        if (ui.s.phase() != MatchPhase.BLIND) return null;
+        List<DeckCard> cards = new ArrayList<>();
+        for (CardEntity e : ui.hand.selectedCards())
+            cards.add(new DeckCard(DeckCard.Rank.values()[e.rank()], DeckCard.Suit.values()[e.suit()]));
+        if (cards.isEmpty()) return null;
+        String type = new HandEvaluator().evaluate(cards).type().name();
+        for (MatchSnapshot.HandLevelView hv : ui.s.handLevels())
+            if (hv.type().equals(type)) return hv;
+        return null;
+    }
+
     /** Parses a model-supplied numeric string for animation; a value too exotic to parse just snaps to 0 pop. */
     private static double numeric(String s) {
         try { return Double.parseDouble(s); } catch (NumberFormatException e) { return 0; }
@@ -127,16 +160,38 @@ final class Hud {
             }
             if (j == ui.jokerTarget) r.panel(rr.x() - 3, rr.y() - 3, rr.w() + 6, rr.h() + 6, null, ORANGE, 10, 3);
             ui.jokerSel.add(new Ui.Sel(rr, "joker", j));
+            ui.tip(rr, jokerTip(jv));
             jx += 62;
         }
         r.textLeftBold(s.consumableSlotsUsed() + "/" + s.consumableSlotsMax(), x + w - 40, y, 18, INK);
         double kx = x + w - 54;
         for (int i = s.inventory().size() - 1; i >= 0; i--) {
+            MatchSnapshot.ItemView it = s.inventory().get(i);
             Layout.Rect rr = new Layout.Rect(kx, y + 22, 54, Ui.SLOT_H - 30);
-            mini(r, rr, Color.web("#3d3357"), Fmt.shortName(s.inventory().get(i).label()));
+            mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
             ui.selectables.add(new Ui.Sel(rr, "item", i));
+            ui.tip(rr, itemTip(it));
             kx -= 62;
         }
+    }
+
+    /** A joker's hover text: its name, effect, badge (edition/stickers), and whether it is dead right now. */
+    private static String jokerTip(MatchSnapshot.JokerView jv) {
+        StringBuilder tip = new StringBuilder(jv.name());
+        if (!jv.description().isEmpty()) tip.append('\n').append(jv.description());
+        if (!jv.badge().isEmpty()) tip.append('\n').append(jv.badge());
+        if (jv.debuffed()) tip.append('\n').append("DEBUFFED — no effect right now");
+        return tip.toString();
+    }
+
+    /** A held item's hover text: name, effect, and — for targeted cards — what it needs selected. */
+    private static String itemTip(MatchSnapshot.ItemView it) {
+        StringBuilder tip = new StringBuilder(it.label());
+        if (!it.description().isEmpty()) tip.append('\n').append(it.description());
+        if (it.minTargets() > 0)
+            tip.append('\n').append("Needs ").append(it.minTargets())
+               .append(" selected card").append(it.minTargets() > 1 ? "s" : "");
+        return tip.toString();
     }
 
     private void mini(Renderer r, Layout.Rect rr, Color c, String label) {
@@ -149,5 +204,7 @@ final class Hud {
         double cardH = 140, cardY = y + h - cardH - 24;
         r.panel(x + 5, cardY, w - 10, cardH, Color.web("#d3c3a2"), Color.web("#7a5a3a"), 8, 3);
         r.textCenter(ui.s.deckRemaining() + " / " + ui.s.deckTotal(), x + w / 2, y + h - 12, 14, INK);
+        // Hovering the pile opens the full deck view (GameClient checks this rect each frame).
+        ui.deckRect = new Layout.Rect(x + 5, cardY, w - 10, cardH);
     }
 }

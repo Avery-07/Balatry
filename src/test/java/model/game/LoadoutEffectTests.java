@@ -1,12 +1,12 @@
 package model.game;
 
-import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.DeckType;
-import model.cards.consumables.ConsumableCard;
-import model.cards.consumables.ConsumableType;
+import model.items.Card;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.DeckType;
+import model.items.consumables.ConsumableCard;
+import model.items.consumables.ConsumableType;
 import model.game.player.PlayerId;
 import model.game.player.Run;
 import model.game.player.SeatConfig;

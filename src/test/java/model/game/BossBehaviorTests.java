@@ -1,9 +1,9 @@
 package model.game;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.jokers.Jokers;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.jokers.Jokers;
 import model.game.player.BlindResult;
 import model.game.player.PlayerId;
 import model.game.player.Run;

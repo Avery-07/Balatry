@@ -9,7 +9,7 @@ final class BlindScreen implements Screen {
 
     @Override
     public void render(Ui ui, double x, double y, double w, double h) {
-        ui.hand.render(ui.r, x, y, w, h);
+        ui.hand.render(ui, x, y, w, h);
 
         double by = y + h - 56, bw = 130, bx = x + w / 2 - (bw * 2 + 30 + 130) / 2;
         ui.button(bx, by, bw, 44, "Play Hand", RED, INK, () -> play(ui), true);

@@ -33,7 +33,7 @@ public interface SinModifier {
     default void onHandScored(Run run, java.math.BigDecimal handScore) { }
 
     /** Per seat, after a completed shop purchase from any row, with the price actually paid (Greed's claims, Envy's log). */
-    default void onPurchase(Run buyer, model.cards.Card item, int pricePaid) { }
+    default void onPurchase(Run buyer, model.items.Card item, int pricePaid) { }
 
     /** Per seat, as its shop closes at the end of the phase (Sloth's empty-visit spectral). */
     default void onShopClosed(Run run, model.game.shop.Shop shop) { }

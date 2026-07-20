@@ -1,11 +1,11 @@
 package model.game.player;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.consumables.ConsumableSpec;
-import model.cards.consumables.ConsumableType;
-import model.cards.vouchers.Voucher;
-import model.cards.vouchers.VoucherSpec;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.consumables.ConsumableSpec;
+import model.items.consumables.ConsumableType;
+import model.items.vouchers.Voucher;
+import model.items.vouchers.VoucherSpec;
 import model.game.rng.RngSource;
 import model.game.scoring.HandType;
 

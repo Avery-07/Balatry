@@ -1,9 +1,9 @@
 package model.game.shop;
 
-import model.cards.Card;
-import model.cards.consumables.Planets;
-import model.cards.consumables.Tarots;
-import model.cards.jokers.Jokers;
+import model.items.Card;
+import model.items.consumables.Planets;
+import model.items.consumables.Tarots;
+import model.items.jokers.Jokers;
 
 import java.util.random.RandomGenerator;
 

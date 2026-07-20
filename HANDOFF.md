@@ -128,6 +128,23 @@ model.*  (pure game logic, deterministic, fully tested)
      strip; debuffed jokers grey out. Tested in `SnapshotTests.jokerBadgeSnapshot`.
    **Round 2 candidates** (after eyeballing): hand-type + score popup at play position, joker wiggle on trigger,
    money delta floaters, screen shake on big scores. Sound is still entirely absent.
+   **Round 2 (user-reported fixes), done:**
+   - **Hover works now.** `Ui` tracks the mouse (`mouseX/Y`), screens register `Ui.Tip` regions, and
+     `Overlays.tooltip` draws the topmost one under the cursor after everything else. Registered: hand cards
+     (readable title + enhancement/seal), held jokers (description + badge + debuff note), held items
+     (description + target demands), shop slots/vouchers/packs (the tooltip strings that already existed but
+     were never drawn).
+   - **Deck-pile hover** opens the full-deck view (`Overlays.deckContents`): 13×4 grid, spent cards greyed,
+     duplicate counts (Crowded/Erratic) as "live/total" under the cell. Data: `MatchSnapshot.deckCards`
+     (`DeckCardView(rank, suit, live)`), live = draw pile + hand during a round, everything otherwise.
+   - **Play preview**: selecting cards shows the detected hand ("Two Pair  lv.2") above the chips×mult boxes,
+     and the boxes preview what that play scores at this seat's levels (`MatchSnapshot.handLevels`, evaluated
+     client-side with the same `HandEvaluator` the model scores with). Deselecting falls back to the last play.
+   - **Targeted consumables can't be wasted**: `ConsumableSpec.minTargets` (12 tarots annotated; Death=2,
+     World=3), enforced in `Run.useConsumable` (throws, card kept) and mirrored in the client (greyed Use +
+     hint). Covered in `TarotTests.targetRequirements`.
+   - **Pack names fixed**: `BoosterPack` had no `toString`, so shop tiles showed object hashes. Now
+     `displayName()` ("Mega Arcana Pack").
 5. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would allow Balatro-style skipping.
 6. **Implement the ~35 stub jokers** (24 base-game + Merchant/The Void + 9 multiplayer ones needing engine events).
 7. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`

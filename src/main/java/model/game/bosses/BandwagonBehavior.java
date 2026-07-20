@@ -1,6 +1,6 @@
 package model.game.bosses;
 
-import model.cards.jokers.JokerCard;
+import model.items.jokers.JokerCard;
 import model.game.BossBlind;
 import model.game.Match;
 import model.game.player.PlayerId;

@@ -1,10 +1,10 @@
 package model.game.tags;
 
-import model.cards.jokers.Jokers;
-import model.cards.jokers.Rarity;
-import model.cards.packs.BoosterPack;
-import model.cards.packs.PackKind;
-import model.cards.packs.PackSize;
+import model.items.jokers.Jokers;
+import model.items.jokers.Rarity;
+import model.items.packs.BoosterPack;
+import model.items.packs.PackKind;
+import model.items.packs.PackSize;
 import model.game.player.Run;
 import model.game.rng.RngSource;
 import model.game.scoring.HandType;

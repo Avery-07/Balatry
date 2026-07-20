@@ -1,10 +1,10 @@
 package model.game.shop;
 import model.game.player.Run;
 
-import model.cards.Card;
-import model.cards.jokers.JokerCard;
-import model.cards.packs.BoosterPack;
-import model.cards.vouchers.Voucher;
+import model.items.Card;
+import model.items.jokers.JokerCard;
+import model.items.packs.BoosterPack;
+import model.items.vouchers.Voucher;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.scoring.Trigger;

@@ -1,6 +1,6 @@
 package model.game.player;
 
-import model.cards.jokers.JokerCard;
+import model.items.jokers.JokerCard;
 import model.game.scoring.Trigger;
 import model.modifiers.Edition;
 import model.modifiers.Sticker;

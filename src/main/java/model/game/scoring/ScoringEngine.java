@@ -1,8 +1,8 @@
 package model.game.scoring;
 
-import model.cards.consumables.ConsumableCard;
-import model.cards.DeckCard;
-import model.cards.jokers.JokerCard;
+import model.items.consumables.ConsumableCard;
+import model.items.DeckCard;
+import model.items.jokers.JokerCard;
 import model.game.rng.RngSource;
 import model.game.player.Run;
 import model.modifiers.Enhancement;

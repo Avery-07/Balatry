@@ -29,18 +29,31 @@ final class Ui {
     final List<Btn> packButtons = new ArrayList<>();   // pack-opening option picks (modal: only these are live during a pack)
     final List<Sel> selectables = new ArrayList<>();   // shop/consumable items selectable for contextual actions
     final List<Sel> jokerSel = new ArrayList<>();      // held jokers (own selection: Sell, and Katadesmos's target)
+    final List<Tip> tips = new ArrayList<>();          // hover regions; the topmost under the mouse draws a tooltip
     String selKind;                                    // currently-selected item's kind, or null
     int selIndex;
     int jokerTarget = -1;                              // targeted joker index (Sell / Katadesmos), -1 = none
     Runnable onLeaveMatch = () -> { };                 // set by GameClient: quit the match and return to the menu
+
+    double mouseX = -1, mouseY = -1;                   // last mouse position, canvas coordinates
+    Layout.Rect deckRect;                              // the deck pile's screen area; hovering it opens the deck view
 
     Ui(Renderer r, Hand hand) { this.r = r; this.hand = hand; }
 
     record Btn(Layout.Rect rect, Runnable action) { }
     record Sel(Layout.Rect rect, String kind, int index) { }
     record Act(String label, Color color, Color text, Runnable run) { }
+    record Tip(Layout.Rect rect, String text) { }
 
-    void newFrame() { buttons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); }
+    void newFrame() { buttons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); tips.clear(); deckRect = null; }
+
+    /** Registers a hover region; the topmost one under the mouse draws its text as a tooltip after everything else. */
+    void tip(Layout.Rect rect, String text) {
+        if (text != null && !text.isBlank()) tips.add(new Tip(rect, text));
+    }
+
+    /** Whether the mouse is currently inside {@code rect}. */
+    boolean hovered(Layout.Rect rect) { return rect != null && rect.contains(mouseX, mouseY); }
 
     /** Draws a chunky button and, if enabled, registers it for clicking. */
     void button(double x, double y, double w, double h, String label, Color fill, Color text, Runnable action, boolean enabled) {

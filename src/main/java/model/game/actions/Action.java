@@ -1,6 +1,6 @@
 package model.game.actions;
 
-import model.cards.relics.RelicTarget;
+import model.items.relics.RelicTarget;
 import model.game.player.PlayerId;
 
 import java.util.List;

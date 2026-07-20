@@ -1,9 +1,9 @@
 package model.game.player;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.jokers.JokerCard;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.jokers.JokerCard;
 import model.modifiers.Sticker;
 
 import java.util.List;

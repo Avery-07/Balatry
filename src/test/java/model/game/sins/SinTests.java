@@ -121,7 +121,7 @@ public final class SinTests {
         check("a pending pack is granted at round begin", m.getRun(a).getPendingPacks().size() == 1);
         var pack = m.getRun(a).getPendingPacks().get(0);
         check("the grant is a Mega Myth Pack",
-                pack.kind() == model.cards.packs.PackKind.MYTH && pack.size() == model.cards.packs.PackSize.MEGA);
+                pack.kind() == model.items.packs.PackKind.MYTH && pack.size() == model.items.packs.PackSize.MEGA);
 
         var openA = m.getRun(a).openPendingPack(0);
         var openB = m.getRun(b).openPendingPack(0);
@@ -130,8 +130,8 @@ public final class SinTests {
         checkInt("Mega pick budget is 2", openA.getPicksLeft(), 2);
         boolean mirrored = true;
         for (int i = 0; i < 5; i++) {
-            var ca = (model.cards.relics.RelicCard) openA.getOptions().get(i);
-            var cb = (model.cards.relics.RelicCard) openB.getOptions().get(i);
+            var ca = (model.items.relics.RelicCard) openA.getOptions().get(i);
+            var cb = (model.items.relics.RelicCard) openB.getOptions().get(i);
             mirrored &= ca.getSpec().getName().equals(cb.getSpec().getName());
         }
         check("both seats see the same seeded offer", mirrored);
@@ -142,8 +142,8 @@ public final class SinTests {
         check("picks come off the offer", openA.getOptions().get(0) == null && openA.getOptions().get(1) == null);
         checkThrows("the pick budget is enforced", () -> openA.pick(2));
         check("picked relics never touch the relic area", m.getRun(a).getRelics().isEmpty());
-        m.useRelicCard(a, (model.cards.relics.RelicCard) first, model.cards.relics.RelicTarget.on(b));
-        m.useRelicCard(a, (model.cards.relics.RelicCard) second, model.cards.relics.RelicTarget.on(b));
+        m.useRelicCard(a, (model.items.relics.RelicCard) first, model.items.relics.RelicTarget.on(b));
+        m.useRelicCard(a, (model.items.relics.RelicCard) second, model.items.relics.RelicTarget.on(b));
         check("pack relics cast without holding slots", m.getRun(a).getRelics().isEmpty());
 
         // An unopened pack dies with its round.
@@ -158,9 +158,9 @@ public final class SinTests {
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.WRATH));
         PlayerId a = m.getSeats().get(0);
         Run run = m.getRun(a);
-        run.board().add(model.cards.jokers.Jokers.JOKER.make());
-        run.board().add(model.cards.jokers.Jokers.GREEDY_JOKER.make());
-        var eternal = model.cards.jokers.Jokers.LUSTY_JOKER.make();
+        run.board().add(model.items.jokers.Jokers.JOKER.make());
+        run.board().add(model.items.jokers.Jokers.GREEDY_JOKER.make());
+        var eternal = model.items.jokers.Jokers.LUSTY_JOKER.make();
         eternal.apply(model.modifiers.Sticker.ETERNAL);
         run.board().add(eternal);
         m.start();
@@ -180,7 +180,7 @@ public final class SinTests {
         int before = run.getMoney();
         boolean jokerBought = false;
         for (int i = 0; i < shop.getSlotCount(); i++) {
-            if (shop.getSlot(i) instanceof model.cards.jokers.JokerCard && run.canAcquire(shop.getSlot(i))) {
+            if (shop.getSlot(i) instanceof model.items.jokers.JokerCard && run.canAcquire(shop.getSlot(i))) {
                 shop.buy(i);
                 jokerBought = true;
                 break;
@@ -204,7 +204,7 @@ public final class SinTests {
         Match pride = Match.create(66L, List.of("A", "B"),
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
         PlayerId pa = pride.getSeats().get(0);
-        pride.getRun(pa).board().add(model.cards.jokers.Jokers.JOKER.make());
+        pride.getRun(pa).board().add(model.items.jokers.Jokers.JOKER.make());
         pride.start();
         checkThrows("destroy-for-free is Wrath-gated", () -> pride.wrathDestroyJoker(pa, 0));
     }
@@ -221,9 +221,9 @@ public final class SinTests {
         var stream = new java.util.Random(99);
         for (int i = 0; i < 600; i++) {
             var c = model.game.shop.GluttonyShopPool.INSTANCE.roll(stream);
-            if (c instanceof model.cards.jokers.JokerCard) joker = true;
-            else if (c instanceof model.cards.relics.RelicCard) relic = true;
-            else if (c instanceof model.cards.consumables.ConsumableCard cc) {
+            if (c instanceof model.items.jokers.JokerCard) joker = true;
+            else if (c instanceof model.items.relics.RelicCard) relic = true;
+            else if (c instanceof model.items.consumables.ConsumableCard cc) {
                 switch (cc.getSpec().getType()) {
                     case TAROT -> tarot = true;
                     case PLANET -> planet = true;
@@ -244,14 +244,14 @@ public final class SinTests {
         PlayerId b = m.getSeats().get(1);
         m.start();
 
-        m.getRun(a).createConsumable(model.cards.consumables.Tarots.THE_HERMIT.spec());
+        m.getRun(a).createConsumable(model.items.consumables.Tarots.THE_HERMIT.spec());
         m.getRun(a).useConsumable(0);
         checkInt("a consumable use mints $4", m.getSinTableState().getGluttonyGauge(), 4);
         checkInt("the user's tally bumps", m.getSinTableState().gluttonyUses(a), 1);
         checkInt("other seats' tallies do not", m.getSinTableState().gluttonyUses(b), 0);
 
-        m.useRelicCard(a, new model.cards.relics.RelicCard(model.cards.relics.Relics.AEGIS.spec()),
-                model.cards.relics.RelicTarget.none());
+        m.useRelicCard(a, new model.items.relics.RelicCard(model.items.relics.Relics.AEGIS.spec()),
+                model.items.relics.RelicTarget.none());
         checkInt("a relic cast is a consumable use too", m.getSinTableState().getGluttonyGauge(), 8);
         checkInt("relic cast bumps the tally", m.getSinTableState().gluttonyUses(a), 2);
 
@@ -264,9 +264,9 @@ public final class SinTests {
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GLUTTONY));
         PlayerId a = m.getSeats().get(0);
         Run run = m.getRun(a);
-        run.board().add(new model.cards.jokers.JokerCard(
-                model.cards.jokers.JokerSpec.named("Snack", model.cards.jokers.Rarity.COMMON).build(), 4));
-        var eternal = model.cards.jokers.Jokers.JOKER.make();
+        run.board().add(new model.items.jokers.JokerCard(
+                model.items.jokers.JokerSpec.named("Snack", model.items.jokers.Rarity.COMMON).build(), 4));
+        var eternal = model.items.jokers.Jokers.JOKER.make();
         eternal.apply(model.modifiers.Sticker.ETERNAL);
         run.board().add(eternal);
         m.start();
@@ -283,7 +283,7 @@ public final class SinTests {
         Match pride = Match.create(83L, List.of("A", "B"),
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
         PlayerId pa = pride.getSeats().get(0);
-        pride.getRun(pa).board().add(model.cards.jokers.Jokers.JOKER.make());
+        pride.getRun(pa).board().add(model.items.jokers.Jokers.JOKER.make());
         pride.start();
         checkThrows("eating is Gluttony-gated", () -> pride.gluttonyEatJoker(pa, 0));
     }
@@ -404,16 +404,16 @@ public final class SinTests {
         var stream = new java.util.Random(7);
         for (int i = 0; i < 800; i++) {
             var c = model.game.shop.GreedShopPool.INSTANCE.roll(stream);
-            if (c instanceof model.cards.jokers.JokerCard j) {
+            if (c instanceof model.items.jokers.JokerCard j) {
                 switch (j.getSpec().getRarity()) {
                     case COMMON -> common++;
                     case UNCOMMON -> uncommon++;
                     case RARE -> rare++;
                     default -> { }
                 }
-            } else if (c instanceof model.cards.consumables.ConsumableCard cc) {
-                if (cc.getSpec().getType() == model.cards.consumables.ConsumableType.TAROT) tarot = true;
-                if (cc.getSpec().getType() == model.cards.consumables.ConsumableType.PLANET) planet = true;
+            } else if (c instanceof model.items.consumables.ConsumableCard cc) {
+                if (cc.getSpec().getType() == model.items.consumables.ConsumableType.TAROT) tarot = true;
+                if (cc.getSpec().getType() == model.items.consumables.ConsumableType.PLANET) planet = true;
             }
         }
         check("uncommons become the norm (" + common + "/" + uncommon + "/" + rare + ")", uncommon > common);
@@ -469,10 +469,10 @@ public final class SinTests {
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.GREED));
         m.start();
         Run runA = m.getRun(m.getSeats().get(0)), runB = m.getRun(m.getSeats().get(1));
-        var spec = model.cards.jokers.JokerSpec.named("Coveted", model.cards.jokers.Rarity.COMMON).build();
-        model.game.shop.ShopPool covetedPool = stream -> new model.cards.jokers.JokerCard(spec, 4);
+        var spec = model.items.jokers.JokerSpec.named("Coveted", model.items.jokers.Rarity.COMMON).build();
+        model.game.shop.ShopPool covetedPool = stream -> new model.items.jokers.JokerCard(spec, 4);
 
-        new GreedModifier().onPurchase(runA, new model.cards.jokers.JokerCard(spec, 4), 4);   // A claims "Coveted"
+        new GreedModifier().onPurchase(runA, new model.items.jokers.JokerCard(spec, 4), 4);   // A claims "Coveted"
 
         runB.addMoney(10);
         var shopB = new model.game.shop.Shop(runB, 9, new model.game.shop.ShopSetup(2, covetedPool, 0, null, 0, null));
@@ -498,14 +498,14 @@ public final class SinTests {
         PlayerId a = m.getSeats().get(0);
         Run run = m.getRun(a);
 
-        run.createConsumable(model.cards.consumables.Tarots.THE_HERMIT.spec());
+        run.createConsumable(model.items.consumables.Tarots.THE_HERMIT.spec());
         run.getConsumables().get(0).apply(model.modifiers.Sticker.DEBUFFED);
         checkThrows("a debuffed consumable cannot be used", () -> run.useConsumable(0));
 
-        var relic = new model.cards.relics.RelicCard(model.cards.relics.Relics.AEGIS.spec());
+        var relic = new model.items.relics.RelicCard(model.items.relics.Relics.AEGIS.spec());
         relic.apply(model.modifiers.Sticker.DEBUFFED);
         checkThrows("a debuffed relic cannot be cast",
-                () -> m.useRelicCard(a, relic, model.cards.relics.RelicTarget.none()));
+                () -> m.useRelicCard(a, relic, model.items.relics.RelicTarget.none()));
     }
 
     /** Round wiring: the per-hand hook fires after scoring with the hand's own score. */
@@ -641,10 +641,10 @@ public final class SinTests {
         checkInt("a buyer gets no spectral", m.getRun(a).getConsumables().size(), 0);
         checkInt("an empty visit offers a spectral", m.getRun(b).getConsumables().size(), 1);
         check("the offer is a spectral", m.getRun(b).getConsumables().get(0).getSpec().getType()
-                == model.cards.consumables.ConsumableType.SPECTRAL);
+                == model.items.consumables.ConsumableType.SPECTRAL);
 
         // Full consumable area: the offer is silently lost.
-        m.getRun(b).createConsumable(model.cards.consumables.Tarots.THE_HERMIT.spec());   // B now at 2/2
+        m.getRun(b).createConsumable(model.items.consumables.Tarots.THE_HERMIT.spec());   // B now at 2/2
         for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
         m.toShop();
         m.nextBlind();   // neither bought anything
@@ -701,7 +701,7 @@ public final class SinTests {
 
         var legendary = m.getSinTableState().getPrideLegendary();
         check("a legendary is on the block", legendary != null
-                && legendary.getSpec().getRarity() == model.cards.jokers.Rarity.LEGENDARY);
+                && legendary.getSpec().getRarity() == model.items.jokers.Rarity.LEGENDARY);
         Match replay = Match.create(102L, List.of("A", "B"),
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
         replay.start();

@@ -1,6 +1,6 @@
 package model.game;
 
-import model.cards.DeckType;
+import model.items.DeckType;
 import model.game.actions.Action;
 import model.game.host.MatchHost;
 import model.game.net.MatchClient;

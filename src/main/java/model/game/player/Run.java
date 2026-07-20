@@ -1,22 +1,22 @@
 package model.game.player;
 
-import model.cards.Card;
-import model.cards.DeckType;
-import model.cards.consumables.ConsumableCard;
-import model.cards.DeckCard;
-import model.cards.jokers.JokerCard;
-import model.cards.packs.BoosterPack;
-import model.cards.packs.PackOpening;
-import model.cards.jokers.JokerTrait;
+import model.items.Card;
+import model.items.DeckType;
+import model.items.consumables.ConsumableCard;
+import model.items.DeckCard;
+import model.items.jokers.JokerCard;
+import model.items.packs.BoosterPack;
+import model.items.packs.PackOpening;
+import model.items.jokers.JokerTrait;
 import model.game.sins.SinState;
 import model.game.tags.SkipTag;
-import model.cards.consumables.ConsumableSpec;
-import model.cards.relics.RelicCard;
+import model.items.consumables.ConsumableSpec;
+import model.items.relics.RelicCard;
 import model.modifiers.Sticker;
-import model.cards.consumables.ConsumableType;
-import model.cards.consumables.Tarots;
-import model.cards.vouchers.Voucher;
-import model.cards.vouchers.VoucherSpec;
+import model.items.consumables.ConsumableType;
+import model.items.consumables.Tarots;
+import model.items.vouchers.Voucher;
+import model.items.vouchers.VoucherSpec;
 import model.game.*;
 import model.game.bosses.SharedDiscardPool;
 import model.game.rng.DeterministicRng;
@@ -352,6 +352,10 @@ public final class Run {
         if (consumable.isDebuffed())   // Greed's claim: a debuffed consumable is dead until the sticker is removed
             throw new IllegalStateException("a debuffed consumable cannot be used: " + consumable.getSpec().getName());
         ConsumableSpec spec = consumable.getSpec();
+        // A targeted card refuses to fire into nothing — using Strength with no selection would just eat the card.
+        if (targets.size() < spec.getMinTargets())
+            throw new IllegalStateException(spec.getName() + " needs " + spec.getMinTargets()
+                    + " selected card" + (spec.getMinTargets() > 1 ? "s" : ""));
         consumables.remove(consumable);   // free its slot before the effect runs, so creation effects (Emperor, High Priestess) can fill it
         consumableTargets = List.copyOf(targets);
         consumable.consume(this);
@@ -622,10 +626,10 @@ public final class Run {
                 case D6_TAG       -> setup.setRerollsFromZero(true);
                 case VOUCHER_TAG  -> setup.addVouchers(1);
                 case NEGATIVE_TAG -> setup.addNegativeJokerGrant();
-                case RARE_TAG     -> setup.injectFreeCard(rolledTagJoker(model.cards.jokers.Rarity.RARE));
+                case RARE_TAG     -> setup.injectFreeCard(rolledTagJoker(model.items.jokers.Rarity.RARE));
                 case UNCOMMON_TAG -> {
-                    setup.injectFreeCard(rolledTagJoker(model.cards.jokers.Rarity.UNCOMMON));
-                    setup.injectFreeCard(rolledTagJoker(model.cards.jokers.Rarity.UNCOMMON));
+                    setup.injectFreeCard(rolledTagJoker(model.items.jokers.Rarity.UNCOMMON));
+                    setup.injectFreeCard(rolledTagJoker(model.items.jokers.Rarity.UNCOMMON));
                 }
                 default -> throw new IllegalStateException("unhandled NEXT_SHOP tag: " + tag);
             }
@@ -633,8 +637,8 @@ public final class Run {
     }
 
     /** A tag-granted free shop joker of {@code rarity}, drawn from the occurrence-salted generation stream. */
-    private JokerCard rolledTagJoker(model.cards.jokers.Rarity rarity) {
-        return model.cards.jokers.Jokers.randomOfRarity(rarity,
+    private JokerCard rolledTagJoker(model.items.jokers.Rarity rarity) {
+        return model.items.jokers.Jokers.randomOfRarity(rarity,
                 rng.streamFor(RngSource.JOKER_GENERATION, stats.nextSalt(RngSource.JOKER_GENERATION))).make();
     }
 

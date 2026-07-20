@@ -1,7 +1,7 @@
 package model.game.scoring;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
 import model.modifiers.Enhancement;
 
 import java.util.ArrayList;

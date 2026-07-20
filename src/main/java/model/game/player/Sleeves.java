@@ -1,7 +1,7 @@
 package model.game.player;
 
-import model.cards.DeckCard;
-import model.cards.vouchers.Vouchers;
+import model.items.DeckCard;
+import model.items.vouchers.Vouchers;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
 

@@ -3,8 +3,8 @@ package client.game;
 import client.MatchSnapshot;
 import client.engine.Layout;
 import javafx.scene.paint.Color;
-import model.cards.DeckCard;
-import model.cards.relics.RelicTarget;
+import model.items.DeckCard;
+import model.items.relics.RelicTarget;
 import model.game.scoring.HandEvaluator;
 
 import java.util.ArrayList;
@@ -65,7 +65,16 @@ final class Overlays {
                         out.add(new Ui.Act("Aim…", Color.web("#303237"), DIM, () -> ui.status = it.label() + " must be aimed at a seat — seat targeting is coming."));
                     out.add(new Ui.Act("Sell", RED, INK, () -> ui.vm.sellRelic(it.modelIndex())));
                 } else {
-                    out.add(new Ui.Act("Use", ORANGE, DARK, () -> ui.vm.useConsumable(it.modelIndex(), ui.hand.selectedModelIndices(s.hand()))));
+                    // A targeted consumable (Strength, The Hierophant, …) refuses to fire into nothing: with too
+                    // few cards selected the button turns into a hint instead of wasting the card. The model
+                    // enforces the same rule, so this is a courtesy, not the protection.
+                    int selected = ui.hand.selectedModelIndices(s.hand()).size();
+                    if (selected < it.minTargets())
+                        out.add(new Ui.Act("Use", Color.web("#303237"), DIM, () -> ui.status =
+                                it.label() + " needs " + it.minTargets() + " selected card"
+                                + (it.minTargets() > 1 ? "s" : "") + " — select in your hand first."));
+                    else
+                        out.add(new Ui.Act("Use", ORANGE, DARK, () -> ui.vm.useConsumable(it.modelIndex(), ui.hand.selectedModelIndices(s.hand()))));
                     out.add(new Ui.Act("Sell", RED, INK, () -> ui.vm.sellConsumable(it.modelIndex())));
                 }
             }
@@ -146,6 +155,67 @@ final class Overlays {
             }
         }
         r.textCenter("Choose your pick(s) — the pack closes once the budget is spent.", px + pw / 2, py + ph - 18, 11, FAINT);
+    }
+
+    /**
+     * The hover tooltip: the topmost registered tip under the mouse, drawn as a panel beside the cursor. Screens
+     * register their regions with {@link Ui#tip}; this runs after everything else so the panel sits on top.
+     */
+    void tooltip(Ui ui) {
+        Ui.Tip hit = null;
+        for (Ui.Tip t : ui.tips) if (t.rect().contains(ui.mouseX, ui.mouseY)) hit = t;   // last registered wins
+        if (hit == null) return;
+
+        String[] lines = hit.text().split("\n");
+        double size = 12, lineH = size + 5, padX = 10, padY = 8;
+        double w = 0;
+        for (String line : lines) w = Math.max(w, line.length() * size * 0.62);
+        w += 2 * padX;
+        double h = lines.length * lineH + 2 * padY;
+        double x = Math.min(ui.mouseX + 16, Ui.W - w - 8);
+        double y = Math.min(ui.mouseY + 18, Ui.H - h - 8);
+
+        Renderer r = ui.r;
+        r.panel(x, y, w, h, Color.web("#101114", 0.96), ORANGE, 8, 2);
+        for (int i = 0; i < lines.length; i++)
+            if (i == 0) r.textLeftBold(lines[i], x + padX, y + padY + i * lineH, size, ORANGE);
+            else        r.textLeft(lines[i], x + padX, y + padY + i * lineH, size, INK);
+    }
+
+    /**
+     * The deck-pile hover: the whole deck laid out by suit row and rank column, with cards that can no longer
+     * turn up this round (played, discarded, destroyed) greyed out. Duplicates stack a count on the cell.
+     */
+    void deckContents(Ui ui) {
+        Renderer r = ui.r;
+        r.gc().setFill(Color.web("#040a08", 0.72)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+
+        int ranks = 13, suits = 4;
+        double cw = 62, ch = 88, gap = 8;
+        double gw = ranks * cw + (ranks - 1) * gap, gh = suits * ch + (suits - 1) * gap;
+        double gx = (Ui.W - gw) / 2, gy = (Ui.H - gh) / 2 + 14;
+
+        r.textCenterBold("DECK — " + ui.s.deckRemaining() + " of " + ui.s.deckTotal() + " still to come",
+                Ui.W / 2.0, gy - 40, 20, ORANGE);
+        r.textCenter("greyed cards are already out of this round", Ui.W / 2.0, gy - 18, 12, DIM);
+
+        // The deck may hold duplicates and gaps (Erratic, destroyed cards), so count live/spent per rank+suit.
+        int[][] live = new int[suits][ranks], spent = new int[suits][ranks];
+        for (MatchSnapshot.DeckCardView c : ui.s.deckCards())
+            if (c.live()) live[c.suit()][c.rank()]++; else spent[c.suit()][c.rank()]++;
+
+        for (int s = 0; s < suits; s++)
+            for (int k = 0; k < ranks; k++) {
+                int total = live[s][k] + spent[s][k];
+                if (total == 0) continue;   // this deck simply has no such card
+                double x = gx + k * (cw + gap), y = gy + s * (ch + gap);
+                boolean anyLive = live[s][k] > 0;
+                r.gc().setGlobalAlpha(anyLive ? 1.0 : 0.30);
+                r.card(k, s, x + cw / 2, y + ch / 2, cw, ch, 0, false);
+                r.gc().setGlobalAlpha(1.0);
+                if (total > 1)   // duplicates (Crowded, Erratic): show how many remain live
+                    r.textCenterBold(live[s][k] + "/" + total, x + cw / 2, y + ch + 2, 11, anyLive ? INK : FAINT);
+            }
     }
 
     /** The Run Info overlay: the ranked standings table, honoring the information boundary. */

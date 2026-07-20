@@ -1,11 +1,11 @@
 package client;
 
-import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.jokers.JokerCard;
-import model.cards.packs.BoosterPack;
-import model.cards.packs.PackOpening;
-import model.cards.vouchers.Voucher;
+import model.items.Card;
+import model.items.DeckCard;
+import model.items.jokers.JokerCard;
+import model.items.packs.BoosterPack;
+import model.items.packs.PackOpening;
+import model.items.vouchers.Voucher;
 import model.game.Blind;
 import model.game.BlindTargets;
 import model.game.BossBlind;
@@ -14,12 +14,13 @@ import model.game.MatchPhase;
 import model.game.Stake;
 import model.game.Standings;
 import model.game.player.BlindResult;
-import model.cards.consumables.ConsumableCard;
-import model.cards.relics.RelicCard;
+import model.items.consumables.ConsumableCard;
+import model.items.relics.RelicCard;
 import model.game.net.MatchClient;
 import model.game.player.PlayerId;
 import model.game.player.Round;
 import model.game.player.RoundOutcome;
+import model.game.scoring.HandType;
 import model.game.player.Run;
 import model.game.shop.Shop;
 
@@ -71,6 +72,8 @@ public record MatchSnapshot(
         String mult,               // red mult of the last play this round ("0" before any hand)
         RoundView round,           // null outside a round
         List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
+        List<DeckCardView> deckCards,   // the whole deck, spent cards flagged — the deck-pile hover view
+        List<HandLevelView> handLevels, // every hand type at this seat's current level, for the play preview
         List<JokerView> jokers,
         List<ItemView> inventory,  // consumables and relics as one indexed area; relics carry their casting demands
         List<BlindOption> blinds,  // the ante's three blinds, for the selection screen (empty outside SELECTION)
@@ -93,12 +96,21 @@ public record MatchSnapshot(
     public record HandCardView(int id, String label, int rank, int suit) { }
 
     /**
-     * One held joker as the top bar shows it: its name, a short {@code badge} naming its edition and stickers
-     * ("Foil · Sticky $4", empty when it has neither), and whether it is currently doing nothing. The badge
-     * exists because stickers are drawbacks the player agreed to — they have to stay visible after the purchase,
-     * not just in the shop.
+     * One card of the full deck, for the deck-pile hover: rank/suit ordinals and whether it is still {@code live}
+     * (in the draw pile or the hand). During a round a spent card greys out; outside a round everything is live.
      */
-    public record JokerView(String name, String badge, boolean debuffed) { }
+    public record DeckCardView(int rank, int suit, boolean live) { }
+
+    /** One poker hand at this seat's current level — what a play of that type is worth right now. */
+    public record HandLevelView(String type, int level, long chips, long mult) { }
+
+    /**
+     * One held joker as the top bar shows it: its name, the authored effect text (for the hover tooltip), a short
+     * {@code badge} naming its edition and stickers ("Foil · Sticky $4", empty when it has neither), and whether
+     * it is currently doing nothing. The badge exists because stickers are drawbacks the player agreed to — they
+     * have to stay visible after the purchase, not just in the shop.
+     */
+    public record JokerView(String name, String description, String badge, boolean debuffed) { }
 
     /**
      * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
@@ -117,8 +129,8 @@ public record MatchSnapshot(
      * kind} names who it lands on, {@code selector} what choice it needs ("NONE" for consumables), and {@code
      * needsSeat} is true only for relics the caster aims by hand.
      */
-    public record ItemView(String label, boolean isRelic, int modelIndex,
-                           String kind, String selector, boolean needsSeat) { }
+    public record ItemView(String label, String description, boolean isRelic, int modelIndex,
+                           String kind, String selector, boolean needsSeat, int minTargets) { }
 
     /** One seat's line in the final standings; {@code isMe} marks the local seat, {@code departed} a player who left. */
     public record StandingView(int seat, String name, long points, int rank, boolean isMe, boolean departed) { }
@@ -237,6 +249,8 @@ public record MatchSnapshot(
                 mult,
                 roundView,
                 hand(run),
+                deckCards(run),
+                handLevels(run),
                 jokerViews(run),
                 inventory(run),
                 blindOptions(match, run.getStake()),
@@ -254,6 +268,35 @@ public record MatchSnapshot(
         List<HandCardView> out = new ArrayList<>();
         for (DeckCard c : run.getHeld())
             out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal()));
+        return out;
+    }
+
+    /**
+     * The whole deck for the pile's hover view. During a round a card is {@code live} while it can still turn up
+     * — in the draw pile or held — and greys out once played, discarded or destroyed this round; outside a round
+     * the next deal could bring anything, so everything is live.
+     */
+    private static List<DeckCardView> deckCards(Run run) {
+        Round r = run.getRound();
+        java.util.Set<Integer> liveIds = null;
+        if (r != null) {
+            liveIds = new java.util.HashSet<>();
+            for (DeckCard c : r.getDrawPile()) liveIds.add(c.id());
+            for (DeckCard c : r.getHand())     liveIds.add(c.id());
+        }
+        List<DeckCardView> out = new ArrayList<>();
+        for (DeckCard c : run.getDeck())
+            out.add(new DeckCardView(c.getRank().ordinal(), c.getSuit().ordinal(),
+                    liveIds == null || liveIds.contains(c.id())));
+        return out;
+    }
+
+    /** Every poker hand at this seat's current level — what the client's play preview prices a selection at. */
+    private static List<HandLevelView> handLevels(Run run) {
+        List<HandLevelView> out = new ArrayList<>();
+        for (HandType t : HandType.values())
+            out.add(new HandLevelView(t.name(), run.getHandLevels().levelOf(t),
+                    run.getHandLevels().chipsFor(t), run.getHandLevels().multFor(t)));
         return out;
     }
 
@@ -391,8 +434,11 @@ public record MatchSnapshot(
     private static List<ItemView> inventory(Run run) {
         List<ItemView> out = new ArrayList<>();
         List<ConsumableCard> consumables = run.getConsumables();
-        for (int i = 0; i < consumables.size(); i++)
-            out.add(new ItemView(describe(consumables.get(i)), false, i, null, "NONE", false));
+        for (int i = 0; i < consumables.size(); i++) {
+            var spec = consumables.get(i).getSpec();
+            out.add(new ItemView(spec.getName(), spec.getDescription(), false, i, null, "NONE", false,
+                    spec.getMinTargets()));
+        }
         List<RelicCard> relics = run.getRelics();
         for (int i = 0; i < relics.size(); i++) {
             var spec = relics.get(i).getSpec();
@@ -400,16 +446,17 @@ public record MatchSnapshot(
                 case OPPONENT -> true;             // a freely-chosen seat (no current relic uses this)
                 case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false; // random / standings-driven / no target
             };
-            out.add(new ItemView(spec.getName(), true, i, spec.getKind().name(), spec.getSelector().name(), needsSeat));
+            out.add(new ItemView(spec.getName(), spec.getDescription(), true, i,
+                    spec.getKind().name(), spec.getSelector().name(), needsSeat, 0));
         }
         return out;
     }
 
-    /** The board as the top bar shows it: each joker's name, its edition/sticker badge, and whether it is live. */
+    /** The board as the top bar shows it: each joker's name, effect text, edition/sticker badge, and liveness. */
     private static List<JokerView> jokerViews(Run run) {
         List<JokerView> out = new ArrayList<>();
         for (JokerCard j : run.getJokers())
-            out.add(new JokerView(j.getSpec().getName(), badgeOf(j), j.isDebuffed()));
+            out.add(new JokerView(j.getSpec().getName(), j.getSpec().getDescription(), badgeOf(j), j.isDebuffed()));
         return out;
     }
 

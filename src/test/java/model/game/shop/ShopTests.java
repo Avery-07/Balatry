@@ -1,19 +1,19 @@
 package model.game.shop;
 
-import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.consumables.ConsumableCard;
-import model.cards.consumables.ConsumableType;
-import model.cards.jokers.JokerCard;
-import model.cards.jokers.JokerSpec;
-import model.cards.jokers.Rarity;
-import model.cards.packs.BoosterPack;
-import model.cards.packs.PackKind;
-import model.cards.packs.PackSize;
-import model.cards.vouchers.Voucher;
-import model.cards.vouchers.Vouchers;
+import model.items.Card;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.consumables.ConsumableCard;
+import model.items.consumables.ConsumableType;
+import model.items.jokers.JokerCard;
+import model.items.jokers.JokerSpec;
+import model.items.jokers.Rarity;
+import model.items.packs.BoosterPack;
+import model.items.packs.PackKind;
+import model.items.packs.PackSize;
+import model.items.vouchers.Voucher;
+import model.items.vouchers.Vouchers;
 import model.game.Match;
 import model.game.player.PlayerId;
 import model.game.player.RoundOutcome;
@@ -181,7 +181,7 @@ public final class ShopTests {
                 && spectral.stream().allMatch(c -> c instanceof ConsumableCard cc && cc.getSpec().getType() == ConsumableType.SPECTRAL));
         List<Card> myth = new BoosterPack(PackKind.MYTH, PackSize.NORMAL).open(pr, new Random(4));
         check("Myth Normal: 3 relics", myth.size() == 3
-                && myth.stream().allMatch(c -> c instanceof model.cards.relics.RelicCard));
+                && myth.stream().allMatch(c -> c instanceof model.items.relics.RelicCard));
 
         // Sampler bonus widens the option set
         pr.setPackOptionBonus(1);
@@ -357,7 +357,7 @@ public final class ShopTests {
     private static void purchaseLifecycleChecks() {
         // Loyalty Card: purchases 1-3 paid, 4th free, counter advances only on completed buys.
         Run loyal = new Run(30L); loyal.addMoney(100);
-        JokerCard loyalty = model.cards.jokers.Jokers.LOYALTY_CARD.make();
+        JokerCard loyalty = model.items.jokers.Jokers.LOYALTY_CARD.make();
         loyal.board().add(loyalty);
         Shop ls = new Shop(loyal, 0, 4, JOKER_POOL);
         int m0 = loyal.getMoney();
@@ -370,7 +370,7 @@ public final class ShopTests {
 
         // A failed buy is side-effect free: the counter does not advance...
         Run broke = new Run(31L); broke.addMoney(2);   // joker costs 4
-        JokerCard loyalty2 = model.cards.jokers.Jokers.LOYALTY_CARD.make();
+        JokerCard loyalty2 = model.items.jokers.Jokers.LOYALTY_CARD.make();
         loyalty2.setCounter(2);                        // 2 completed purchases so far
         broke.board().add(loyalty2);
         Shop bs2 = new Shop(broke, 0, 2, JOKER_POOL);

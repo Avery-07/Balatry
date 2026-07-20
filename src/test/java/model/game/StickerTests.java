@@ -1,10 +1,10 @@
 package model.game;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.jokers.JokerCard;
-import model.cards.jokers.Jokers;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.jokers.JokerCard;
+import model.items.jokers.Jokers;
 import model.game.player.Run;
 import model.game.player.Stickers;
 import model.modifiers.Sticker;

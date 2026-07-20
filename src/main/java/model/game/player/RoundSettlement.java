@@ -1,9 +1,9 @@
 package model.game.player;
 
-import model.cards.DeckCard;
-import model.cards.consumables.ConsumableCard;
-import model.cards.consumables.Tarots;
-import model.cards.jokers.JokerCard;
+import model.items.DeckCard;
+import model.items.consumables.ConsumableCard;
+import model.items.consumables.Tarots;
+import model.items.jokers.JokerCard;
 import model.game.Blind;
 import model.game.BossBlind;
 import model.game.scoring.Trigger;

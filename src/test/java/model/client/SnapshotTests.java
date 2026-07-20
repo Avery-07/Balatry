@@ -1,9 +1,9 @@
 package model.client;
 
 import client.MatchSnapshot;
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
 import model.game.Match;
 import model.game.MatchConfig;
 import model.game.MatchPhase;
@@ -32,6 +32,7 @@ public final class SnapshotTests {
         shopPurchaseSnapshot();
         packOpeningSnapshot();
         jokerBadgeSnapshot();
+        deckAndLevelsSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -189,12 +190,12 @@ public final class SnapshotTests {
         PlayerId a = m.getSeats().get(0);
         Run run = m.getRun(a);
 
-        var plain = model.cards.jokers.Jokers.JOKER.make();
-        var laden = model.cards.jokers.Jokers.GREEDY_JOKER.make();
+        var plain = model.items.jokers.Jokers.JOKER.make();
+        var laden = model.items.jokers.Jokers.GREEDY_JOKER.make();
         laden.apply(model.modifiers.Edition.FOIL);
         laden.apply(model.modifiers.Sticker.STICKY);
         laden.tickStickers();   // the toll grows a round, so the badge must show the *current* cost
-        var dead = model.cards.jokers.Jokers.LUSTY_JOKER.make();
+        var dead = model.items.jokers.Jokers.LUSTY_JOKER.make();
         dead.apply(model.modifiers.Sticker.DEBUFFED);
         run.acquire(plain);
         run.acquire(laden);
@@ -208,6 +209,39 @@ public final class SnapshotTests {
         check("the badge shows Sticky's live toll", s.jokers().get(1).badge().contains("Sticky $4"));
         check("a live joker is not greyed", !s.jokers().get(0).debuffed());
         check("a debuffed joker is greyed", s.jokers().get(2).debuffed());
+    }
+
+    /** The deck-hover view and the play-preview table: spent cards grey out, hand levels price a play. */
+    private static void deckAndLevelsSnapshot() {
+        Match m = Match.create(44L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        m.start();   // straight into a round: 8 dealt, 44 in the pile
+
+        MatchSnapshot fresh = MatchSnapshot.of(m, a);
+        checkInt("the whole deck projects", fresh.deckCards().size(), 52);
+        check("nothing is spent before a play", fresh.deckCards().stream().allMatch(MatchSnapshot.DeckCardView::live));
+
+        Run run = m.getRun(a);
+        int played = Math.min(5, run.getRound().getHand().size());
+        run.getRound().play(new ArrayList<>(run.getRound().getHand().subList(0, played)));
+
+        MatchSnapshot after = MatchSnapshot.of(m, a);
+        long spent = after.deckCards().stream().filter(c -> !c.live()).count();
+        checkInt("played cards grey out in the deck view", (int) spent, played);
+
+        checkInt("every hand type is priced", after.handLevels().size(), HandType.values().length);
+        MatchSnapshot.HandLevelView pair = after.handLevels().stream()
+                .filter(h -> h.type().equals("PAIR")).findFirst().orElseThrow();
+        check("PAIR at level 1 prices 10 x 2", pair.level() == 1 && pair.chips() == 10 && pair.mult() == 2);
+
+        // The pack shelf's label is String.valueOf(pack), which used to print an object hash — the display name
+        // is what the snapshot (and the pack-opening header) actually ships.
+        var pack = new model.items.packs.BoosterPack(
+                model.items.packs.PackKind.ARCANA, model.items.packs.PackSize.MEGA);
+        check("packs name themselves", String.valueOf(pack).equals("Mega Arcana Pack"));
+        var plain = new model.items.packs.BoosterPack(
+                model.items.packs.PackKind.CELESTIAL, model.items.packs.PackSize.NORMAL);
+        check("a normal pack has no size prefix", String.valueOf(plain).equals("Celestial Pack"));
     }
 
     private static void stackToWin(Run run) {

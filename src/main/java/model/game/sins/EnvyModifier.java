@@ -1,7 +1,7 @@
 package model.game.sins;
 
-import model.cards.Card;
-import model.cards.vouchers.Voucher;
+import model.items.Card;
+import model.items.vouchers.Voucher;
 import model.game.player.Run;
 
 /** Envy: the round-end joker/consumable swap lives at the Match level ({@code Match#swapJokers} and friends);

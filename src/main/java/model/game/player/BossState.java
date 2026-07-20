@@ -1,7 +1,7 @@
 package model.game.player;
 
-import model.cards.DeckCard;
-import model.cards.jokers.JokerCard;
+import model.items.DeckCard;
+import model.items.jokers.JokerCard;
 import model.game.BossBlind;
 import model.modifiers.Sticker;
 

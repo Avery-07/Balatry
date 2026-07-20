@@ -1,6 +1,6 @@
 package model.game.player;
 
-import model.cards.DeckCard;
+import model.items.DeckCard;
 import model.game.scoring.HandType;
 
 import java.math.BigDecimal;

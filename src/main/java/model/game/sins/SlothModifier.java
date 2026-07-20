@@ -1,6 +1,6 @@
 package model.game.sins;
 
-import model.cards.consumables.Spectrals;
+import model.items.consumables.Spectrals;
 import model.game.player.Run;
 import model.game.rng.RngSource;
 import model.game.shop.Shop;

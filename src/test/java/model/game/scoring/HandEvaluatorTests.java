@@ -1,8 +1,8 @@
 package model.game.scoring;
 
-import model.cards.DeckCard;
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
+import model.items.DeckCard;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
 import model.modifiers.Enhancement;
 
 import java.util.List;

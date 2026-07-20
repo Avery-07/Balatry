@@ -1,11 +1,11 @@
 package model.game;
 
-import model.cards.Card;
-import model.cards.DeckCard;
-import model.cards.consumables.ConsumableCard;
-import model.cards.jokers.JokerCard;
-import model.cards.packs.BoosterPack;
-import model.cards.vouchers.Voucher;
+import model.items.Card;
+import model.items.DeckCard;
+import model.items.consumables.ConsumableCard;
+import model.items.jokers.JokerCard;
+import model.items.packs.BoosterPack;
+import model.items.vouchers.Voucher;
 import model.game.player.BlindResult;
 import model.game.player.PlayerId;
 import model.game.player.Round;
@@ -190,8 +190,8 @@ public final class DeterminismTests {
             if (item == null || !run.canAcquire(item)) continue;
             // Seat-coupling jokers (Robin Hood, ...) let two mirrored seats diverge by design; skip them so the
             // mirror assertion keeps guarding pure determinism, not the coupling these jokers intentionally add.
-            if (item instanceof model.cards.jokers.JokerCard j
-                    && j.getSpec().has(model.cards.jokers.JokerTrait.SEAT_COUPLING)) continue;
+            if (item instanceof model.items.jokers.JokerCard j
+                    && j.getSpec().has(model.items.jokers.JokerTrait.SEAT_COUPLING)) continue;
             if (run.getMoney() - item.getShopValue() < run.minBalance() + 4) continue;   // conservative: discounts only cheapen
             if (shop.purchasesRemaining() == 0) break;   // Lust: one item per roll state
             shop.buy(i);

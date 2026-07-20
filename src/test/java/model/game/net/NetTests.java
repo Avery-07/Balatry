@@ -1,9 +1,9 @@
 package model.game.net;
 
-import model.cards.DeckCard.Rank;
-import model.cards.DeckCard.Suit;
-import model.cards.DeckType;
-import model.cards.relics.RelicTarget;
+import model.items.DeckCard.Rank;
+import model.items.DeckCard.Suit;
+import model.items.DeckType;
+import model.items.relics.RelicTarget;
 import model.game.Match;
 import model.game.MatchPhase;
 import model.game.actions.Action;

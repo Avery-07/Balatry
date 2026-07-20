@@ -1,8 +1,8 @@
 package model.game.sins;
 
-import model.cards.jokers.JokerCard;
-import model.cards.jokers.Jokers;
-import model.cards.jokers.Rarity;
+import model.items.jokers.JokerCard;
+import model.items.jokers.Jokers;
+import model.items.jokers.Rarity;
 import model.game.Match;
 import model.game.Sin;
 import model.game.player.BlindResult;

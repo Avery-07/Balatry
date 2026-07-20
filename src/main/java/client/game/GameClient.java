@@ -52,6 +52,7 @@ public final class GameClient extends Application {
         ui = new Ui(r, hand);
         loadAssets();
         canvas.setOnMouseClicked(e -> handleClick(e.getX(), e.getY()));
+        canvas.setOnMouseMoved(e -> { ui.mouseX = e.getX(); ui.mouseY = e.getY(); });
 
         screens.put(MatchPhase.SELECTION, new SelectionScreen());
         screens.put(MatchPhase.BLIND, new BlindScreen());
@@ -225,6 +226,10 @@ public final class GameClient extends Application {
         }
         if (!ui.status.isEmpty()) r.textLeft(ui.status, Ui.PAD + 8, Ui.H - 20, 12, Palette.DIM);
         if (ui.showRunInfo) overlays.runInfo(ui);
+
+        // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
+        if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
+        else overlays.tooltip(ui);
     }
 
     private void paintFelt() {

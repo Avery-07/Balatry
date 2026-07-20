@@ -1,7 +1,7 @@
 package model.game.scoring;
 
-import model.cards.DeckCard;
-import model.cards.jokers.JokerCard;
+import model.items.DeckCard;
+import model.items.jokers.JokerCard;
 import model.game.player.Run;
 import model.modifiers.Edition;
 

@@ -30,6 +30,7 @@ final class ShopScreen implements Screen {
                 r.panel(px, cy + 16 + 130 - 18, 108, 18, javafx.scene.paint.Color.web("#000a"), null, 6, 0);
                 r.textCenter(it.badge(), px + 54, cy + 16 + 130 - 9, 9, GOLD);
             }
+            if (it != null) ui.tip(new Layout.Rect(px, cy + 16, 108, 130), it.tooltip());
             px += 118;
         }
         cy += 150;
@@ -39,11 +40,14 @@ final class ShopScreen implements Screen {
         for (int i = 0; i < shop.vouchers().size(); i++) {
             MatchSnapshot.VoucherItem v = shop.vouchers().get(i);
             tile(ui, ix + i * 118, cy, v == null ? null : v.label(), v == null ? 0 : v.price(), BLUE, v != null && v.redeemable(), "shopVoucher", i);
+            if (v != null) ui.tip(new Layout.Rect(ix + i * 118, cy + 16, 108, 130),
+                    v.tooltip() + (v.redeemable() ? "" : "\n(one voucher per ante — already redeemed)"));
         }
         double ppx = ix + iw / 2;
         for (int i = 0; i < shop.packs().size(); i++) {
             MatchSnapshot.ShopItem p = shop.packs().get(i);
             tile(ui, ppx, cy, p == null ? null : p.label(), p == null ? 0 : p.price(), PURPLE, p != null, "shopPack", i);
+            if (p != null) ui.tip(new Layout.Rect(ppx, cy + 16, 108, 130), p.tooltip());
             ppx += 118;
         }
     }

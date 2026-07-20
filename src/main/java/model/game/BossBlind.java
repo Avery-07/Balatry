@@ -1,6 +1,6 @@
 package model.game;
 
-import model.cards.DeckCard;
+import model.items.DeckCard;
 
 import java.util.Arrays;
 import java.util.function.Predicate;

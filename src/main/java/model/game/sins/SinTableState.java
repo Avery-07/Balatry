@@ -1,7 +1,7 @@
 package model.game.sins;
 
-import model.cards.Card;
-import model.cards.jokers.JokerCard;
+import model.items.Card;
+import model.items.jokers.JokerCard;
 import model.game.player.PlayerId;
 
 import java.util.ArrayList;
