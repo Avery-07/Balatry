@@ -11,6 +11,7 @@ import model.game.BlindTargets;
 import model.game.BossBlind;
 import model.game.Match;
 import model.game.MatchPhase;
+import model.game.Stake;
 import model.game.Standings;
 import model.game.player.BlindResult;
 import model.cards.consumables.ConsumableCard;
@@ -54,6 +55,9 @@ public record MatchSnapshot(
         String activeSin,
         String boss,
         String skipTag,
+        String deckType,           // the table's shared starting deck (display name)
+        String sleeve,             // this seat's sleeve (display name); per-seat, opponents' are not shown
+        String stake,              // this seat's difficulty (display name); per-seat, so targets below are its own
         long money,
         int hands,                 // hands available now: the round's remaining, or the base outside a round
         int discards,              // discards available now: the round's remaining, or the base outside a round
@@ -108,8 +112,8 @@ public record MatchSnapshot(
     public record ItemView(String label, boolean isRelic, int modelIndex,
                            String kind, String selector, boolean needsSeat) { }
 
-    /** One seat's line in the final standings; {@code isMe} marks the local seat. */
-    public record StandingView(int seat, String name, long points, int rank, boolean isMe) { }
+    /** One seat's line in the final standings; {@code isMe} marks the local seat, {@code departed} a player who left. */
+    public record StandingView(int seat, String name, long points, int rank, boolean isMe, boolean departed) { }
 
     /** This seat's most recent blind outcome, for the result summary. */
     public record ResultView(String outcome, String score, long target, String bestHand,
@@ -167,7 +171,8 @@ public record MatchSnapshot(
                     match.getPlayer(id).name(),
                     standings.getPoints(id),
                     ranking.indexOf(id),
-                    id.seat() == me.seat()));
+                    id.seat() == me.seat(),
+                    match.hasDeparted(id)));
 
         List<OpponentView> opponents = new ArrayList<>();
         for (PlayerId id : match.getSeats()) {
@@ -200,10 +205,13 @@ public record MatchSnapshot(
                 match.getAnteCount(),
                 match.getRoundNumber(),
                 String.valueOf(match.getBlind()),
-                match.getCurrentTarget(),
+                match.getCurrentTarget(me),   // this seat's own stake-scaled target
                 String.valueOf(match.getActiveSin()),
                 match.getCurrentBoss() == null ? null : String.valueOf(match.getCurrentBoss()),
                 String.valueOf(match.getCurrentTag()),
+                match.getDeckType().displayName(),
+                run.getSleeve().displayName(),
+                run.getStake().displayName(),
                 run.getMoney(),
                 hands,
                 discards,
@@ -219,7 +227,7 @@ public record MatchSnapshot(
                 hand(run),
                 display(run.getJokers()),
                 inventory(run),
-                blindOptions(match),
+                blindOptions(match, run.getStake()),
                 inShop,
                 shopView,
                 packOpening(run),
@@ -237,13 +245,16 @@ public record MatchSnapshot(
         return out;
     }
 
-    /** The ante's three blinds for the selection screen; empty unless the match is in SELECTION. */
-    private static List<BlindOption> blindOptions(Match match) {
+    /**
+     * The ante's three blinds for the selection screen; empty unless the match is in SELECTION. Targets are shown
+     * at {@code stake} — the viewing seat's own — since stakes are per-seat and scale what it must score.
+     */
+    private static List<BlindOption> blindOptions(Match match, Stake stake) {
         if (match.getPhase() != MatchPhase.SELECTION) return List.of();
         List<BlindOption> out = new ArrayList<>();
         BossBlind anteBoss = match.getAnteBoss();
         for (Blind b : Blind.values()) {
-            long tgt = BlindTargets.target(match.getAnte(), b);
+            long tgt = BlindTargets.target(match.getAnte(), b, stake);
             String bossName = null, bossEffect = null;
             if (b == Blind.BOSS && anteBoss != null) {
                 tgt = tgt * anteBoss.targetMultiplier();

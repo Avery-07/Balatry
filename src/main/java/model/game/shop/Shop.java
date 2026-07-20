@@ -78,10 +78,13 @@ public final class Shop {
         return cap == Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.max(0, cap - purchasesThisRoll);
     }
 
-    /** Cost of the next reroll: the base (the run's, or $0 under a D6 Tag) plus $1 per reroll already done. */
+    /**
+     * Cost of the next reroll: the base (the run's, or $0 under a D6 Tag) plus a step per reroll already done.
+     * The step is the seat's stake — $1 normally, $2 from the Orange Stake up.
+     */
     public int rerollCost() {
         int base = setup.isRerollsFromZero() ? 0 : run.getBaseRerollCost();
-        return base + rerolls;
+        return base + rerolls * run.getStake().rerollStep();
     }
 
     /** Buys the card in {@code slotIndex}, charging the run and routing it into inventory. */

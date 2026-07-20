@@ -8,7 +8,7 @@ public final class BlindTargets {
 
     private BlindTargets() { }
 
-    /** Chips required to clear {@code blind} in {@code ante}. */
+    /** Chips required to clear {@code blind} in {@code ante} at the White Stake. */
     public static long target(int ante, Blind blind) {
         long base = anteBase(ante);
         return switch (blind) {
@@ -16,6 +16,15 @@ public final class BlindTargets {
             case BIG   -> base * 3 / 2;   // 1.5x
             case BOSS  -> base * 2;       // 2x (default; specific bosses override)
         };
+    }
+
+    /**
+     * Chips required to clear {@code blind} in {@code ante} at {@code stake}. Stakes are per-seat, so this is the
+     * form every gameplay path should use — the White-stake {@link #target(int, Blind)} is the baseline it scales.
+     */
+    public static long target(int ante, Blind blind, Stake stake) {
+        long base = target(ante, blind);
+        return stake == null ? base : stake.scaleTarget(base, ante);
     }
 
     private static long anteBase(int ante) {

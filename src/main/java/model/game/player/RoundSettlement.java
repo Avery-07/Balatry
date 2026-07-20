@@ -46,7 +46,7 @@ public final class RoundSettlement {
     private void cashOut(Run run, Round round, Blind blind) {
         int interest = interest(run.getMoney(), run.getInterestCap());   // on money held entering cash-out
         int handsBonus = round.getHandsRemaining() * HAND_BONUS;
-        int reward = blind.getReward();
+        int reward = run.getStake().rewardFor(blind);   // per-seat: the Black Stake and up pay nothing for a Small Blind
         int gold = GOLD_CARD_BONUS * countGold(round);
         int rental = totalRental(run);
 

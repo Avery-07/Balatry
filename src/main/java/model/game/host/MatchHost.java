@@ -81,28 +81,35 @@ public final class MatchHost {
 
     private void requireReadyPhase(PlayerId actor) {
         match.getRun(actor);   // seat validation
+        if (match.hasDeparted(actor))
+            throw new IllegalStateException("seat " + actor.seat() + " has left the match");
         MatchPhase phase = match.getPhase();
         if (phase != MatchPhase.RESULT && phase != MatchPhase.SHOP)
             throw new IllegalStateException("readiness applies to the result or shop phase; phase is " + phase);
     }
 
-    /** Crosses every barrier that just became passable: all seats chose, all rounds resolved, all done shopping. */
+    /**
+     * Crosses every barrier that just became passable: all seats chose, all rounds resolved, all done shopping.
+     * Every barrier is measured against the seats <em>still playing</em> — a departed seat must never hold the
+     * table up, which is what makes a mid-match disconnect survivable rather than a deadlock.
+     */
     private void advanceIfBarrierMet() {
         boolean advanced = true;
         while (advanced) {
             advanced = false;
+            List<PlayerId> active = match.getActiveSeats();
             switch (match.getPhase()) {
-                case SELECTION -> { if (match.allChosen())                        { match.enterBlind();          advanced = true; } }
-                case BLIND     -> { if (allRoundsResolved())                      { match.toResult(); readySeats.clear(); advanced = true; } }
-                case RESULT    -> { if (readySeats.containsAll(match.getSeats()))  { match.openShopsOrFinish(); readySeats.clear(); advanced = true; } }
-                case SHOP      -> { if (readySeats.containsAll(match.getSeats()))  { match.nextBlind(); readySeats.clear(); advanced = true; } }
+                case SELECTION -> { if (match.allChosen())                 { match.enterBlind();          advanced = true; } }
+                case BLIND     -> { if (allRoundsResolved(active))         { match.toResult(); readySeats.clear(); advanced = true; } }
+                case RESULT    -> { if (readySeats.containsAll(active))    { match.openShopsOrFinish(); readySeats.clear(); advanced = true; } }
+                case SHOP      -> { if (readySeats.containsAll(active))    { match.nextBlind(); readySeats.clear(); advanced = true; } }
                 default -> { }
             }
         }
     }
 
-    private boolean allRoundsResolved() {
-        for (PlayerId id : match.getSeats()) {
+    private boolean allRoundsResolved(List<PlayerId> active) {
+        for (PlayerId id : active) {
             var round = match.getRun(id).getRound();
             if (round == null || round.getOutcome() == RoundOutcome.IN_PROGRESS) return false;
         }

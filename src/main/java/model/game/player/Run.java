@@ -58,6 +58,8 @@ public final class Run {
     private final List<SkipTag> pendingTags = new ArrayList<>();        // NEXT_SHOP / NEXT_BOSS / META tags awaiting their moment
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
+    private Sleeve sleeve = Sleeve.STANDARD;   // this seat's sleeve (applied at assembly by Sleeves#apply)
+    private Stake stake = Stake.WHITE;         // this seat's difficulty; per-seat, so targets/rewards are asked per run
     private int handSize = 8;
     private int baseHands = 4;
     private int baseDiscards = 3;
@@ -383,6 +385,16 @@ public final class Run {
     /** Whether {@code voucher} may be redeemed now: not already redeemed, base satisfied, and none used yet this ante. */
     public boolean canRedeem(Voucher voucher) { return stats.canRedeem(voucher); }
 
+    /**
+     * Applies {@code voucher}'s effect and records it as redeemed <em>without</em> consuming this ante's single
+     * redemption. This is the setup path for vouchers a seat simply starts with (the Silk sleeve, the Eclipse
+     * deck) — they are owned from turn one and must not cost the player their first shop's redemption.
+     */
+    public void grantVoucher(Voucher voucher) {
+        voucher.getSpec().getEffect().apply(this);
+        stats.markGranted(voucher.getSpec());
+    }
+
     /** Applies {@code voucher}'s effect and records it; consumes this ante's single redemption. */
     public void redeemVoucher(Voucher voucher) {
         if (voucher.isDebuffed())
@@ -406,6 +418,14 @@ public final class Run {
     public void setBaseDiscards(int n){ baseDiscards = n; }
     public int getInterestCap()       { return interestCap; }
     public void setInterestCap(int n) { interestCap = n; }
+
+    /** This seat's sleeve; its starting adjustments are already applied (see {@link Sleeves#apply}). */
+    public Sleeve getSleeve()          { return sleeve; }
+    public void setSleeve(Sleeve s)    { sleeve = (s == null ? Sleeve.STANDARD : s); }
+
+    /** This seat's difficulty. Per-seat: ask the run, never the match, for anything a stake scales. */
+    public Stake getStake()            { return stake; }
+    public void setStake(Stake s)      { stake = (s == null ? Stake.WHITE : s); }
 
     /** The active round, or {@code null} outside a blind. */
     public Round getRound() { return round; }

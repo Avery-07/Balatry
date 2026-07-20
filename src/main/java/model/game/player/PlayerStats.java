@@ -99,6 +99,9 @@ public final class PlayerStats {
         voucherRedeemedThisAnte = true;
     }
 
+    /** Records {@code spec} as owned without spending this ante's redemption (starting vouchers from a sleeve/deck). */
+    public void markGranted(VoucherSpec spec) { redeemedVouchers.add(spec); }
+
     // --- hand-type plays ---
 
     /** Records one play of {@code type}; call before scoring so the current hand is counted (see class doc). */

@@ -49,7 +49,10 @@ public enum Vouchers {
     CONNOISSEUR("Connoisseur", null, "+1 card kept from Mega packs.", r -> r.setPackMegaPickBonus(r.getPackMegaPickBonus() + 1)),
 
     RELIC_MERCHANT("Relic Merchant", null, "Relics appear more often in the shop.", VoucherEffect.NONE),   // needs Relic weight knob
-    RELIC_TYCOON("Relic Tycoon", RELIC_MERCHANT, "Relics appear much more often in the shop.", VoucherEffect.NONE);
+    RELIC_TYCOON("Relic Tycoon", RELIC_MERCHANT, "Relics appear much more often in the shop.", VoucherEffect.NONE),
+
+    SHOWMAN("Showman", null, "Jokers and consumables can appear more than once in the shop.", VoucherEffect.NONE),   // needs shop uniqueness knob
+    ENCORE("Encore", null, "Jokers and consumables you already own appear more often.", VoucherEffect.NONE);          // needs shop weight knob
 
     private static final int COST = 10;
 

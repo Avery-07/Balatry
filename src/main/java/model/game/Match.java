@@ -1,5 +1,6 @@
 package model.game;
 
+import model.cards.DeckType;
 import model.cards.Decks;
 import model.cards.consumables.ConsumableSpec;
 import model.cards.Card;
@@ -20,8 +21,11 @@ import model.game.bosses.BossBehavior;
 import model.game.bosses.BossBehaviors;
 import model.game.player.BlindResult;
 import model.game.player.Board;
+import model.game.player.DeckSetup;
 import model.game.player.Player;
 import model.game.player.PlayerId;
+import model.game.player.SeatConfig;
+import model.game.player.Sleeves;
 import model.game.player.Round;
 import model.game.player.RoundOutcome;
 import model.game.rng.DeterministicRng;
@@ -52,6 +56,9 @@ public final class Match {
     /** Every seat's opening balance when a match is dealt. */
     public static final int STARTING_MONEY = 4;
 
+    /** Below this many players still connected there is nothing left to compete over, so the match ends. */
+    public static final int MIN_ACTIVE_SEATS = 2;
+
     private final long seed;
     private final Rng rng;                       // table-level randomness
     private final Map<PlayerId, Player> players; // insertion-ordered by seat
@@ -71,6 +78,7 @@ public final class Match {
     private SinModifier sinModifier = SinModifier.NONE;   // behaviour for activeSin; refreshed when the sin changes
     private final SinTableState sinTableState = new SinTableState();   // table-level, ante-scoped state owned by the active sin
     private Map<PlayerId, BlindResult> lastResults = Map.of();   // most recent blind's outcomes
+    private DeckType deckType = DeckType.STANDARD; // the table's starting deck (shared; sleeve/stake are per-seat)
     private BossBlind currentBoss;                 // the boss for the current BOSS blind, else null
     private BossBlind anteBoss;                     // the boss that will close the current ante; locked at ante start so its effect shows during blind selection
     private BossBehavior bossBehavior = BossBehavior.NONE;   // the boss's Match-level behaviour; NONE outside boss rounds
@@ -78,6 +86,7 @@ public final class Match {
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
     private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
     private final Map<PlayerId, Boolean> blindChoice = new LinkedHashMap<>();   // SELECTION: seat -> play(true)/skip(false)
+    private final Set<PlayerId> departed = new LinkedHashSet<>();               // seats whose players have left
 
     private Match(long seed, MatchConfig config) {
         this.seed = seed;
@@ -102,22 +111,37 @@ public final class Match {
         return create(seed, playerNames, MatchConfig.defaults().withSinSelector(sinSelector));
     }
 
-    /** Creates a seated match; each player's {@link Run} is built from {@code seed}. Seats follow name order. */
+    /** Creates a seated match; every seat takes the default sleeve and stake. Seats follow name order. */
     public static Match create(long seed, List<String> playerNames, MatchConfig config) {
-        if (playerNames == null || playerNames.size() < 2 || playerNames.size() > 4)
+        if (playerNames == null) throw new IllegalArgumentException("a match needs 2-4 players, got 0");
+        return createSeated(seed, SeatConfig.defaults(playerNames), config);
+    }
+
+    /**
+     * Creates a seated match from explicit per-seat configs; each player's {@link Run} is built from {@code seed}.
+     * The table's {@link DeckType} comes from {@code config} and is dealt to everyone; each seat's own sleeve then
+     * adjusts its run. Seats follow list order.
+     */
+    public static Match createSeated(long seed, List<SeatConfig> seats, MatchConfig config) {
+        if (seats == null || seats.size() < 2 || seats.size() > 4)
             throw new IllegalArgumentException("a match needs 2-4 players, got "
-                    + (playerNames == null ? 0 : playerNames.size()));
+                    + (seats == null ? 0 : seats.size()));
 
         Match match = new Match(seed, config);
         int seat = 0;
-        for (String name : playerNames) {
+        for (SeatConfig sc : seats) {
             PlayerId id = new PlayerId(seat++);
             Run run = new Run(seed);          // same seed -> identical luck per action
-            run.resetDeck(Decks.standard());
+            run.setStake(sc.stake());
+            run.setSleeve(sc.sleeve());
+            run.resetDeck(Decks.of(config.deckType(), run.getRng()));   // the table's deck, identical for every seat
             run.addMoney(STARTING_MONEY);     // every seat opens with $4
+            DeckSetup.applyStartingGrants(run, config.deckType());      // Eclipse's opening voucher + joker
+            Sleeves.apply(run, sc.sleeve(), id.seat());                 // then the seat's own sleeve
             run.joinMatch(match, id);
-            match.players.put(id, new Player(id, name, run));
+            match.players.put(id, new Player(id, sc.name(), run));
         }
+        match.deckType = config.deckType();
         match.standings = new Standings(match.players.keySet());
         return match;
     }
@@ -132,9 +156,21 @@ public final class Match {
     public Blind getBlind()         { return blind; }
     public Sin getActiveSin()       { return activeSin; }
 
-    /** Chips required to clear the current blind (boss target multipliers applied). */
+    /** The starting deck the whole table played. Per-seat sleeve and stake live on each {@link Run}. */
+    public DeckType getDeckType()   { return deckType; }
+
+    /**
+     * Chips required to clear the current blind at the White Stake (boss target multipliers applied). Stakes are
+     * per-seat, so gameplay should ask {@link #getCurrentTarget(PlayerId)}; this form is the table-level baseline.
+     */
     public long getCurrentTarget() {
         long base = BlindTargets.target(ante, blind);
+        return (blind == Blind.BOSS && currentBoss != null) ? base * currentBoss.targetMultiplier() : base;
+    }
+
+    /** Chips {@code id} must score to clear the current blind: the baseline scaled by that seat's own stake. */
+    public long getCurrentTarget(PlayerId id) {
+        long base = BlindTargets.target(ante, blind, getRun(id).getStake());
         return (blind == Blind.BOSS && currentBoss != null) ? base * currentBoss.targetMultiplier() : base;
     }
 
@@ -306,11 +342,10 @@ public final class Match {
         currentTag = selectTag();                                    // table-level: the same skip reward for every seat
     }
 
-    /** Begins each seat's round on its own seed; runs boss setup once every round exists. */
+    /** Begins each seat's round on its own seed and its own stake-scaled target; boss setup runs once every round exists. */
     private void dealRounds() {
-        long target = getCurrentTarget();
         for (Player p : players.values()) {
-            p.run().beginRound(target, currentBoss);
+            p.run().beginRound(getCurrentTarget(p.id()), currentBoss);
             sinModifier.onRoundBegin(p.run());
         }
         bossBehavior = BossBehaviors.behaviorFor(currentBoss);   // NONE outside boss rounds
@@ -375,10 +410,10 @@ public final class Match {
         else skipBlind(id);
     }
 
-    /** Whether every seat has made its blind-selection choice (only meaningful during SELECTION). */
+    /** Whether every seat still playing has made its blind-selection choice (only meaningful during SELECTION). */
     public boolean allChosen() {
         if (phase != MatchPhase.SELECTION) return false;
-        for (PlayerId id : getSeats()) if (!blindChoice.containsKey(id)) return false;
+        for (PlayerId id : getActiveSeats()) if (!blindChoice.containsKey(id)) return false;
         return true;
     }
 
@@ -536,6 +571,9 @@ public final class Match {
      */
     public Object apply(Action action) {
         Run run = getRun(action.actor());
+        // A departed seat may do nothing further — except leave again, which is simply a no-op.
+        if (departed.contains(action.actor()) && !(action instanceof Action.PlayerLeft))
+            throw new IllegalStateException("seat " + action.actor().seat() + " has left the match");
         return switch (action) {
             case Action.PlayHand a      -> requireRound(run).play(resolveHand(run, a.handIndices()));
             case Action.DiscardCards a  -> { requireRound(run).discard(resolveHand(run, a.handIndices())); yield null; }
@@ -569,6 +607,7 @@ public final class Match {
             case Action.SubmitSinChoice a -> { recordSinChoice(a.actor(), a.optionIndex()); yield null; }
             case Action.ReadyForNext a -> throw new IllegalStateException("readiness is table-level; submit it to a MatchHost");
             case Action.NotReady a     -> throw new IllegalStateException("readiness is table-level; submit it to a MatchHost");
+            case Action.PlayerLeft a   -> { markDeparted(a.actor()); yield null; }
         };
     }
 
@@ -722,8 +761,40 @@ public final class Match {
             throw new IllegalStateException(op + " requires phase " + expected + " but was " + phase);
     }
 
-    /** Snapshot of seats in order. */
+    /** Snapshot of seats in order, including seats whose players have left. */
     public List<PlayerId> getSeats() {
         return new ArrayList<>(players.keySet());
+    }
+
+    // --- departures --------------------------------------------------------
+
+    /** Whether {@code id}'s player has left the match. A departed seat keeps its points but stops playing. */
+    public boolean hasDeparted(PlayerId id) { return departed.contains(id); }
+
+    /** The seats still playing, in order — the set every barrier must be measured against, not {@link #getSeats()}. */
+    public List<PlayerId> getActiveSeats() {
+        List<PlayerId> out = new ArrayList<>();
+        for (PlayerId id : players.keySet()) if (!departed.contains(id)) out.add(id);
+        return out;
+    }
+
+    /**
+     * Records that {@code id} has left. The seat forfeits any live round, is counted as having made its blind
+     * choice, and is excluded from every barrier from here on, so the remaining players never wait on it. Its
+     * standings entry is left alone: the points it earned while playing are real and still rank it.
+     *
+     * <p>When this drops the table below two players the match ends immediately — a solo table has nothing left
+     * to compete over, and whoever remains is the winner by the standings as they stand.
+     */
+    public void markDeparted(PlayerId id) {
+        getRun(id);   // seat validation
+        if (!departed.add(id)) return;   // already gone; a duplicate is a no-op, not an error
+
+        Round round = getRun(id).getRound();
+        if (round != null) round.abandon();
+        blindChoice.remove(id);   // it no longer counts either way; allChosen() ignores departed seats
+
+        if (phase != MatchPhase.LOBBY && phase != MatchPhase.FINISHED && getActiveSeats().size() < MIN_ACTIVE_SEATS)
+            phase = MatchPhase.FINISHED;
     }
 }

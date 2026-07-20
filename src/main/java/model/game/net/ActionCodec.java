@@ -55,6 +55,7 @@ public final class ActionCodec {
             case Action.SubmitSinChoice x-> join("CHOICE", x.actor(), x.optionIndex());
             case Action.ReadyForNext x   -> join("READY", x.actor());
             case Action.NotReady x       -> join("UNREADY", x.actor());
+            case Action.PlayerLeft x     -> join("LEFT", x.actor());
         };
     }
 
@@ -89,6 +90,7 @@ public final class ActionCodec {
             case "CHOICE"    -> new Action.SubmitSinChoice(actor, i(f[2]));
             case "READY"     -> new Action.ReadyForNext(actor);
             case "UNREADY"   -> new Action.NotReady(actor);
+            case "LEFT"      -> new Action.PlayerLeft(actor);
             default -> throw new IllegalArgumentException("unknown action tag: " + tag);
         };
     }

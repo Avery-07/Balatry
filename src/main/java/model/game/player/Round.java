@@ -121,6 +121,15 @@ public final class Round {
         resolve();
     }
 
+    /**
+     * Forfeits this round because the seat left the match. Unlike {@link #finish()} this never resolves to a win
+     * — not even via Mr. Bones — because a departed seat should not go on collecting cash-outs and points from a
+     * table it is no longer at. Idempotent, since a departure may arrive after the round already resolved.
+     */
+    public void abandon() {
+        if (outcome == RoundOutcome.IN_PROGRESS) outcome = RoundOutcome.LOST;
+    }
+
     /** Skips this blind: only legal before the seat has played or discarded. */
     public void skip() {
         requireInProgress();

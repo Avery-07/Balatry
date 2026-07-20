@@ -2,6 +2,7 @@ package model.game.net;
 
 import model.cards.DeckCard.Rank;
 import model.cards.DeckCard.Suit;
+import model.cards.DeckType;
 import model.cards.relics.RelicTarget;
 import model.game.Match;
 import model.game.MatchPhase;
@@ -9,6 +10,7 @@ import model.game.actions.Action;
 import model.game.host.MatchHost;
 import model.game.player.PlayerId;
 import model.game.player.Run;
+import model.game.player.SeatConfig;
 import model.game.player.RoundOutcome;
 import model.game.scoring.HandType;
 
@@ -64,7 +66,8 @@ public final class NetTests {
                 new Action.GluttonyEat(a, 3),
                 new Action.SubmitSinChoice(a, 2),
                 new Action.ReadyForNext(a),
-                new Action.NotReady(b));
+                new Action.NotReady(b),
+                new Action.PlayerLeft(b));
 
         boolean allOk = true;
         for (Action action : samples) {
@@ -74,34 +77,36 @@ public final class NetTests {
             if (!action.equals(back)) { allOk = false; System.out.println("  mismatch: " + action + " -> " + back); }
         }
         check("every action round-trips through the codec", allOk);
-        checkInt("all action types are covered", samples.size(), 30);
+        checkInt("all action types are covered", samples.size(), 31);
     }
 
     private static void codecRejectsGarbage() {
         checkThrows("an unknown tag is rejected", () -> ActionCodec.decode("BOGUS\t0"));
     }
 
-    /** A full match over localhost: two socket clients play to FINISHED; all three models must match. */
+    /**
+     * A full match over localhost: two socket clients join a lobby, the host starts it, and both play to
+     * FINISHED. All three models must match — and neither client was told the roster, so this also covers the
+     * lobby handing every side the identical starting setup.
+     */
     private static void endToEndMatch() throws Exception {
         long seed = 400L;
-        List<String> names = List.of("A", "B");
-        MatchHost serverHost = MatchHost.create(seed, names);
 
-        try (MatchServer server = new MatchServer(serverHost, 0)) {
+        try (MatchServer server = new MatchServer(0, seed, DeckType.STANDARD, 2, true)) {
+            server.listen();
             int port = server.getPort();
-            CountDownLatch ready = new CountDownLatch(1);
-            Thread accept = new Thread(() -> {
-                try { server.awaitPlayersAndStart(2); ready.countDown(); }
-                catch (Exception e) { e.printStackTrace(); }
-            });
-            accept.start();
 
             List<String> errors = new ArrayList<>();
-            MatchClient c0 = MatchClient.connect("localhost", port, seed, names, errors::add);
-            MatchClient c1 = MatchClient.connect("localhost", port, seed, names, errors::add);
+            CountDownLatch started = new CountDownLatch(2);
+            MatchClient c0 = MatchClient.join("localhost", port, SeatConfig.of("A"),
+                    new MatchClient.Callbacks(null, started::countDown, null, errors::add));
+            MatchClient c1 = MatchClient.join("localhost", port, SeatConfig.of("B"),
+                    new MatchClient.Callbacks(null, started::countDown, null, errors::add));
             check("clients received distinct seats", c0.getSeat().seat() == 0 && c1.getSeat().seat() == 1);
-            ready.await(5, TimeUnit.SECONDS);
+            check("the lobby auto-started once it filled", started.await(5, TimeUnit.SECONDS));
 
+            MatchHost serverHost = server.getHost();
+            check("the server built its match", serverHost != null);
             MatchClient[] clients = { c0, c1 };
             int guard = 0;
             while (serverHost.getMatch().getPhase() != MatchPhase.FINISHED && guard++ < 500) {

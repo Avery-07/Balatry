@@ -32,6 +32,7 @@ final class Ui {
     String selKind;                                    // currently-selected item's kind, or null
     int selIndex;
     int jokerTarget = -1;                              // targeted joker index (Sell / Katadesmos), -1 = none
+    Runnable onLeaveMatch = () -> { };                 // set by GameClient: quit the match and return to the menu
 
     Ui(Renderer r, Hand hand) { this.r = r; this.hand = hand; }
 

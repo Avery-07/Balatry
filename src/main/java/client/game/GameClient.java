@@ -10,14 +10,16 @@ import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.image.Image;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.StackPane;
 import javafx.scene.text.Font;
 import javafx.stage.Stage;
 import model.game.MatchPhase;
+import model.game.net.HostedMatch;
 import model.game.net.MatchClient;
+import model.game.net.MatchServer;
 
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,6 +38,9 @@ public final class GameClient extends Application {
     private final Overlays overlays = new Overlays();
     private final Map<MatchPhase, Screen> screens = new EnumMap<>(MatchPhase.class);
 
+    private final Menu menu = new Menu();
+    private MatchClient client;
+    private HostedMatch hosted;      // non-null when this client is the one hosting
     private MatchViewModel vm;
     private String fontFamily = "Monospaced";
     private long lastNanos;
@@ -52,12 +57,22 @@ public final class GameClient extends Application {
         screens.put(MatchPhase.BLIND, new BlindScreen());
         screens.put(MatchPhase.SHOP, new ShopScreen());
         screens.put(MatchPhase.RESULT, new ResultScreen());
+        screens.put(MatchPhase.FINISHED, new FinishedScreen());
 
-        stage.setScene(new Scene(new StackPane(canvas), Ui.W, Ui.H));
+        menu.onHost = this::hostGame;
+        menu.onJoin = this::joinGame;
+        menu.onBegin = () -> { if (client != null) client.begin(); };
+        menu.onLeave = this::leaveLobby;
+        ui.onLeaveMatch = this::leaveLobby;   // the same teardown; from a finished match it just returns to the menu
+        menu.onDeckChange = d -> { if (client != null) client.chooseDeck(d); };
+
+        Scene scene = new Scene(new StackPane(canvas), Ui.W, Ui.H);
+        scene.setOnKeyTyped(e -> { if (!inMatch()) menu.onChar(e.getCharacter()); });
+        scene.setOnKeyPressed(e -> { if (!inMatch() && e.getCode() == KeyCode.BACK_SPACE) menu.onBackspace(); });
+        stage.setScene(scene);
         stage.setTitle("Balatry");
+        stage.setOnCloseRequest(e -> shutdown());
         stage.show();
-
-        connect();
 
         new AnimationTimer() {
             @Override public void handle(long now) {
@@ -69,21 +84,101 @@ public final class GameClient extends Application {
         }.start();
     }
 
-    private void connect() {
-        String host = System.getProperty("balatry.host", "localhost");
-        int port = Integer.getInteger("balatry.port", 5555);
-        long seed = Long.parseLong(System.getProperty("balatry.seed", "42"));
-        List<String> players = List.of(System.getProperty("balatry.players", "P0,P1").split(","));
+    /** Whether a match is live; until then the menu owns the screen, the keyboard and the clicks. */
+    private boolean inMatch() { return client != null && client.isStarted(); }
+
+    /** Opens a lobby in this process and joins it as seat 0, so this player picks who plays and when to start. */
+    private void hostGame() {
+        connect(callbacks -> {
+            hosted = HostedMatch.start(HostedMatch.DEFAULT_PORT, new java.util.Random().nextLong(),
+                    menu.deck, MatchServer.MAX_SEATS, menu.seatConfig(), callbacks);
+            menu.host = true;
+            menu.hostAddress = HostedMatch.lanAddress() + ":" + hosted.server().getPort();
+            return hosted.client();
+        });
+    }
+
+    /** Joins someone else's lobby at the typed address. */
+    private void joinGame() {
+        connect(callbacks -> {
+            String[] hostPort = menu.address.trim().split(":");
+            int port = hostPort.length > 1 ? Integer.parseInt(hostPort[1].trim()) : HostedMatch.DEFAULT_PORT;
+            menu.host = false;
+            return MatchClient.join(hostPort[0].trim(), port, menu.seatConfig(), callbacks);
+        });
+    }
+
+    /** Shared connect path: builds the callbacks, runs the supplied opener, and lands the client in the lobby. */
+    private void connect(Opener opener) {
+        if (client != null) return;   // already connected; ignore a double click
+        MatchClient.Callbacks callbacks = new MatchClient.Callbacks(
+                setup   -> Platform.runLater(() -> menu.lobby = setup),
+                ()      -> Platform.runLater(this::onMatchStarted),
+                action  -> {
+                    if (vm == null) return;
+                    Log.recv(action, vm.seat());
+                    if (action instanceof model.game.actions.Action.PlayerLeft left) announceDeparture(left);
+                    vm.onFrameApplied();
+                },
+                err     -> { Log.error(err); Platform.runLater(() -> { menu.status = "ERR: " + err; ui.status = "ERR: " + err; }); });
         try {
-            MatchClient client = MatchClient.connect(host, port, seed, players,
-                    err -> { Log.error(err); Platform.runLater(() -> ui.status = "ERR: " + err); },
-                    a -> { if (vm != null) { Log.recv(a, vm.seat()); vm.onFrameApplied(); } });
-            vm = new MatchViewModel(client);
-            ui.vm = vm;
-            vm.snapshotProperty().addListener((o, old, snap) -> { if (snap != null) onSnapshot(snap); });
-            vm.refresh();
+            client = opener.open(callbacks);
+            menu.seat = client.getSeat().seat();
+            menu.mode = Menu.Mode.LOBBY;
+            menu.status = "";
         } catch (Exception e) {
-            ui.status = "Failed to connect: " + (e.getMessage() == null ? e : e.getMessage());
+            client = null;
+            menu.status = "ERR: could not connect — " + (e.getMessage() == null ? e : e.getMessage());
+        }
+    }
+
+    /**
+     * Names the seat that just left in the status line. Read off the local model, which has already replayed the
+     * departure — the action itself carries only a seat index.
+     */
+    private void announceDeparture(model.game.actions.Action.PlayerLeft left) {
+        String who = client.getLocalHost().getMatch().getPlayer(left.actor()).name();
+        Platform.runLater(() -> ui.status = who + " left the match.");
+    }
+
+    /** FX thread: the server closed the lobby and everyone has built the same match. */
+    private void onMatchStarted() {
+        vm = new MatchViewModel(client);
+        ui.vm = vm;
+        vm.snapshotProperty().addListener((o, old, snap) -> { if (snap != null) onSnapshot(snap); });
+        vm.refresh();
+    }
+
+    /** Opens a connection; separated so hosting and joining share the callback wiring and error handling. */
+    @FunctionalInterface
+    private interface Opener { MatchClient open(MatchClient.Callbacks callbacks) throws Exception; }
+
+    /**
+     * Back to the main menu: drops the connection (and the hosted lobby with it) and clears all match state.
+     * Closing the socket is what tells the server we left — it turns that into the broadcast {@code PlayerLeft}
+     * everyone else replays, so there is no separate "goodbye" message to get lost.
+     */
+    private void leaveLobby() {
+        shutdown();
+        client = null;
+        hosted = null;
+        vm = null;
+        ui.vm = null;
+        ui.s = null;
+        ui.status = "";
+        menu.mode = Menu.Mode.MAIN;
+        menu.lobby = null;
+        menu.host = false;
+        menu.seat = -1;
+        menu.status = "";
+    }
+
+    private void shutdown() {
+        try {
+            if (hosted != null) hosted.close();
+            else if (client != null) client.close();
+        } catch (Exception ignored) {
+            // shutting down anyway; a failed close has nothing left to affect
         }
     }
 
@@ -96,7 +191,8 @@ public final class GameClient extends Application {
     private void render() {
         ui.newFrame();
         paintFelt();
-        if (ui.s == null) { r.textCenter(ui.status.isEmpty() ? "Connecting…" : ui.status, Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
+        if (!inMatch()) { menu.render(ui); return; }          // menu and lobby own the screen until the match begins
+        if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
 
         double cx = Ui.PAD + Ui.SIDEBAR + 18;
         double cTop = Ui.PAD + Ui.SLOT_H + 12;
@@ -124,6 +220,11 @@ public final class GameClient extends Application {
     }
 
     private void handleClick(double x, double y) {
+        if (!inMatch()) {   // menu/lobby: only the widgets it registered this frame are live
+            for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
+            menu.focus = Menu.Focus.NONE;   // clicked outside every field — drop the caret
+            return;
+        }
         if (ui.s == null) return;
         if (ui.s.opening() != null) {   // modal pack: only its option picks are live
             for (Ui.Btn b : ui.packButtons) if (b.rect().contains(x, y)) { b.action().run(); return; }

@@ -55,4 +55,12 @@ public sealed interface Action {
     record ReadyForNext(PlayerId actor) implements Action { }
     /** Withdraws a previously declared readiness. */
     record NotReady(PlayerId actor) implements Action { }
+    /**
+     * The actor has left the match — normally submitted by the server when a socket drops, not by a player.
+     * It is an <em>action</em> rather than out-of-band transport state precisely because the model has to react
+     * to it: every seat replays the same log, so a departure must land at the same point in that log everywhere
+     * or the seats diverge. The match reacts by forfeiting the seat's live round and excluding it from every
+     * barrier, so the remaining players are never left waiting on someone who is gone.
+     */
+    record PlayerLeft(PlayerId actor) implements Action { }
 }

@@ -156,12 +156,17 @@ final class Overlays {
         r.panel(px, py, pw, ph, Color.web("#1a1b20"), ORANGE, 14, 3);
         r.textLeftBold("RUN INFO — Standings", px + 20, py + 16, 22, ORANGE);
         ui.button(px + pw - 90, py + 12, 70, 34, "Close", RED, INK, () -> ui.showRunInfo = false, true);
-        double ry = py + 66;
+
+        // The loadout: the deck is the table's, the sleeve and stake are this seat's own.
+        r.textLeft(ui.s.deckType() + "  ·  " + ui.s.sleeve() + "  ·  " + ui.s.stake(), px + 20, py + 44, 12, DIM);
+
+        double ry = py + 76;
         for (MatchSnapshot.StandingView v : ui.s.standings()) {
             r.panel(px + 20, ry, pw - 40, 46, v.isMe() ? Color.web("#221d10") : Color.web("#1a1b1f"), v.isMe() ? ORANGE : EDGE, 10, 2);
             r.textCenterBold(String.valueOf(v.rank() + 1), px + 44, ry + 23, 20, v.rank() == 0 ? Color.web("#ffd45e") : DIM);
-            r.textLeftBold(v.name() + (v.isMe() ? "  ◄ you" : ""), px + 74, ry + 15, 16, INK);
-            r.textCenterBold(v.points() + " pts", px + pw - 70, ry + 23, 16, GREEN);
+            String tag = v.isMe() ? "  ◄ you" : (v.departed() ? "  (left)" : "");
+            r.textLeftBold(v.name() + tag, px + 74, ry + 15, 16, v.departed() ? FAINT : INK);
+            r.textCenterBold(v.points() + " pts", px + pw - 70, ry + 23, 16, v.departed() ? FAINT : GREEN);
             ry += 54;
         }
         r.textCenter("Opponents show only points & rank across the information boundary.", px + pw / 2, py + ph - 20, 12, FAINT);

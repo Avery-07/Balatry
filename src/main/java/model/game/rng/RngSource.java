@@ -36,6 +36,7 @@ public enum RngSource {
     SKIP_TAG           (26),       // structural: which skip tag each blind carries (table-level, same for all seats)
     LUST_SHOP_EXTRAS   (27),       // structural: which rows Lust's two extra shop items land in (table-level)
     PRIDE_LEGENDARY    (28),       // structural: which legendary joker Pride auctions each shop phase (table-level)
+    DECK_BUILD         (29),       // structural: the starting deck's composition (Erratic's ranks/suits, Fracture's cuts)
 
     MISC               (99);       // anything not yet promoted to its own source
 
