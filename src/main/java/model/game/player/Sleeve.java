@@ -2,9 +2,8 @@ package model.game.player;
 
 /**
  * A seat's sleeve: a per-player run modifier, chosen independently of everyone else's (contrast {@code DeckType},
- * which the whole table shares). Most sleeves are one-shot adjustments applied when the run is built — see
- * {@link Sleeves#apply} — and are live. Two need ongoing engine hooks and are described-but-inert for now, marked
- * below with what they still need.
+ * which the whole table shares). Most are one-shot adjustments applied when the run is built (see
+ * {@link Sleeves#apply}); Frugal and Celestial instead hook into the round settlement and the ante start.
  */
 public enum Sleeve {
 
@@ -16,9 +15,9 @@ public enum Sleeve {
     SILK     ("Silk Sleeve",      "Start with the Planet Merchant, Tarot Merchant, Relic Merchant and Overstock vouchers."),
     FRACTURE ("Fracture Sleeve",  "10 random cards are removed from the deck."),
 
-    // Behavioural sleeves: described, not yet wired.
-    FRUGAL   ("Frugal Sleeve",    "Each round, earn $2 per hand left and $1 per discard left, but no interest."),   // needs RoundSettlement hook
-    CELESTIAL("Celestial Sleeve", "Upgrade every hand type by 2 levels each ante; no Planets or Celestial Packs in the shop.");   // needs ante hook + shop pool filter
+    // Behavioural sleeves: these two act during play rather than at setup.
+    FRUGAL   ("Frugal Sleeve",    "Each round, earn $2 per hand left and $1 per discard left, but no interest."),
+    CELESTIAL("Celestial Sleeve", "Upgrade every hand type by 2 levels each ante; no Planets in the shop.");
 
     private final String displayName;
     private final String description;

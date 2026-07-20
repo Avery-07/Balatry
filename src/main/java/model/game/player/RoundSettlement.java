@@ -2,10 +2,12 @@ package model.game.player;
 
 import model.cards.DeckCard;
 import model.cards.consumables.ConsumableCard;
+import model.cards.consumables.Tarots;
 import model.cards.jokers.JokerCard;
 import model.game.Blind;
 import model.game.BossBlind;
 import model.game.scoring.Trigger;
+import model.game.tags.SkipTag;
 import model.modifiers.Enhancement;
 
 import java.math.BigDecimal;
@@ -17,9 +19,13 @@ public final class RoundSettlement {
     private static final int HAND_BONUS = 1;        // $ per remaining hand
     private static final int INTEREST_PER = 5;      // $1 of interest per $5 held
 
+    // The Frugal sleeve's replacement economy: paid per unused hand and discard, with no interest at all.
+    private static final int FRUGAL_PER_HAND = 2, FRUGAL_PER_DISCARD = 1;
+
     /** Settles {@code round} against {@code blind}; cash-out applies only when the blind was cleared. */
     public BlindResult settle(Run run, Round round, Blind blind) {
         int entryMoney = run.getMoney();
+        Stickers.endRound(run);   // unconditional: a lost round must not carry a Delayed silence into the next
 
         if (round.getOutcome() == RoundOutcome.WON) {
             cashOut(run, round, blind);
@@ -44,13 +50,26 @@ public final class RoundSettlement {
     }
 
     private void cashOut(Run run, Round round, Blind blind) {
-        int interest = interest(run.getMoney(), run.getInterestCap());   // on money held entering cash-out
-        int handsBonus = round.getHandsRemaining() * HAND_BONUS;
         int reward = run.getStake().rewardFor(blind);   // per-seat: the Black Stake and up pay nothing for a Small Blind
         int gold = GOLD_CARD_BONUS * countGold(round);
         int rental = totalRental(run);
 
-        run.addMoney(reward + handsBonus + interest + gold - rental);
+        if (run.getSleeve() == Sleeve.FRUGAL) {
+            // Frugal trades interest for a flat payout on what went unused: $2 a hand, $1 a discard, no interest.
+            int frugal = round.getHandsRemaining() * FRUGAL_PER_HAND
+                       + round.getDiscardsRemaining() * FRUGAL_PER_DISCARD;
+            run.addMoney(reward + frugal + gold - rental);
+        } else {
+            int interest = interest(run.getMoney(), run.getInterestCap());   // on money held entering cash-out
+            int handsBonus = round.getHandsRemaining() * HAND_BONUS;
+            run.addMoney(reward + handsBonus + interest + gold - rental);
+        }
+
+        // Anaglyph: clearing a boss blind pays a Double Tag and a Fool on top of the usual cash-out.
+        if (blind == Blind.BOSS && run.getDeckType().rewardsBossBonus()) {
+            run.grantTag(SkipTag.DOUBLE_TAG);
+            run.createConsumable(Tarots.THE_FOOL.spec());
+        }
 
         for (JokerCard joker : run.getJokers())
             if (!joker.isDebuffed()) joker.trigger(Trigger.ON_ROUND_END, run);

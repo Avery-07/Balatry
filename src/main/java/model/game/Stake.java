@@ -6,19 +6,19 @@ package model.game;
  * the table.
  *
  * <p>Stakes are cumulative in declaration order — each one "applies all previous effects", which {@link #includes}
- * expresses. The numeric effects are live; the three sticker-spawning stakes (Red, Blue, Gold) are described here
- * but inert until the shop's sticker roll learns about them, and are marked as such below.
+ * expresses. That holds for the sticker stakes too: the pool a shop card rolls from is every pair up to and
+ * including the seat's stake (see {@code Stickers.poolFor}).
  */
 public enum Stake {
 
     WHITE ("White Stake",  "Base difficulty. Standard score scaling and rewards."),
-    RED   ("Red Stake",    "Jokers may be Floating or Sticky."),                       // needs the sticker roll
+    RED   ("Red Stake",    "Shop jokers may be Floating or Sticky."),
     GREEN ("Green Stake",  "Required score scales faster each ante."),
     BLACK ("Black Stake",  "The Small Blind pays no reward money."),
-    BLUE  ("Blue Stake",   "Jokers may be Fragile or Eternal."),                       // needs the sticker roll
+    BLUE  ("Blue Stake",   "Shop jokers may also be Fragile or Eternal."),
     PURPLE("Purple Stake", "Required score scales significantly faster."),
     ORANGE("Orange Stake", "Shop rerolls get $1 more expensive each time."),
-    GOLD  ("Gold Stake",   "Jokers may be Rental or Perishable.");                     // needs the sticker roll
+    GOLD  ("Gold Stake",   "Shop jokers may also be Rental or Perishable.");
 
     /**
      * Per-ante target growth contributed by this stake alone, as a numerator over {@link #SCALE_DEN}. The effective

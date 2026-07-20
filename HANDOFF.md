@@ -15,7 +15,7 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   separate server is needed. A lobby seats **2-4**. To play locally, run
   `mvn javafx:run` twice: host in the first window, join `localhost` in the second, then Start in the first.
   `mvn exec:java@server` still runs a headless dedicated server that auto-starts when its seats fill.
-- 27 harnesses currently pass.
+- 29 harnesses currently pass.
 
 ## Critical working conventions (read these)
 
@@ -84,11 +84,21 @@ model.*  (pure game logic, deterministic, fully tested)
   random seat above (`RelicKind.RANDOM_RIVAL`); Katadesmos = joker-slot from a selected joker.
 - Every seat starts with **$4**. Relics **share the consumable slot pool**.
 - **Decks / sleeves / stakes** (`DeckType`, `Sleeve`, `Stake`): the deck is **table-shared** (`MatchConfig.deckType`),
-  the sleeve and stake are **per-seat** (`SeatConfig` → `Match.createSeated`). Live: all deck compositions
-  (Abandoned/Crowded/Checkered/Erratic), the starting-modifier sleeves, Eclipse's grants, and the numeric stakes
-  (Green/Purple targets, Black's Small-Blind reward, Orange's reroll step). Inert-but-described: Bazaar, Ghost,
-  Anaglyph, Plasma; Frugal, Celestial; Red/Blue/Gold (they need 4 stickers that don't exist yet — see below).
-  Covered by `LoadoutTests`.
+  the sleeve and stake are **per-seat** (`SeatConfig` → `Match.createSeated`). **All of them are live now.**
+  Compositions (Abandoned/Crowded/Checkered/Erratic, Fracture) in `Decks`/`LoadoutTests`; behavioural decks —
+  Plasma (target ×2 in `Match.getCurrentTarget`, chips/mult averaged in `Run.balanceIfPlasma` *after* the engine
+  so joker arithmetic is untouched), Bazaar (pack surcharge + reroll refreshes packs — `fillPacks` folds `rerolls`
+  into its salt only after a refresh so other decks' openers stay stable), Ghost/Anaglyph (shop spectrals; boss
+  pays Double Tag + Fool) — plus Frugal ($2/hand + $1/discard, **no interest**, in `RoundSettlement.cashOut`) and
+  Celestial (+2 levels every hand type per ante in `Run.beginAnte`; the shop's Planet band falls back to Tarot).
+  The seat-aware shop roll is `ShopPool.roll(Run, stream)` (default delegates to the seat-blind roll, so test
+  pools are unaffected). Covered by `LoadoutTests` (composition) and `LoadoutEffectTests` (behaviour).
+- **Stickers: all 8 live** (`Sticker`, `StickerState`, and the lifecycle owner `model.game.player.Stickers`).
+  Floating (keyed drift per hand), Delayed (transient `Card.isSuppressed` silence, first hand only — cleared
+  unconditionally in settlement so a lost round can't leak it), Fragile (debuffed when a hand scores <10% of the
+  target), Sticky (growing sell toll, charged in `Board.sell`, refused when unaffordable). The Red/Blue/Gold
+  stakes now roll them onto shop jokers (1-in-4, cumulative pools — `Stickers.poolFor`) via `Shop.rollSlot`.
+  Covered by `StickerTests`.
 - Bosses: the ante boss is locked at ante start (visible during selection) and has an `effect()` description.
 
 ## What's next (recommended order)
@@ -104,9 +114,11 @@ model.*  (pure game logic, deterministic, fully tested)
    learns of it at the same point in the same replay). The seat forfeits any live round, is excluded from every
    barrier, and keeps its earned points; dropping below 2 active seats ends the match. Covered by
    `DisconnectTests`, including a real socket close. **Still missing:** reconnect and kicking.
-3. **The 4 missing stickers** — `Sticker` has Eternal/Perishable/Rental/Debuffed; the doc also needs Floating,
-   Delayed, Fragile, Sticky. Those unlock the Red/Blue/Gold stakes, which are the only inert ones left.
+3. ~~**The 4 missing stickers**~~ / ~~**inert decks & sleeves**~~ — done (see Current content state). Every deck,
+   sleeve and stake in the doc now does what it says. `StickerTests` + `LoadoutEffectTests` cover them.
 4. **Juice pass** — score count-up, card fly-out on play/discard (reconciler already supports exit), chip/mult pops.
+   **Do this after the user has eyeballed the new menu/lobby/finished screens** — several hundred lines of drawing
+   are still unverified, and juice iterates on exactly those layouts.
 5. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would allow Balatro-style skipping.
 6. **Implement the ~11 stub jokers** (multiplayer ones need standings/engine hooks).
 7. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`

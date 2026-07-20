@@ -13,6 +13,7 @@ public abstract class Card {
     private Edition edition;
     private final Map<Sticker, StickerState> stickers = new EnumMap<>(Sticker.class);
     private int shopValue;
+    private boolean suppressed;   // transient silence owned by whoever set it; see isSuppressed()
 
     public Edition getEdition() { return edition; }
 
@@ -37,14 +38,38 @@ public abstract class Card {
     /** Removes the given sticker, if present. */
     public void remove(Sticker sticker) { stickers.remove(sticker); }
 
-    /** Whether this card's effects are nullified. */
-    public boolean isDebuffed() { return stickers.containsKey(Sticker.DEBUFFED); }
+    /**
+     * Whether this card's effects are nullified — the single gate the whole engine consults before letting a
+     * card do anything. It covers both the lasting {@link Sticker#DEBUFFED} and the transient suppression below.
+     */
+    public boolean isDebuffed() { return suppressed || stickers.containsKey(Sticker.DEBUFFED); }
+
+    /**
+     * Transient, scope-owned silence — distinct from the DEBUFFED sticker, which is a lasting mark a player can
+     * see and cure. Whoever sets it is responsible for clearing it ({@link Sticker#DELAYED} is silenced for a
+     * round's first hand and freed after it), and because it feeds {@link #isDebuffed()} it needs no separate
+     * check anywhere in the engine.
+     */
+    public boolean isSuppressed()             { return suppressed; }
+    public void setSuppressed(boolean value)  { suppressed = value; }
 
     /** Money removed at end of round while RENTAL is attached. */
     public int getRentalCost() { return hasSticker(Sticker.RENTAL) ? 3 : 0; }
 
-    /** Advances per-round sticker timers; call once per card at end of round. Expired PERISHABLE self-applies DEBUFFED and NEGATIVE. */
+    /** What selling this card costs while STICKY is attached; $0 when it is not. */
+    public int getStickySellCost() {
+        StickerState sticky = stickers.get(Sticker.STICKY);
+        return sticky == null ? 0 : sticky.sellCost();
+    }
+
+    /**
+     * Advances per-round sticker state; call once per card at end of round. An expired PERISHABLE self-applies
+     * DEBUFFED and NEGATIVE; a STICKY sticker's sell toll grows.
+     */
     public void tickStickers() {
+        StickerState sticky = stickers.get(Sticker.STICKY);
+        if (sticky != null) stickers.put(Sticker.STICKY, sticky.tick());
+
         StickerState perishable = stickers.get(Sticker.PERISHABLE);
         if (perishable == null || !perishable.hasTimer() || perishable.expired()) return;
 

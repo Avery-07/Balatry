@@ -101,7 +101,7 @@ public final class Shop {
         return item;
     }
 
-    /** Rerolls the card row for a fresh, still-seeded set; packs and vouchers are unaffected. */
+    /** Rerolls the card row for a fresh, still-seeded set; the Bazaar deck refreshes the packs too. */
     public void reroll() {
         int cost = rerollCost();
         if (run.getMoney() - cost < run.minBalance()) throw new IllegalStateException("cannot afford reroll " + cost);
@@ -110,6 +110,7 @@ public final class Shop {
         purchasesThisRoll = 0;   // a reroll grants a fresh purchase allowance (Lust's cap is per roll state)
         run.getStats().recordReroll();
         rerollFill();
+        if (run.getDeckType().rerollRefreshesPacks()) fillPacks();   // Bazaar: the pack row rolls with the cards
         run.fire(Trigger.ON_SHOP_REROLL);
         if (run.getMatch() != null)
             run.getMatch().getSinModifier().onShopRerolled(run, this);   // Greed: re-debuff claimed reappearances
@@ -121,11 +122,15 @@ public final class Shop {
     public int getPackCount()           { return packs.size(); }
     public BoosterPack getPack(int i)   { return packs.get(i); }
 
-    /** The final price of the pack in {@code packIndex} (override if set, else value less the run's discount). */
+    /**
+     * The final price of the pack in {@code packIndex}: an override if one is set, else the value less the run's
+     * discount, plus the deck's pack surcharge (the Bazaar deck charges $1 more for the packs it refreshes).
+     */
     public int packPrice(int packIndex) {
         BoosterPack pack = require(packs, packIndex);
         Integer override = packPrices.get(packIndex);
-        return override != null ? override : priced(pack.getShopValue());
+        if (override != null) return override;
+        return priced(pack.getShopValue()) + run.getDeckType().packSurcharge();
     }
 
     /** Buys the pack in {@code packIndex}, charging the run; the caller opens it via {@link BoosterPack#open}. */
@@ -237,10 +242,12 @@ public final class Shop {
             slots.get(0).apply(model.modifiers.Sticker.DEBUFFED);
     }
 
-    /** Rolls the card for rolled position {@code rolled}. */
+    /** Rolls the card for rolled position {@code rolled}, then lets the seat's stake sticker it. */
     private Card rollSlot(int rolled) {
         long salt = Rng.combine(shopIndex, rerolls, rolled);
-        return setup.getCardPool().roll(run.getRng().streamFor(RngSource.SHOP_CONTENTS, salt));
+        Card card = setup.getCardPool().roll(run, run.getRng().streamFor(RngSource.SHOP_CONTENTS, salt));
+        model.game.player.Stickers.rollOnto(card, run.getStake(), run.getRng(), salt);
+        return card;
     }
 
     /** Negative Tag: turns base-edition jokers just rolled (from {@code firstRolledIndex} on) into free Negative ones, consuming one grant each, in slot order, until grants run out. */
@@ -255,10 +262,15 @@ public final class Shop {
         }
     }
 
+    /**
+     * Fills the pack row. The salt folds in the reroll count only once a reroll has actually refreshed the packs
+     * (Bazaar), so the opening row of every other deck keeps the exact contents it always rolled — a Bazaar
+     * reroll has to change the packs, but nothing else's seeded shop may shift underneath it.
+     */
     private void fillPacks() {
         if (setup.getPackPool() == null) return;
         for (int i = 0; i < packs.size(); i++) {
-            long salt = Rng.combine(shopIndex, i);
+            long salt = rerolls == 0 ? Rng.combine(shopIndex, i) : Rng.combine(shopIndex, i, rerolls);
             packs.set(i, setup.getPackPool().roll(run.getRng().streamFor(RngSource.SHOP_PACKS, salt)));
             packPrices.set(i, setup.isInitialItemsFree() ? Integer.valueOf(0) : null);
         }

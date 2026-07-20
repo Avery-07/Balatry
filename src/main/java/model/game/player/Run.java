@@ -1,6 +1,7 @@
 package model.game.player;
 
 import model.cards.Card;
+import model.cards.DeckType;
 import model.cards.consumables.ConsumableCard;
 import model.cards.DeckCard;
 import model.cards.jokers.JokerCard;
@@ -22,6 +23,7 @@ import model.game.rng.DeterministicRng;
 import model.game.rng.Rng;
 import model.game.rng.RngSource;
 import model.game.scoring.HandType;
+import model.game.scoring.ScoringResult;
 import model.game.scoring.ScoringSession;
 import model.game.scoring.Trigger;
 import model.game.shop.CatalogPackPool;
@@ -31,6 +33,7 @@ import model.game.shop.Shop;
 import model.game.shop.ShopSetup;
 import model.modifiers.Edition;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -404,8 +407,18 @@ public final class Run {
         stats.markRedeemed(voucher.getSpec());
     }
 
-    /** Resets this run's per-ante allowances; call at the start of each ante. */
-    public void beginAnte() { stats.beginAnte(); afflictions.beginAnte(); bossState.beginAnte(); sinState.beginAnte(); }
+    /**
+     * Resets this run's per-ante allowances; call at the start of each ante. The Celestial sleeve also collects
+     * here: every hand type gains two levels, which is what it trades its access to Planets for.
+     */
+    public void beginAnte() {
+        stats.beginAnte();
+        afflictions.beginAnte();
+        bossState.beginAnte();
+        sinState.beginAnte();
+        if (sleeve == Sleeve.CELESTIAL)
+            for (HandType type : HandType.values()) { handLevels.levelUp(type); handLevels.levelUp(type); }
+    }
 
     /** The cards currently in hand, or empty outside a round. */
     public List<DeckCard> getHeld() { return round == null ? List.of() : round.getHand(); }
@@ -418,6 +431,21 @@ public final class Run {
     public void setBaseDiscards(int n){ baseDiscards = n; }
     public int getInterestCap()       { return interestCap; }
     public void setInterestCap(int n) { interestCap = n; }
+
+    /** The table's starting deck, or {@link DeckType#STANDARD} for a standalone run with no match behind it. */
+    public DeckType getDeckType() { return match == null ? DeckType.STANDARD : match.getDeckType(); }
+
+    /**
+     * The Plasma deck: chips and mult are averaged before they multiply, so a lopsided hand is worth far less
+     * than a balanced one of the same total. Applied after the scoring engine has finished, which keeps every
+     * joker's own arithmetic untouched — Plasma reshapes the result, it does not change how it was reached.
+     */
+    public ScoringResult balanceIfPlasma(ScoringResult result) {
+        if (getDeckType() != DeckType.PLASMA) return result;
+        BigDecimal balanced = result.chips().add(result.mult())
+                .divide(BigDecimal.valueOf(2), java.math.MathContext.DECIMAL64);
+        return new ScoringResult(balanced.multiply(balanced), balanced, balanced, result.destroyed());
+    }
 
     /** This seat's sleeve; its starting adjustments are already applied (see {@link Sleeves#apply}). */
     public Sleeve getSleeve()          { return sleeve; }

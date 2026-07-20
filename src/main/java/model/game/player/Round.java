@@ -39,6 +39,7 @@ public final class Round {
     private BigDecimal lastMult  = BigDecimal.ZERO;       // mult of the most recent play this round
     private DeckCard forcedCard;           // Cerulean Bell: must be included in every play and discard; null when inactive
     private boolean acted;                 // whether this seat has played or discarded (skipping requires an untouched round)
+    private int handsPlayedThisRound;      // keys Floating's drift and gates Delayed's first-hand silence
 
     Round(Run run, long target, int handSize, int hands, int discards, RandomGenerator shuffle) {
         this.run = run;
@@ -49,7 +50,8 @@ public final class Round {
         drawPile.addAll(run.getDeck());
         shuffle(drawPile, shuffle);
         draw();
-        refreshForcedCard();   // Cerulean Bell: the deal's forced card
+        refreshForcedCard();     // Cerulean Bell: the deal's forced card
+        Stickers.beginRound(run);   // Delayed jokers sit out the round's first hand
     }
 
     /** Plays 1-5 cards from the hand: evaluates, scores, banks, removes them, redraws, and updates the outcome. */
@@ -57,6 +59,8 @@ public final class Round {
         requireInProgress();
         if (handsRemaining <= 0) throw new IllegalStateException("no hands remaining");
         validateSelection(cards);
+
+        Stickers.beforeHand(run, handsPlayedThisRound);   // Floating jokers drift before anything reads the board
 
         HandEvaluation eval = evaluator.evaluate(cards);
         HandType type = eval.type();
@@ -81,6 +85,7 @@ public final class Round {
                 && (!boss.zerosMoneyOnMostPlayed() || type == run.getStats().getMostPlayedHand()));
 
         ScoringResult result = ENGINE.score(run, eval.context(), baseChips, baseMult, eval.scoringCards(), heldAfterPlay);
+        result = run.balanceIfPlasma(result);   // Plasma deck: chips and mult meet in the middle before multiplying
         lastChips = result.chips();   // for the UI chips×mult readout
         lastMult  = result.mult();
         BigDecimal handScore = result.score();
@@ -88,6 +93,8 @@ public final class Round {
             handScore = run.getMatch().getSinModifier().adjustHandScore(run, type, handScore);
 
         acted = true;
+        handsPlayedThisRound++;
+        Stickers.afterHand(run, handScore, target);   // Delayed wakes up; a feeble hand sours Fragile
         run.recordAntePlayed(cards);   // The Pillar: this ante's played cards (non-boss blinds only; see Run)
 
         if (!result.destroyed().isEmpty()) run.getStats().recordGlassDestroyed(result.destroyed().size());

@@ -67,6 +67,16 @@ public final class Board {
         JokerCard joker = jokers.get(index);
         if (joker.hasSticker(Sticker.ETERNAL))
             throw new IllegalStateException("an Eternal joker cannot be sold: " + joker.getSpec().getName());
+
+        // Sticky charges a toll to part with, and that toll grows every round it stays. Take it before the sale
+        // value is banked, and refuse outright if the seat cannot cover it — a half-paid sale has no meaning.
+        int toll = joker.getStickySellCost();
+        if (toll > 0) {
+            if (run.getMoney() - toll < run.minBalance())
+                throw new IllegalStateException("cannot afford the $" + toll + " Sticky fee on "
+                        + joker.getSpec().getName());
+            run.spend(toll);
+        }
         joker.trigger(Trigger.ON_SOLD, run);
         jokers.remove(index);
         int value = joker.getSellValue();

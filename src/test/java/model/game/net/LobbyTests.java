@@ -21,6 +21,14 @@ public final class LobbyTests {
 
     private static int failures = 0;
 
+    /**
+     * How long to wait on a condition that should become true almost immediately. Generous on purpose: the
+     * harness runner starts every {@code *Tests} class in its own JVM, so under that load a socket round trip
+     * can take far longer than it does when this class runs alone. These are all "eventually" checks, so a
+     * larger bound costs nothing when things work and only buys tolerance when the machine is busy.
+     */
+    private static final long WAIT_MS = 15_000;
+
     public static void main(String[] args) throws Exception {
         setupCodec();
         nameSanitizing();
@@ -77,14 +85,14 @@ public final class LobbyTests {
                     new SeatConfig("Ann", Sleeve.LEGACY, Stake.WHITE),
                     new MatchClient.Callbacks(hostView::set, bothStarted::countDown, null, null));
             check("the first to join is the host", host.isHost());
-            waitUntil(() -> hostView.get() != null && hostView.get().seats().size() == 1, 3000);
+            waitUntil(() -> hostView.get() != null && hostView.get().seats().size() == 1, WAIT_MS);
             checkInt("the lobby shows the host alone", hostView.get().seats().size(), 1);
 
             MatchClient guest = MatchClient.join("localhost", port,
                     new SeatConfig("Bo", Sleeve.BLACK, Stake.PURPLE),
                     new MatchClient.Callbacks(null, bothStarted::countDown, null, null));
             check("a later joiner is not the host", !guest.isHost());
-            waitUntil(() -> hostView.get().seats().size() == 2, 3000);
+            waitUntil(() -> hostView.get().seats().size() == 2, WAIT_MS);
             checkInt("the roster reaches the host", hostView.get().seats().size(), 2);
             check("each seat announced its own sleeve",
                     hostView.get().seats().get(1).sleeve() == Sleeve.BLACK);
@@ -93,12 +101,12 @@ public final class LobbyTests {
 
             // The deck is the host's to pick, and the change propagates before anyone starts.
             host.chooseDeck(DeckType.CHECKERED);
-            waitUntil(() -> hostView.get().deck() == DeckType.CHECKERED, 3000);
+            waitUntil(() -> hostView.get().deck() == DeckType.CHECKERED, WAIT_MS);
             check("the host's deck pick propagates", hostView.get().deck() == DeckType.CHECKERED);
 
             check("nothing starts until the host says so", !server.isStarted());
             host.begin();
-            check("both clients started", bothStarted.await(5, TimeUnit.SECONDS));
+            check("both clients started", bothStarted.await(WAIT_MS, TimeUnit.MILLISECONDS));
 
             // What everyone built must be one and the same match, taken from the broadcast setup.
             var hostMatch = host.getLocalHost().getMatch();
@@ -128,17 +136,17 @@ public final class LobbyTests {
                     new MatchClient.Callbacks(null, null, null, hostErrors::add));
 
             host.begin();   // alone in the lobby
-            waitUntil(() -> !hostErrors.isEmpty(), 3000);
+            waitUntil(() -> !hostErrors.isEmpty(), WAIT_MS);
             check("a one-player start is refused", !hostErrors.isEmpty() && !server.isStarted());
 
             MatchClient guest = MatchClient.join("localhost", port, SeatConfig.of("Bo"),
                     new MatchClient.Callbacks(null, null, null, guestErrors::add));
             guest.begin();   // not the host
-            waitUntil(() -> !guestErrors.isEmpty(), 3000);
+            waitUntil(() -> !guestErrors.isEmpty(), WAIT_MS);
             check("a guest cannot start the match", !guestErrors.isEmpty() && !server.isStarted());
 
             guest.chooseDeck(DeckType.PLASMA);
-            waitUntil(() -> guestErrors.size() > 1, 3000);
+            waitUntil(() -> guestErrors.size() > 1, WAIT_MS);
             check("a guest cannot change the deck",
                     guestErrors.size() > 1 && server.getSetup().deck() == DeckType.STANDARD);
 
@@ -168,13 +176,13 @@ public final class LobbyTests {
                     new MatchClient.Callbacks(view::set, started::countDown, null, null));
             MatchClient guest = MatchClient.join("localhost", port, SeatConfig.of("Bo"),
                     new MatchClient.Callbacks(null, started::countDown, null, null));
-            waitUntil(() -> view.get() != null && view.get().seats().size() == 2, 3000);
+            waitUntil(() -> view.get() != null && view.get().seats().size() == 2, WAIT_MS);
             check("both seats open on the defaults",
                     view.get().seats().get(1).sleeve() == Sleeve.STANDARD
                     && view.get().seats().get(1).stake() == Stake.WHITE);
 
             guest.setLoadout(Sleeve.COLORFUL, Stake.GOLD);
-            waitUntil(() -> view.get().seats().get(1).sleeve() == Sleeve.COLORFUL, 3000);
+            waitUntil(() -> view.get().seats().get(1).sleeve() == Sleeve.COLORFUL, WAIT_MS);
             check("a guest's new sleeve reaches everyone", view.get().seats().get(1).sleeve() == Sleeve.COLORFUL);
             check("a guest's new stake reaches everyone", view.get().seats().get(1).stake() == Stake.GOLD);
             check("it changed only that seat", view.get().seats().get(0).sleeve() == Sleeve.STANDARD);
@@ -182,9 +190,9 @@ public final class LobbyTests {
 
             // The last pick before the start is what the match is built with.
             guest.setLoadout(Sleeve.BLACK, Stake.GREEN);
-            waitUntil(() -> view.get().seats().get(1).sleeve() == Sleeve.BLACK, 3000);
+            waitUntil(() -> view.get().seats().get(1).sleeve() == Sleeve.BLACK, WAIT_MS);
             host.begin();
-            check("the match started", started.await(5, TimeUnit.SECONDS));
+            check("the match started", started.await(WAIT_MS, TimeUnit.MILLISECONDS));
             var match = host.getLocalHost().getMatch();
             check("the final pick built the run",
                     match.getRun(match.getSeats().get(1)).getSleeve() == Sleeve.BLACK
@@ -213,10 +221,10 @@ public final class LobbyTests {
                     MatchClient.Callbacks.none());
             MatchClient guest = MatchClient.join("localhost", port, SeatConfig.of("Bo"),
                     new MatchClient.Callbacks(guestView::set, null, null, null, guestClosed::set));
-            waitUntil(() -> guestView.get() != null && guestView.get().seats().size() == 2, 3000);
+            waitUntil(() -> guestView.get() != null && guestView.get().seats().size() == 2, WAIT_MS);
 
             host.close();
-            waitUntil(() -> guestClosed.get() != null, 3000);
+            waitUntil(() -> guestClosed.get() != null, WAIT_MS);
             check("the guest was told the lobby closed", guestClosed.get() != null);
             check("the reason names the host",
                     guestClosed.get() != null && guestClosed.get().contains("host"));
@@ -244,11 +252,11 @@ public final class LobbyTests {
             MatchClient d = MatchClient.join("localhost", port, SeatConfig.of("Di"),
                     new MatchClient.Callbacks(null, started::countDown, null, null));
 
-            waitUntil(() -> view.get() != null && view.get().seats().size() == 4, 3000);
+            waitUntil(() -> view.get() != null && view.get().seats().size() == 4, WAIT_MS);
             checkInt("four players seat", view.get().seats().size(), 4);
 
             host.begin();
-            check("a four-player match starts", started.await(5, TimeUnit.SECONDS));
+            check("a four-player match starts", started.await(WAIT_MS, TimeUnit.MILLISECONDS));
             checkInt("the match has four seats", host.getLocalHost().getMatch().getSeats().size(), 4);
 
             host.close(); b.close(); c.close(); d.close();
@@ -266,10 +274,10 @@ public final class LobbyTests {
                     new MatchClient.Callbacks(view::set, null, null, null));
             MatchClient b = MatchClient.join("localhost", port, SeatConfig.of("Bo"), MatchClient.Callbacks.none());
             MatchClient c = MatchClient.join("localhost", port, SeatConfig.of("Cy"), MatchClient.Callbacks.none());
-            waitUntil(() -> view.get() != null && view.get().seats().size() == 3, 3000);
+            waitUntil(() -> view.get() != null && view.get().seats().size() == 3, WAIT_MS);
 
             b.close();
-            waitUntil(() -> view.get().seats().size() == 2, 3000);
+            waitUntil(() -> view.get().seats().size() == 2, WAIT_MS);
             checkInt("the roster shrank", view.get().seats().size(), 2);
             check("the remaining guest moved up", view.get().seats().get(1).name().equals("Cy"));
             check("the host is unaffected", host.isHost() && !server.isStarted());

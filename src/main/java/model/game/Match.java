@@ -168,9 +168,12 @@ public final class Match {
         return (blind == Blind.BOSS && currentBoss != null) ? base * currentBoss.targetMultiplier() : base;
     }
 
-    /** Chips {@code id} must score to clear the current blind: the baseline scaled by that seat's own stake. */
+    /**
+     * Chips {@code id} must score to clear the current blind: the baseline scaled by that seat's own stake, then
+     * by the table's deck (Plasma doubles every blind) and the boss's own multiplier.
+     */
     public long getCurrentTarget(PlayerId id) {
-        long base = BlindTargets.target(ante, blind, getRun(id).getStake());
+        long base = BlindTargets.target(ante, blind, getRun(id).getStake()) * deckType.blindMultiplier();
         return (blind == Blind.BOSS && currentBoss != null) ? base * currentBoss.targetMultiplier() : base;
     }
 
