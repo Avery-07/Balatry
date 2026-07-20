@@ -2,10 +2,12 @@ package model.game.net;
 
 import model.cards.DeckType;
 import model.game.Match;
+import model.game.Stake;
 import model.game.actions.Action;
 import model.game.host.MatchHost;
 import model.game.player.PlayerId;
 import model.game.player.SeatConfig;
+import model.game.player.Sleeve;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -42,21 +44,30 @@ public final class MatchClient implements AutoCloseable {
     private volatile PlayerId seat;
     private volatile MatchSetup lobby;      // the roster as last broadcast; null until the first LOBBY frame
     private volatile MatchHost localHost;   // null until START
+    private volatile boolean closed;        // guards onClosed against firing twice
 
     /**
      * The client's outward hooks, all fired on the socket-receive thread. A UI layer supplies bodies that marshal
      * onto its own thread (e.g. {@code Platform.runLater}); this is the single place where the background thread
      * hands work off, so it is the only point where model mutation crosses into view-update territory.
      *
-     * @param onLobby   the roster changed (a seat joined, or the host changed the deck)
+     * @param onLobby   the roster changed (a seat joined or re-picked its loadout, or the host changed the deck)
      * @param onStarted the match was built and started; the local host now exists
      * @param onApplied an accepted action was replayed into the local host
      * @param onError   the server rejected something this client sent, or refused the connection
+     * @param onClosed  the connection ended, with a reason where the server gave one — fired exactly once, for
+     *                  a closed lobby, a lost server, or this client's own disconnect
      */
     public record Callbacks(Consumer<MatchSetup> onLobby, Runnable onStarted,
-                            Consumer<Action> onApplied, Consumer<String> onError) {
+                            Consumer<Action> onApplied, Consumer<String> onError,
+                            Consumer<String> onClosed) {
 
-        public static Callbacks none() { return new Callbacks(null, null, null, null); }
+        public Callbacks(Consumer<MatchSetup> onLobby, Runnable onStarted,
+                         Consumer<Action> onApplied, Consumer<String> onError) {
+            this(onLobby, onStarted, onApplied, onError, null);
+        }
+
+        public static Callbacks none() { return new Callbacks(null, null, null, null, null); }
     }
 
     private MatchClient(Socket socket, Callbacks callbacks) throws IOException {
@@ -90,10 +101,21 @@ public final class MatchClient implements AutoCloseable {
             try {
                 String line;
                 while ((line = alreadyOpen.readLine()) != null) receive(line);
-            } catch (IOException ignored) { }
+            } catch (IOException ignored) {
+                // a dropped socket is just another way for the stream to end
+            } finally {
+                announceClose(null);   // no-op if a CLOSED frame already explained why
+            }
         }, "client-recv-" + seat.seat());
         t.setDaemon(true);
         t.start();
+    }
+
+    /** Fires {@code onClosed} exactly once, whatever ended the connection. */
+    private void announceClose(String reason) {
+        if (closed) return;
+        closed = true;
+        fire(callbacks.onClosed(), reason == null ? "the connection was lost" : reason);
     }
 
     /** Applies one server frame: lobby updates, the start signal, replayed actions, or a rejection. */
@@ -112,6 +134,8 @@ public final class MatchClient implements AutoCloseable {
             Action action = ActionCodec.decode(line.substring(tab + 1));
             localHost.submit(action);
             fire(callbacks.onApplied(), action);
+        } else if (line.startsWith("CLOSED\t")) {
+            announceClose(line.substring("CLOSED\t".length()));
         } else if (line.startsWith("ERR")) {
             int tab = line.indexOf('\t');
             fire(callbacks.onError(), tab >= 0 ? line.substring(tab + 1) : line);
@@ -127,6 +151,12 @@ public final class MatchClient implements AutoCloseable {
 
     /** Whether this client is the host — seat 0, the only seat that may pick the deck or start the match. */
     public boolean isHost() { return seat != null && seat.seat() == 0; }
+
+    /**
+     * Re-picks this seat's own sleeve and stake. Legal only in the lobby — once the match is built these are
+     * baked into every seat's run, so the server refuses a late change rather than desyncing the table.
+     */
+    public void setLoadout(Sleeve sleeve, Stake stake) { send("LOADOUT\t" + sleeve.name() + ":" + stake.name()); }
 
     /** Host only: change the table's deck. Ignored by the server if sent from any other seat. */
     public void chooseDeck(DeckType deck) { send("DECK\t" + deck.name()); }

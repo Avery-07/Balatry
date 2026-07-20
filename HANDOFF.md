@@ -10,8 +10,9 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   `target/test-classes/model/` and runs each in its own JVM. So **test classes must live under a `model.*`
   package** to be discovered (e.g. client tests are in `model.client`, engine tests in `model.engine`).
 - `mvn javafx:run` — launches the client (`client.game.GameClient`). It opens on the **main menu**: type a name,
-  pick a sleeve and stake, then **Host a game** or **Join a game** (address field below the buttons). Hosting
-  starts a server inside the client process, so no separate server is needed. To play locally, run
+  then **Host a game** or **Join a game** (address field below the buttons). Sleeve, stake and deck are picked in
+  the **lobby**, where everyone can see each other's. Hosting starts a server inside the client process, so no
+  separate server is needed. A lobby seats **2-4**. To play locally, run
   `mvn javafx:run` twice: host in the first window, join `localhost` in the second, then Start in the first.
   `mvn exec:java@server` still runs a headless dedicated server that auto-starts when its seats fill.
 - 27 harnesses currently pass.
@@ -49,8 +50,11 @@ model.*  (pure game logic, deterministic, fully tested)
 
 - `GameClient` — orchestrator: canvas, loop, host/join, input dispatch, screen switching. Until the match starts
   it hands the whole screen, the keyboard and the clicks to `Menu`.
-- `Menu` — the pre-match UI: main menu (name entry, sleeve/stake cyclers, Host/Join + address) and the lobby
-  (roster, host's deck picker, Start). It owns its state because no snapshot exists before the match begins.
+- `Menu` — the pre-match UI: main menu (name entry, Host/Join + address) and the lobby (roster up to 4, your own
+  sleeve/stake, the host's deck picker, Start). It owns its state because no snapshot exists before the match
+  begins. **Loadout is picked in the lobby, not the menu** — so everyone can see what everyone else chose. Its
+  cyclers send the pick to the server and adopt what comes back in the next `LOBBY` frame, so the roster on
+  screen is always the server's, never a local guess.
 - `Ui` — shared per-frame context: renderer, snapshot, vm, status, click registries (`buttons`,
   `packButtons`, `selectables`, `jokerSel`), selection state (`selKind`/`selIndex`/`jokerTarget`), `button()` helper.
 - `Hand` — the animated hand: reconcile-from-snapshot (keeps selection + motion across frames — this fixed the
@@ -130,3 +134,8 @@ model.*  (pure game logic, deterministic, fully tested)
 - Seats are never removed from a running match (indices are baked into every logged action); a departed seat
   stays in `getSeats()` and in the standings, flagged by `hasDeparted`. Seat re-indexing happens only in the
   lobby, where no log exists yet.
+- **The host leaving the lobby closes it** (the server lives in the host's process): the server broadcasts
+  `CLOSED` and drops everyone, and each guest's `onClosed` sends it back to the main menu. A *guest* leaving is
+  survivable — the roster just shrinks and the seats below move up.
+- `MatchClient.Callbacks.onClosed` fires exactly once for any end of connection (closed lobby, lost server, our
+  own disconnect). `GameClient` ignores it when it tore the connection down itself (`client == null`).

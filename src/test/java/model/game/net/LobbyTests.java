@@ -26,6 +26,10 @@ public final class LobbyTests {
         nameSanitizing();
         hostDrivenLobby();
         lobbyGuards();
+        loadoutChangesInLobby();
+        hostLeavingClosesTheLobby();
+        guestLeavingReseats();
+        fourPlayerLobby();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -149,6 +153,128 @@ public final class LobbyTests {
 
             host.close();
             guest.close();
+        }
+    }
+
+    /** The loadout is picked in the lobby, so a seat must be able to re-pick it — and only its own. */
+    private static void loadoutChangesInLobby() throws Exception {
+        try (MatchServer server = new MatchServer(0, 21L, DeckType.STANDARD, 4, false)) {
+            server.listen();
+            int port = server.getPort();
+            AtomicReference<MatchSetup> view = new AtomicReference<>();
+            CountDownLatch started = new CountDownLatch(2);
+
+            MatchClient host = MatchClient.join("localhost", port, SeatConfig.of("Ann"),
+                    new MatchClient.Callbacks(view::set, started::countDown, null, null));
+            MatchClient guest = MatchClient.join("localhost", port, SeatConfig.of("Bo"),
+                    new MatchClient.Callbacks(null, started::countDown, null, null));
+            waitUntil(() -> view.get() != null && view.get().seats().size() == 2, 3000);
+            check("both seats open on the defaults",
+                    view.get().seats().get(1).sleeve() == Sleeve.STANDARD
+                    && view.get().seats().get(1).stake() == Stake.WHITE);
+
+            guest.setLoadout(Sleeve.COLORFUL, Stake.GOLD);
+            waitUntil(() -> view.get().seats().get(1).sleeve() == Sleeve.COLORFUL, 3000);
+            check("a guest's new sleeve reaches everyone", view.get().seats().get(1).sleeve() == Sleeve.COLORFUL);
+            check("a guest's new stake reaches everyone", view.get().seats().get(1).stake() == Stake.GOLD);
+            check("it changed only that seat", view.get().seats().get(0).sleeve() == Sleeve.STANDARD);
+            check("the name is not editable this way", view.get().seats().get(1).name().equals("Bo"));
+
+            // The last pick before the start is what the match is built with.
+            guest.setLoadout(Sleeve.BLACK, Stake.GREEN);
+            waitUntil(() -> view.get().seats().get(1).sleeve() == Sleeve.BLACK, 3000);
+            host.begin();
+            check("the match started", started.await(5, TimeUnit.SECONDS));
+            var match = host.getLocalHost().getMatch();
+            check("the final pick built the run",
+                    match.getRun(match.getSeats().get(1)).getSleeve() == Sleeve.BLACK
+                    && match.getRun(match.getSeats().get(1)).getStake() == Stake.GREEN);
+
+            // Once the match exists the loadout is baked into every run; a late change must not take effect.
+            guest.setLoadout(Sleeve.SILK, Stake.WHITE);
+            waitUntil(() -> match.getRun(match.getSeats().get(1)).getSleeve() != Sleeve.BLACK, 500);
+            check("a loadout change after the start is ignored",
+                    match.getRun(match.getSeats().get(1)).getSleeve() == Sleeve.BLACK);
+
+            host.close();
+            guest.close();
+        }
+    }
+
+    /** The lobby lives in the host's process, so the host leaving must send the guests home, not orphan them. */
+    private static void hostLeavingClosesTheLobby() throws Exception {
+        try (MatchServer server = new MatchServer(0, 31L, DeckType.STANDARD, 4, false)) {
+            server.listen();
+            int port = server.getPort();
+            AtomicReference<String> guestClosed = new AtomicReference<>();
+            AtomicReference<MatchSetup> guestView = new AtomicReference<>();
+
+            MatchClient host = MatchClient.join("localhost", port, SeatConfig.of("Ann"),
+                    MatchClient.Callbacks.none());
+            MatchClient guest = MatchClient.join("localhost", port, SeatConfig.of("Bo"),
+                    new MatchClient.Callbacks(guestView::set, null, null, null, guestClosed::set));
+            waitUntil(() -> guestView.get() != null && guestView.get().seats().size() == 2, 3000);
+
+            host.close();
+            waitUntil(() -> guestClosed.get() != null, 3000);
+            check("the guest was told the lobby closed", guestClosed.get() != null);
+            check("the reason names the host",
+                    guestClosed.get() != null && guestClosed.get().contains("host"));
+            check("the lobby is empty", server.getSetup().seats().isEmpty());
+            check("nothing was started", !server.isStarted());
+
+            guest.close();
+        }
+    }
+
+    /** A guest leaving is survivable, and the lobby seats up to four. */
+    private static void fourPlayerLobby() throws Exception {
+        try (MatchServer server = new MatchServer(0, 41L, DeckType.STANDARD, 4, false)) {
+            server.listen();
+            int port = server.getPort();
+            AtomicReference<MatchSetup> view = new AtomicReference<>();
+            CountDownLatch started = new CountDownLatch(4);
+
+            MatchClient host = MatchClient.join("localhost", port, SeatConfig.of("Ann"),
+                    new MatchClient.Callbacks(view::set, started::countDown, null, null));
+            MatchClient b = MatchClient.join("localhost", port, SeatConfig.of("Bo"),
+                    new MatchClient.Callbacks(null, started::countDown, null, null));
+            MatchClient c = MatchClient.join("localhost", port, SeatConfig.of("Cy"),
+                    new MatchClient.Callbacks(null, started::countDown, null, null));
+            MatchClient d = MatchClient.join("localhost", port, SeatConfig.of("Di"),
+                    new MatchClient.Callbacks(null, started::countDown, null, null));
+
+            waitUntil(() -> view.get() != null && view.get().seats().size() == 4, 3000);
+            checkInt("four players seat", view.get().seats().size(), 4);
+
+            host.begin();
+            check("a four-player match starts", started.await(5, TimeUnit.SECONDS));
+            checkInt("the match has four seats", host.getLocalHost().getMatch().getSeats().size(), 4);
+
+            host.close(); b.close(); c.close(); d.close();
+        }
+    }
+
+    /** A guest leaving before the start frees its seat and moves the rest up. */
+    private static void guestLeavingReseats() throws Exception {
+        try (MatchServer server = new MatchServer(0, 51L, DeckType.STANDARD, 4, false)) {
+            server.listen();
+            int port = server.getPort();
+            AtomicReference<MatchSetup> view = new AtomicReference<>();
+
+            MatchClient host = MatchClient.join("localhost", port, SeatConfig.of("Ann"),
+                    new MatchClient.Callbacks(view::set, null, null, null));
+            MatchClient b = MatchClient.join("localhost", port, SeatConfig.of("Bo"), MatchClient.Callbacks.none());
+            MatchClient c = MatchClient.join("localhost", port, SeatConfig.of("Cy"), MatchClient.Callbacks.none());
+            waitUntil(() -> view.get() != null && view.get().seats().size() == 3, 3000);
+
+            b.close();
+            waitUntil(() -> view.get().seats().size() == 2, 3000);
+            checkInt("the roster shrank", view.get().seats().size(), 2);
+            check("the remaining guest moved up", view.get().seats().get(1).name().equals("Cy"));
+            check("the host is unaffected", host.isHost() && !server.isStarted());
+
+            host.close(); c.close();
         }
     }
 

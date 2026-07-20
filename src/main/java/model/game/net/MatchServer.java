@@ -33,9 +33,11 @@ import java.util.List;
  *   C-&gt;S  JOIN&lt;TAB&gt;name:SLEEVE:STAKE     announce this seat's loadout (first line a client sends)
  *   S-&gt;C  SEAT&lt;TAB&gt;n                     your seat index; n=0 is the host
  *   S-&gt;*  LOBBY&lt;TAB&gt;&lt;setup&gt;              the roster so far, re-sent on every change
+ *   C-&gt;S  LOADOUT&lt;TAB&gt;SLEEVE:STAKE       change your own sleeve/stake; lobby only
  *   C-&gt;S  DECK&lt;TAB&gt;NAME                  host only: change the table's deck
  *   C-&gt;S  BEGIN                          host only: start the match with whoever is seated
  *   S-&gt;*  START&lt;TAB&gt;&lt;setup&gt;              build this match and start; the lobby is closed
+ *   S-&gt;*  CLOSED&lt;TAB&gt;reason              the lobby is gone (the host left); everyone is disconnected
  * </pre>
  * Match: clients send action lines ({@link ActionCodec}) and receive {@code SEQ<n>\t<action-line>} for every
  * accepted action, plus {@code ERR\t<reason>} for their own rejections. State is never pushed — clients derive
@@ -131,6 +133,18 @@ public final class MatchServer implements AutoCloseable {
             if (autoStart && clients.size() >= seatCap) begin();
             return true;
         }
+        if (line.startsWith("LOADOUT\t")) {
+            // A seat may re-pick its own sleeve and stake right up until the match starts, but never its name
+            // or anyone else's loadout — the seat it edits is the one the line arrived on.
+            try {
+                SeatConfig picked = MatchSetup.parseSeats(from.config.name() + ":" + line.substring("LOADOUT\t".length())).get(0);
+                from.config = picked;
+                broadcastLobby();
+            } catch (IllegalArgumentException e) {
+                from.send("ERR\t" + e.getMessage());
+            }
+            return true;
+        }
         if (line.startsWith("DECK\t")) {
             if (from.id.seat() != 0) { from.send("ERR\tonly the host chooses the deck"); return true; }
             try {
@@ -163,17 +177,22 @@ public final class MatchServer implements AutoCloseable {
     private void broadcast(String line) { for (ClientLink c : clients) c.send(line); }
 
     /**
-     * Handles a client's stream ending, however it ended. During the lobby the seat is simply removed and the
-     * roster re-broadcast. Once the match is running the seat cannot be removed — seat indices are baked into
-     * every logged action — so the departure is submitted as a {@link Action.PlayerLeft} and broadcast like any
-     * other action. That is what keeps the replays identical: every client learns of the drop at the same point
-     * in the same log, rather than each noticing its own socket at its own time.
+     * Handles a client's stream ending, however it ended. During the lobby a guest is simply removed and the
+     * roster re-broadcast — but the <em>host</em> leaving takes the lobby with it, since the lobby only exists
+     * inside the host's process; the guests are told and sent back to their menus rather than left staring at a
+     * roster that can never start.
+     *
+     * <p>Once the match is running the seat cannot be removed — seat indices are baked into every logged action
+     * — so the departure is submitted as a {@link Action.PlayerLeft} and broadcast like any other action. That is
+     * what keeps the replays identical: every client learns of the drop at the same point in the same log,
+     * rather than each noticing its own socket at its own time.
      */
     private synchronized void depart(ClientLink link) {
         if (!link.seated) return;   // already departed
         link.seated = false;
 
         if (host == null) {
+            if (link.id.seat() == 0) { closeLobby("the host left"); return; }
             clients.remove(link);
             reseat();
             broadcastLobby();
@@ -187,6 +206,16 @@ public final class MatchServer implements AutoCloseable {
             // already recorded as gone, or the match is over — either way there is nothing to announce
         }
         link.close();
+    }
+
+    /** Tears the lobby down, telling every remaining guest why before dropping them. */
+    private synchronized void closeLobby(String reason) {
+        for (ClientLink c : clients) {
+            if (c.seated) c.send("CLOSED\t" + reason);
+            c.seated = false;
+        }
+        for (ClientLink c : clients) c.close();
+        clients.clear();
     }
 
     /** Lobby only: re-indexes the remaining seats so they stay 0..n-1 with the earliest arrival hosting. */

@@ -32,6 +32,9 @@ final class Menu {
 
     private static final int NAME_LIMIT = 16, ADDRESS_LIMIT = 40;
 
+    /** Matches the model's own limits ({@code Match.createSeated} seats 2-4). */
+    private static final int MIN_PLAYERS = 2, MAX_PLAYERS = 4;
+
     Mode mode = Mode.MAIN;
     Focus focus = Focus.NONE;
 
@@ -48,7 +51,7 @@ final class Menu {
     String status = "";
 
     /** Set by GameClient: what the buttons actually do. */
-    Runnable onHost, onJoin, onBegin, onLeave;
+    Runnable onHost, onJoin, onBegin, onLeave, onLoadoutChange;
     java.util.function.Consumer<DeckType> onDeckChange;
 
     /** This player's choices, sanitized for the wire (the name is typed, so it cannot be trusted raw). */
@@ -79,99 +82,123 @@ final class Menu {
         if (!status.isEmpty()) ui.r.textCenter(status, Ui.W / 2.0, Ui.H - 28, 13, status.startsWith("ERR") ? RED : DIM);
     }
 
+    /** The main menu is only identity and connection; the loadout is picked in the lobby, where others can see it. */
     private void renderMain(Ui ui) {
         Renderer r = ui.r;
-        r.textCenterBold("BALATRY", Ui.W / 2.0, 96, 64, ORANGE);
-        r.textCenter("a multiplayer Balatro", Ui.W / 2.0, 140, 15, DIM);
+        r.textCenterBold("BALATRY", Ui.W / 2.0, 150, 76, ORANGE);
+        r.textCenter("a multiplayer Balatro", Ui.W / 2.0, 202, 16, DIM);
 
-        double pw = 560, px = (Ui.W - pw) / 2, py = 186, ph = 448;
+        double pw = 520, px = (Ui.W - pw) / 2, py = 268, ph = 320;
         r.panel(px, py, pw, ph, Color.web("#141517"), EDGE, 14, 3);
 
-        double y = py + 26;
-        r.textLeftBold("YOU", px + 30, y, 13, DIM);
+        double y = py + 28;
+        r.textLeftBold("YOUR NAME", px + 30, y, 13, DIM);
         y += 22;
-        textField(ui, px + 30, y, pw - 60, 40, Focus.NAME, name, "your name");
-        y += 56;
-
-        // The loadout. The deck is the table's, so only the host picks it — a guest inherits whatever the host set.
-        r.textLeftBold("YOUR LOADOUT", px + 30, y, 13, DIM);
-        y += 22;
-        cycler(ui, px + 30, y, pw - 60, "Sleeve", sleeve.displayName(),
-                () -> sleeve = cycle(Sleeve.values(), sleeve, -1), () -> sleeve = cycle(Sleeve.values(), sleeve, 1));
-        r.textCenter(sleeve.description(), px + pw / 2, y + 48, 11, FAINT);
-        y += 68;
-        cycler(ui, px + 30, y, pw - 60, "Stake", stake.displayName(),
-                () -> stake = cycle(Stake.values(), stake, -1), () -> stake = cycle(Stake.values(), stake, 1));
-        r.textCenter(stake.description(), px + pw / 2, y + 48, 11, FAINT);
-        y += 78;
+        textField(ui, px + 30, y, pw - 60, 42, Focus.NAME, name, "your name");
+        y += 66;
 
         r.textLeftBold("PLAY WITH", px + 30, y, 13, DIM);
         y += 22;
-        ui.button(px + 30, y, (pw - 72) / 2, 46, "Host a game", GREEN, INK, run(onHost), true);
-        r.textCenter("others join your address", px + 30 + (pw - 72) / 4, y + 62, 11, FAINT);
-
-        double jx = px + 30 + (pw - 72) / 2 + 12;
-        ui.button(jx, y, (pw - 72) / 2, 46, "Join a game", BLUE, INK, run(onJoin), true);
-        r.textCenter("at the address below", jx + (pw - 72) / 4, y + 62, 11, FAINT);
+        double bw = (pw - 72) / 2;
+        ui.button(px + 30, y, bw, 48, "Host a game", GREEN, INK, run(onHost), true);
+        ui.button(px + 42 + bw, y, bw, 48, "Join a game", BLUE, INK, run(onJoin), true);
+        r.textCenter("others join your address", px + 30 + bw / 2, y + 62, 11, FAINT);
+        r.textCenter("at the address below", px + 42 + bw + bw / 2, y + 62, 11, FAINT);
         y += 80;
 
-        textField(ui, px + 30, y, pw - 60, 38, Focus.ADDRESS, address, "host address");
+        textField(ui, px + 30, y, pw - 60, 40, Focus.ADDRESS, address, "host address");
+        r.textCenter("Sleeve, stake and deck are chosen in the lobby.", px + pw / 2, py + ph - 18, 11, FAINT);
     }
 
     private void renderLobby(Ui ui) {
         Renderer r = ui.r;
-        r.textCenterBold("LOBBY", Ui.W / 2.0, 88, 44, ORANGE);
+        r.textCenterBold("LOBBY", Ui.W / 2.0, 74, 42, ORANGE);
 
-        double pw = 620, px = (Ui.W - pw) / 2, py = 140, ph = 520;
+        double pw = 980, px = (Ui.W - pw) / 2, py = 116, ph = 570;
         r.panel(px, py, pw, ph, Color.web("#141517"), EDGE, 14, 3);
-        ui.button(px + pw - 96, py - 52, 96, 38, host ? "Close" : "Leave", RED, INK, run(onLeave), true);
+        ui.button(px + pw - 100, py - 44, 100, 36, host ? "Close lobby" : "Leave", RED, INK, run(onLeave), true);
 
         if (host) {
-            r.textCenter("Others join at  " + hostAddress, px + pw / 2, py + 28, 15, GREEN);
-            r.textCenter("(same machine: localhost)", px + pw / 2, py + 50, 11, FAINT);
+            r.textCenter("Others join at  " + hostAddress, px + pw / 2, py + 26, 15, GREEN);
+            r.textCenter("(same machine: localhost)", px + pw / 2, py + 46, 11, FAINT);
         } else {
-            r.textCenter("Connected to " + address, px + pw / 2, py + 28, 14, DIM);
-            r.textCenter("waiting for the host to start", px + pw / 2, py + 50, 11, FAINT);
+            r.textCenter("Connected to " + address, px + pw / 2, py + 26, 14, DIM);
+            r.textCenter("waiting for the host to start", px + pw / 2, py + 46, 11, FAINT);
         }
 
-        // The table's deck: the host picks it, everyone plays it.
-        double y = py + 76;
+        double colGap = 30, colW = (pw - 80 - colGap) / 2;
+        double lx = px + 40, rx = lx + colW + colGap, top = py + 74;
+        renderRoster(ui, lx, top, colW);
+        renderLoadout(ui, rx, top, colW);
+
+        List<SeatConfig> seats = seats();
+        boolean canStart = seats.size() >= MIN_PLAYERS;
+        if (host)
+            ui.button(lx, py + ph - 68, pw - 80, 50,
+                    canStart ? "Start the match" : "Need " + MIN_PLAYERS + " players",
+                    canStart ? GREEN : Color.web("#303237"), canStart ? INK : DIM, run(onBegin), canStart);
+        else
+            r.textCenter("The host starts the match.", px + pw / 2, py + ph - 44, 13, DIM);
+    }
+
+    /** The left column: every seated player with the loadout they picked, plus the seats still open. */
+    private void renderRoster(Ui ui, double x, double y, double w) {
+        Renderer r = ui.r;
+        List<SeatConfig> seats = seats();
+        r.textLeftBold("PLAYERS  " + seats.size() + " / " + MAX_PLAYERS, x, y, 13, DIM);
+        y += 24;
+        for (int i = 0; i < MAX_PLAYERS; i++) {
+            if (i < seats.size()) {
+                SeatConfig s = seats.get(i);
+                boolean me = i == seat;
+                r.panel(x, y, w, 56, me ? Color.web("#221d10") : Color.web("#1a1b1f"), me ? ORANGE : EDGE, 10, 2);
+                r.textLeftBold(s.name() + (i == 0 ? "  (host)" : "") + (me ? "  ◄ you" : ""), x + 18, y + 12, 15, INK);
+                r.textLeft(s.sleeve().displayName() + "  ·  " + s.stake().displayName(), x + 18, y + 33, 11, DIM);
+            } else {
+                r.panel(x, y, w, 56, Color.web("#141517"), Color.web("#2a2c31"), 10, 2);
+                r.textCenter(i < MIN_PLAYERS ? "waiting for a player…" : "open seat", x + w / 2, y + 28, 12, FAINT);
+            }
+            y += 64;
+        }
+    }
+
+    /**
+     * The right column: this seat's own sleeve and stake, and the table's deck. Changing a cycler sends the pick
+     * to the server rather than editing local state — the roster everyone sees is the server's, so a choice is
+     * only real once it has been echoed back in a LOBBY frame.
+     */
+    private void renderLoadout(Ui ui, double x, double y, double w) {
+        Renderer r = ui.r;
+        r.textLeftBold("YOUR LOADOUT", x, y, 13, DIM);
+        y += 24;
+        cycler(ui, x, y, w, "Sleeve", sleeve.displayName(),
+                () -> changeSleeve(cycle(Sleeve.values(), sleeve, -1)),
+                () -> changeSleeve(cycle(Sleeve.values(), sleeve, 1)));
+        r.textCenter(sleeve.description(), x + w / 2, y + 62, 11, FAINT);
+        y += 86;
+        cycler(ui, x, y, w, "Stake", stake.displayName(),
+                () -> changeStake(cycle(Stake.values(), stake, -1)),
+                () -> changeStake(cycle(Stake.values(), stake, 1)));
+        r.textCenter(stake.description(), x + w / 2, y + 62, 11, FAINT);
+        y += 100;
+
+        // The deck is the table's: the host picks it, everyone plays it, and everyone sees the current pick.
+        r.textLeftBold("TABLE DECK", x, y, 13, DIM);
+        y += 24;
         if (host) {
-            cycler(ui, px + 40, y, pw - 80, "Table deck", deck.displayName(),
+            cycler(ui, x, y, w, "Deck", deck.displayName(),
                     () -> changeDeck(cycle(DeckType.values(), deck, -1)),
                     () -> changeDeck(cycle(DeckType.values(), deck, 1)));
         } else {
-            r.panel(px + 40, y + 16, pw - 80, 40, Color.web("#1a1b1f"), EDGE, 8, 2);
-            r.textCenterBold("Table deck:  " + deck.displayName(), px + pw / 2, y + 36, 14, DIM);
+            r.textLeftBold("Deck", x, y, 12, FAINT);
+            r.panel(x, y + 16, w, 40, Color.web("#1a1b1f"), EDGE, 8, 2);
+            r.textCenterBold(deck.displayName(), x + w / 2, y + 36, 15, DIM);
+            r.textCenter("the host picks the table's deck", x + w / 2, y + 74, 10, FAINT);
         }
-        r.textCenter(deck.description(), px + pw / 2, y + 70, 11, FAINT);
-        y += 96;
-
-        r.textLeftBold("PLAYERS", px + 40, y, 13, DIM);
-        y += 24;
-        List<SeatConfig> seats = lobby == null ? List.of() : lobby.seats();
-        for (int i = 0; i < seats.size(); i++) {
-            SeatConfig s = seats.get(i);
-            boolean me = i == seat;
-            r.panel(px + 40, y, pw - 80, 52, me ? Color.web("#221d10") : Color.web("#1a1b1f"), me ? ORANGE : EDGE, 10, 2);
-            r.textLeftBold(s.name() + (i == 0 ? "  (host)" : "") + (me ? "  ◄ you" : ""), px + 60, y + 12, 15, INK);
-            r.textLeft(s.sleeve().displayName() + "  ·  " + s.stake().displayName(), px + 60, y + 32, 11, DIM);
-            y += 60;
-        }
-        for (int i = seats.size(); i < 2; i++) {   // a match needs two, so show the empty seat as a prompt
-            r.panel(px + 40, y, pw - 80, 52, Color.web("#141517"), Color.web("#2a2c31"), 10, 2);
-            r.textCenter("waiting for a player…", px + pw / 2, y + 26, 12, FAINT);
-            y += 60;
-        }
-
-        boolean canStart = seats.size() >= 2;
-        if (host)
-            ui.button(px + 40, py + ph - 70, pw - 80, 50,
-                    canStart ? "Start the match" : "Need 2 players", canStart ? GREEN : Color.web("#303237"),
-                    canStart ? INK : DIM, run(onBegin), canStart);
-        else
-            r.textCenter("The host starts the match.", px + pw / 2, py + ph - 45, 13, DIM);
+        r.textCenter(deck.description(), x + w / 2, y + 62, 11, FAINT);
     }
+
+    private List<SeatConfig> seats() { return lobby == null ? List.of() : lobby.seats(); }
 
     // --- widgets -------------------------------------------------------------
 
@@ -198,6 +225,26 @@ final class Menu {
     private void changeDeck(DeckType d) {
         deck = d;
         if (onDeckChange != null) onDeckChange.accept(d);
+    }
+
+    private void changeSleeve(Sleeve s) { sleeve = s; pushLoadout(); }
+
+    private void changeStake(Stake s) { stake = s; pushLoadout(); }
+
+    private void pushLoadout() { if (onLoadoutChange != null) onLoadoutChange.run(); }
+
+    /**
+     * Adopts the server's view of the lobby. The deck especially must come from here rather than from local
+     * state: a guest never picks it, so without this it would sit on its default while the host changed it.
+     */
+    void applyLobby(MatchSetup setup) {
+        lobby = setup;
+        deck = setup.deck();
+        if (seat >= 0 && seat < setup.seats().size()) {
+            SeatConfig mine = setup.seats().get(seat);
+            sleeve = mine.sleeve();
+            stake = mine.stake();
+        }
     }
 
     /** The next value in {@code values} from {@code current}, wrapping in either direction. */

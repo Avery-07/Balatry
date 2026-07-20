@@ -65,6 +65,7 @@ public final class GameClient extends Application {
         menu.onLeave = this::leaveLobby;
         ui.onLeaveMatch = this::leaveLobby;   // the same teardown; from a finished match it just returns to the menu
         menu.onDeckChange = d -> { if (client != null) client.chooseDeck(d); };
+        menu.onLoadoutChange = () -> { if (client != null) client.setLoadout(menu.sleeve, menu.stake); };
 
         Scene scene = new Scene(new StackPane(canvas), Ui.W, Ui.H);
         scene.setOnKeyTyped(e -> { if (!inMatch()) menu.onChar(e.getCharacter()); });
@@ -112,7 +113,7 @@ public final class GameClient extends Application {
     private void connect(Opener opener) {
         if (client != null) return;   // already connected; ignore a double click
         MatchClient.Callbacks callbacks = new MatchClient.Callbacks(
-                setup   -> Platform.runLater(() -> menu.lobby = setup),
+                setup   -> Platform.runLater(() -> menu.applyLobby(setup)),
                 ()      -> Platform.runLater(this::onMatchStarted),
                 action  -> {
                     if (vm == null) return;
@@ -120,7 +121,8 @@ public final class GameClient extends Application {
                     if (action instanceof model.game.actions.Action.PlayerLeft left) announceDeparture(left);
                     vm.onFrameApplied();
                 },
-                err     -> { Log.error(err); Platform.runLater(() -> { menu.status = "ERR: " + err; ui.status = "ERR: " + err; }); });
+                err     -> { Log.error(err); Platform.runLater(() -> { menu.status = "ERR: " + err; ui.status = "ERR: " + err; }); },
+                reason  -> Platform.runLater(() -> onConnectionClosed(reason)));
         try {
             client = opener.open(callbacks);
             menu.seat = client.getSeat().seat();
@@ -130,6 +132,18 @@ public final class GameClient extends Application {
             client = null;
             menu.status = "ERR: could not connect — " + (e.getMessage() == null ? e : e.getMessage());
         }
+    }
+
+    /**
+     * FX thread: the connection ended. In the lobby that means the host closed it — there is nothing left to
+     * wait for, so guests are returned to the menu with the reason. In a live match the local model is still a
+     * complete, finished replay, so the screen is left alone and the loss is reported in the status line.
+     */
+    private void onConnectionClosed(String reason) {
+        if (client == null) return;             // we tore the connection down ourselves; nothing to report
+        if (inMatch()) { ui.status = reason; return; }
+        leaveLobby();
+        menu.status = reason;
     }
 
     /**
