@@ -343,6 +343,20 @@ public final class Run {
         return value;
     }
 
+    /** Reorders the consumable area: the card at {@code from} is reinserted at {@code to}. Pure arrangement. */
+    public void moveConsumable(int from, int to) {
+        if (from < 0 || from >= consumables.size() || to < 0 || to >= consumables.size())
+            throw new IllegalArgumentException("move " + from + " -> " + to + " out of range (" + consumables.size() + " consumables)");
+        consumables.add(to, consumables.remove(from));
+    }
+
+    /** Reorders the relic area: the card at {@code from} is reinserted at {@code to}. Pure arrangement. */
+    public void moveRelic(int from, int to) {
+        if (from < 0 || from >= relics.size() || to < 0 || to >= relics.size())
+            throw new IllegalArgumentException("move " + from + " -> " + to + " out of range (" + relics.size() + " relics)");
+        relics.add(to, relics.remove(from));
+    }
+
     /** Uses the consumable at {@code index} with no selected targets. */
     public void useConsumable(int index) { useConsumable(index, List.of()); }
 

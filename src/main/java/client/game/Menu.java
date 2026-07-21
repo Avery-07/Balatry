@@ -77,9 +77,36 @@ final class Menu {
 
     // --- rendering -----------------------------------------------------------
 
+    /** Screen-entry animation: the content slides up and settles as a mode opens (the fade covers the switch). */
+    private final client.engine.Tween slide = new client.engine.Tween(0, 0.35, client.engine.Easing.EASE_OUT_CUBIC);
+
+    /** Switches screens through the entry animation; use this instead of assigning {@code mode} directly. */
+    void enterMode(Mode m) {
+        mode = m;
+        focus = Focus.NONE;
+        slide.snap(46);   // start low…
+        slide.retarget(0);   // …and glide up into place
+    }
+
+    void advance(double dt) { slide.advance(dt); }
+
     void render(Ui ui) {
+        ui.r.gc().save();
+        ui.r.gc().translate(0, slide.value());
         if (mode == Mode.MAIN) renderMain(ui); else renderLobby(ui);
+        ui.r.gc().restore();
+        // The clickable regions registered above moved with the translate; shift them back into screen space.
+        if (slide.value() != 0) shiftRegions(ui, slide.value());
         if (!status.isEmpty()) ui.r.textCenter(status, Ui.W / 2.0, Ui.H - 28, 13, status.startsWith("ERR") ? RED : DIM);
+    }
+
+    /** While the slide runs, hitboxes must match what the eye sees, not the un-translated layout. */
+    private void shiftRegions(Ui ui, double dy) {
+        for (int i = 0; i < ui.buttons.size(); i++) {
+            Ui.Btn b = ui.buttons.get(i);
+            ui.buttons.set(i, new Ui.Btn(new client.engine.Layout.Rect(
+                    b.rect().x(), b.rect().y() + dy, b.rect().w(), b.rect().h()), b.action()));
+        }
     }
 
     /** The main menu is only identity and connection; the loadout is picked in the lobby, where others can see it. */

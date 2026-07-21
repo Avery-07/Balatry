@@ -15,7 +15,7 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   separate server is needed. A lobby seats **2-4**. To play locally, run
   `mvn javafx:run` twice: host in the first window, join `localhost` in the second, then Start in the first.
   `mvn exec:java@server` still runs a headless dedicated server that auto-starts when its seats fill.
-- 29 harnesses currently pass.
+- 30 harnesses currently pass.
 
 ## Critical working conventions (read these)
 
@@ -145,6 +145,41 @@ model.*  (pure game logic, deterministic, fully tested)
      hint). Covered in `TarotTests.targetRequirements`.
    - **Pack names fixed**: `BoosterPack` had no `toString`, so shop tiles showed object hashes. Now
      `displayName()` ("Mega Arcana Pack").
+   **Round 3 (user-reported fixes), done:**
+   - **Editions everywhere**: hand-card labels carry the edition (`<FOIL>` marker in `describe`), and the card
+     tooltip reads it; held consumables/relics gained a badge (`ItemView.badge`) shown in their tooltip.
+   - **Joker live state in the tooltip**: `JokerSpec.state(Function<JokerCard,String>)` (builder) +
+     `stateOf(card)`. Annotated: Mail-In Rebate (rank), To Do List (hand), Ancient Joker (suit), The Idol (card),
+     Ice Cream / Popcorn (decay left), Green Joker / Ride the Bus / Castle / Siamese Cat (bonus), Ramen (Xmult).
+     Un-annotated jokers with a non-zero counter fall back to "Value: n"; zero shows nothing. Ships as
+     `JokerView.state`.
+   - **Deck view is the real deck**: one drawn card per physical card (destroyed = absent, created = visible,
+     duplicates side by side, rows overlap when fat); **live = still in the draw pile**, so held cards grey out
+     too. NOTE: the model package rename `model.cards` → `model.items` happened this session (user side).
+   **Round 4 (animation pass), done — all drawing unverified as usual:**
+   - **Menu transitions**: `client.engine.Fader` (fade-to-black, switch exactly once at full black, fade out);
+     `GameClient` routes every screen switch through it (menu→lobby, lobby→match, back to menu). Menus also
+     slide up on entry (`Menu.enterMode` + a Tween; hitboxes are shifted to match during the slide).
+   - **Permanent card animation**: `client.engine.Idle` — pure (time, seed) sway/bob; hand cards sway ±1.4°
+     and bob ±2px, joker/consumable tiles bob, all de-phased by seed so rows ripple.
+   - **Face-down cards + flip**: the four hiding bosses (House / Wheel / Fish / Mark) are **implemented in the
+     model** (`BossBlind.hide*` flags, `Round.maybeFaceDown` + `isFaceDown`). The Wheel's roll is salted by a
+     **round-local draw counter, never `DeckCard.id`** (ids are a JVM-global counter that UI throwaway cards
+     also advance — not replay-safe). The snapshot **masks** hidden cards (rank/suit −1, blank label) so no
+     tooltip/sort/preview can leak them. `CardEntity` carries a flip tween (0.28s, squash through edge-on);
+     `Renderer.card(..., flipT)` draws the back past the midpoint — vector back now, deck texture hook
+     (`backSheet`) ready. Covered by `FaceDownTests`.
+   - **Drag & drop — one grammar for the whole table**: press-move-release with a 7px threshold (clicks still
+     work; a finished drag swallows its click). Hand cards drag as themselves (`Hand.manualRank` commits the
+     visual order; Sort buttons and manual drag cancel each other). **Every tile row is a retained
+     `client.engine.TileRow`** (tested): jokers, consumables/relics, and all three shop shelves. Tiles match
+     across frames by **`Card.id`** (new: a cosmetic JVM-global id on the `Card` base — NEVER use it as an RNG
+     salt, see the field note), so a reorder broadcast *slides* tiles instead of teleporting. Dragging parts the
+     row around the held tile; release in the row's band submits `MoveJoker`/`MoveConsumable`/`MoveRelic`
+     (consumables and relics only reorder within their own class); any invalid drop just glides back — no
+     special case, the layout retargets every tile every frame. **Shop tiles have no drop target by design**:
+     they lift and glide home, purely for feel consistency. Sold shop slots render as static holes outside the
+     row; `Ui` owns the five rows (Hud/ShopScreen lay out + draw, GameClient routes input).
 5. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would allow Balatro-style skipping.
 6. **Implement the ~35 stub jokers** (24 base-game + Merchant/The Void + 9 multiplayer ones needing engine events).
 7. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`

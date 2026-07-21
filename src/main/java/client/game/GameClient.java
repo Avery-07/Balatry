@@ -3,6 +3,7 @@ package client.game;
 import client.MatchSnapshot;
 import client.MatchViewModel;
 import client.engine.CardEntity;
+import client.engine.TileRow;
 import debug.Log;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -20,6 +21,7 @@ import model.game.net.MatchClient;
 import model.game.net.MatchServer;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,6 +41,7 @@ public final class GameClient extends Application {
     private final Map<MatchPhase, Screen> screens = new EnumMap<>(MatchPhase.class);
 
     private final Menu menu = new Menu();
+    private final client.engine.Fader fader = new client.engine.Fader();
     private MatchClient client;
     private HostedMatch hosted;      // non-null when this client is the one hosting
     private MatchViewModel vm;
@@ -53,6 +56,9 @@ public final class GameClient extends Application {
         loadAssets();
         canvas.setOnMouseClicked(e -> handleClick(e.getX(), e.getY()));
         canvas.setOnMouseMoved(e -> { ui.mouseX = e.getX(); ui.mouseY = e.getY(); });
+        canvas.setOnMousePressed(e -> handlePress(e.getX(), e.getY()));
+        canvas.setOnMouseDragged(e -> { ui.mouseX = e.getX(); ui.mouseY = e.getY(); handleDrag(e.getX(), e.getY()); });
+        canvas.setOnMouseReleased(e -> handleRelease(e.getX(), e.getY()));
 
         screens.put(MatchPhase.SELECTION, new SelectionScreen());
         screens.put(MatchPhase.BLIND, new BlindScreen());
@@ -82,6 +88,13 @@ public final class GameClient extends Application {
                 lastNanos = now;
                 hand.advance(dt);
                 hud.advance(dt);
+                menu.advance(dt);
+                fader.advance(dt);
+                ui.jokerRow.advance(dt);
+                ui.itemRow.advance(dt);
+                ui.shopSlotRow.advance(dt);
+                ui.shopVoucherRow.advance(dt);
+                ui.shopPackRow.advance(dt);
                 render();
             }
         }.start();
@@ -89,6 +102,96 @@ public final class GameClient extends Application {
 
     /** Whether a match is live; until then the menu owns the screen, the keyboard and the clicks. */
     private boolean inMatch() { return client != null && client.isStarted(); }
+
+    // --- drag & drop --------------------------------------------------------
+    // One grammar for the whole table: hand cards, jokers, inventory items and shop tiles all lift with the
+    // cursor and glide. The hand manages its own entities; every tile row is a Ui.TileRow. A drop either lands
+    // (a move is submitted) or doesn't (the next layout simply sends the tile back — no special case).
+
+    private static final double DRAG_THRESHOLD = 7;   // pixels of travel before a press becomes a drag
+
+    private double pressX, pressY;
+    private String pressKind;      // what the press landed on: "hand" or a row name, or null
+    private String dragKind;       // the active drag, once the threshold is crossed
+    private int dragFrom = -1;     // the dragged tile's model index (rows), set at beginDrag
+    private boolean suppressClick; // a completed drag must not also fire as a click
+
+    /** Records what the press landed on; nothing moves until the cursor travels past the threshold. */
+    private void handlePress(double x, double y) {
+        pressX = x; pressY = y;
+        pressKind = null;
+        if (!inMatch() || ui.s == null || ui.s.opening() != null || ui.showRunInfo) return;
+
+        if (ui.s.phase() == MatchPhase.BLIND && hand.cardAt(x, y) != null) { pressKind = "hand"; return; }
+        if (ui.jokerRow.tileAt(x, y) != -1) { pressKind = "joker"; return; }
+        if (ui.itemRow.tileAt(x, y) != -1)  { pressKind = "item"; return; }
+        if (ui.s.inShop()) {
+            if (ui.shopSlotRow.tileAt(x, y) != -1)    { pressKind = "shopSlot"; return; }
+            if (ui.shopVoucherRow.tileAt(x, y) != -1) { pressKind = "shopVoucher"; return; }
+            if (ui.shopPackRow.tileAt(x, y) != -1)    { pressKind = "shopPack"; }
+        }
+    }
+
+    /** Once the cursor travels far enough, the press becomes a drag; from then on the drag owns the cursor. */
+    private void handleDrag(double x, double y) {
+        if (dragKind == null && pressKind != null
+                && Math.hypot(x - pressX, y - pressY) > DRAG_THRESHOLD) {
+            if (pressKind.equals("hand")) {
+                if (hand.beginDrag(pressX, pressY)) dragKind = "hand";
+            } else {
+                TileRow row = rowFor(pressKind);
+                dragFrom = row.beginDrag(pressX, pressY);
+                if (dragFrom != -1) dragKind = pressKind;
+            }
+            pressKind = null;
+        }
+        if (dragKind == null) return;
+        if (dragKind.equals("hand")) hand.dragTo(x, y);
+        else rowFor(dragKind).dragTo(x, y);
+    }
+
+    /**
+     * Ends a drag. The hand commits its new order; the joker and item rows submit a move when the drop lands in
+     * their band (an invalid drop just glides back, since the layout retargets every tile every frame); the shop
+     * rows have nowhere to be dragged to, so their tiles always glide home.
+     */
+    private void handleRelease(double x, double y) {
+        if (dragKind == null) { pressKind = null; return; }
+        suppressClick = true;
+        switch (dragKind) {
+            case "hand" -> hand.endDrag();
+            case "joker" -> {
+                int slot = ui.jokerRow.endDrag(x, y);
+                if (slot != -1 && slot != dragFrom) vm.moveJoker(dragFrom, slot);
+            }
+            case "item" -> dropItem(ui.itemRow.endDrag(x, y));
+            default -> rowFor(dragKind).endDrag(x, y);   // shop shelves: lift, release, glide home
+        }
+        dragKind = null; dragFrom = -1;
+    }
+
+    /**
+     * An inventory drop: consumables reorder among consumables, relics among relics — the two share the display
+     * row but live in different model lists, so a cross-class drop just glides back with a hint.
+     */
+    private void dropItem(int slot) {
+        if (slot == -1 || slot == dragFrom || slot >= ui.s.inventory().size()) return;
+        MatchSnapshot.ItemView from = ui.s.inventory().get(dragFrom);
+        MatchSnapshot.ItemView to = ui.s.inventory().get(slot);
+        if (to.isRelic() != from.isRelic()) { ui.status = "Consumables and relics keep to their own areas."; return; }
+        if (from.isRelic()) vm.moveRelic(from.modelIndex(), to.modelIndex());
+        else vm.moveConsumable(from.modelIndex(), to.modelIndex());
+    }
+
+    private TileRow rowFor(String kind) {
+        return switch (kind) {
+            case "joker"       -> ui.jokerRow;
+            case "item"        -> ui.itemRow;
+            case "shopSlot"    -> ui.shopSlotRow;
+            case "shopVoucher" -> ui.shopVoucherRow;
+            default            -> ui.shopPackRow;
+        };
+    }
 
     /** Opens a lobby in this process and joins it as seat 0, so this player picks who plays and when to start. */
     private void hostGame() {
@@ -128,7 +231,7 @@ public final class GameClient extends Application {
         try {
             client = opener.open(callbacks);
             menu.seat = client.getSeat().seat();
-            menu.mode = Menu.Mode.LOBBY;
+            fader.start(() -> menu.enterMode(Menu.Mode.LOBBY));
             menu.status = "";
         } catch (Exception e) {
             client = null;
@@ -157,12 +260,14 @@ public final class GameClient extends Application {
         Platform.runLater(() -> ui.status = who + " left the match.");
     }
 
-    /** FX thread: the server closed the lobby and everyone has built the same match. */
+    /** FX thread: the server closed the lobby and everyone has built the same match — fade into it. */
     private void onMatchStarted() {
-        vm = new MatchViewModel(client);
-        ui.vm = vm;
-        vm.snapshotProperty().addListener((o, old, snap) -> { if (snap != null) onSnapshot(snap); });
-        vm.refresh();
+        fader.start(() -> {
+            vm = new MatchViewModel(client);
+            ui.vm = vm;
+            vm.snapshotProperty().addListener((o, old, snap) -> { if (snap != null) onSnapshot(snap); });
+            vm.refresh();
+        });
     }
 
     /** Opens a connection; separated so hosting and joining share the callback wiring and error handling. */
@@ -175,18 +280,20 @@ public final class GameClient extends Application {
      * everyone else replays, so there is no separate "goodbye" message to get lost.
      */
     private void leaveLobby() {
-        shutdown();
-        client = null;
-        hosted = null;
-        vm = null;
-        ui.vm = null;
-        ui.s = null;
-        ui.status = "";
-        menu.mode = Menu.Mode.MAIN;
-        menu.lobby = null;
-        menu.host = false;
-        menu.seat = -1;
-        menu.status = "";
+        fader.start(() -> {
+            shutdown();
+            client = null;
+            hosted = null;
+            vm = null;
+            ui.vm = null;
+            ui.s = null;
+            ui.status = "";
+            menu.enterMode(Menu.Mode.MAIN);
+            menu.lobby = null;
+            menu.host = false;
+            menu.seat = -1;
+            menu.status = "";
+        });
     }
 
     private void shutdown() {
@@ -207,7 +314,7 @@ public final class GameClient extends Application {
     private void render() {
         ui.newFrame();
         paintFelt();
-        if (!inMatch()) { menu.render(ui); return; }          // menu and lobby own the screen until the match begins
+        if (!inMatch()) { menu.render(ui); drawFade(); return; }   // menu and lobby own the screen until the match begins
         if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
 
         double cx = Ui.PAD + Ui.SIDEBAR + 18;
@@ -230,6 +337,16 @@ public final class GameClient extends Application {
         // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
         if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
         else overlays.tooltip(ui);
+
+        drawFade();
+    }
+
+    /** The fade-to-black transition overlay; the screen switch itself happens inside the Fader at full black. */
+    private void drawFade() {
+        double a = fader.alpha();
+        if (a <= 0) return;
+        r.gc().setFill(javafx.scene.paint.Color.web("#000000", a));
+        r.gc().fillRect(0, 0, Ui.W, Ui.H);
     }
 
     private void paintFelt() {
@@ -240,6 +357,7 @@ public final class GameClient extends Application {
     }
 
     private void handleClick(double x, double y) {
+        if (suppressClick) { suppressClick = false; return; }   // this click was the tail end of a drag
         if (!inMatch()) {   // menu/lobby: only the widgets it registered this frame are live
             for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
             menu.focus = Menu.Focus.NONE;   // clicked outside every field — drop the caret

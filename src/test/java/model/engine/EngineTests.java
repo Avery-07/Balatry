@@ -3,9 +3,12 @@ package model.engine;
 import client.engine.CardEntity;
 import client.engine.Counter;
 import client.engine.Easing;
+import client.engine.Fader;
+import client.engine.Idle;
 import client.engine.Layout;
 import client.engine.Motion;
 import client.engine.Reconciler;
+import client.engine.TileRow;
 import client.engine.Tween;
 
 import java.util.ArrayList;
@@ -29,6 +32,11 @@ public final class EngineTests {
         hitTest();
         reconcile();
         counter();
+        flip();
+        drag();
+        fader();
+        idle();
+        tileRow();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -163,6 +171,116 @@ public final class EngineTests {
         c.snap(0);
         near("snap jumps with no glide", c.displayed(), 0);
         near("snap kills the pop", c.popScale(), 1);
+    }
+
+    /** The card flip: face-up at rest, edge-on at the midpoint, showing its back past it. */
+    private static void flip() {
+        CardEntity e = new CardEntity(1, 5, 2, "x", 0, 0, 0.2, Easing.LINEAR);
+        near("a card starts face up", e.flipT(), 0);
+        check("and shows its face", !e.showsBack());
+        near("its squash is full width at rest", e.flipScaleX(), 1);
+
+        e.setFaceDown(true);
+        e.advance(0.17);   // clearly past the flip's midpoint (0.28s total, eased)
+        check("past the midpoint it shows the back", e.showsBack());
+        check("and is squashed thin", e.flipScaleX() < 0.5);
+        e.advance(1);
+        near("it lands fully face down", e.flipT(), 1);
+        near("at full width again", e.flipScaleX(), 1);
+
+        e.setFaceDown(false);
+        e.advance(1);
+        check("and flips back up", !e.showsBack() && e.flipT() == 0);
+    }
+
+    /** Dragging: the player's hand overrides the layout, and release hands control back. */
+    private static void drag() {
+        CardEntity e = new CardEntity(2, 0, 0, "x", 100, 100, 0.2, Easing.LINEAR);
+        e.beginDrag();
+        e.dragTo(300, 250);
+        near("a held card snaps to the cursor", e.x(), 300);
+        e.moveTo(50, 50);   // the layout tries to place it — and must be ignored
+        near("the layout cannot move a held card", e.x(), 300);
+
+        e.endDrag();
+        e.moveTo(50, 50);
+        e.advance(5);
+        near("after release the layout owns it again", e.x(), 50);
+    }
+
+    /** The fade-to-black transition: dark, switch exactly once at full black, then back to clear. */
+    private static void fader() {
+        Fader f = new Fader();
+        near("idle is transparent", f.alpha(), 0);
+
+        int[] switched = {0};
+        f.start(() -> switched[0]++);
+        check("starting activates it", f.active());
+        f.advance(0.11);   // halfway into the 0.22s fade-in
+        check("it darkens", f.alpha() > 0.3);
+        checkInt("the switch has not fired yet", switched[0], 0);
+        f.advance(0.2);    // past full black: switch fires, fade-out begins
+        checkInt("the switch fired exactly once", switched[0], 1);
+        f.advance(0.5);
+        check("it ends transparent and idle", f.alpha() == 0 && !f.active());
+        f.advance(1);
+        checkInt("and never fires again", switched[0], 1);
+    }
+
+    /** The idle sway is bounded, seed-de-phased, and deterministic in time. */
+    private static void idle() {
+        boolean bounded = true;
+        for (double t = 0; t < 20; t += 0.37)
+            if (Math.abs(Idle.swayDeg(t, 7, 1.5)) > 1.5 || Math.abs(Idle.bobPx(t, 7, 2)) > 2) bounded = false;
+        check("the sway never exceeds its amplitude", bounded);
+        check("the same instant repeats exactly", Idle.swayDeg(3.2, 5, 1) == Idle.swayDeg(3.2, 5, 1));
+        check("different seeds de-phase", Idle.swayDeg(3.2, 5, 1) != Idle.swayDeg(3.2, 6, 1));
+    }
+
+    /** The retained tile row: slot layout, identity across reorders, drag parting, and drop resolution. */
+    private static void tileRow() {
+        TileRow row = new TileRow(50, 80);
+        row.reconcile(List.of(10, 20, 30));
+        double[] slots = { 100, 160, 220 };
+        row.layout(slots, 400);
+        near("a fresh tile spawns in its slot", row.x(10), 100);
+        near("slots assign in model order", row.x(30), 220);
+
+        // A model reorder keeps the entities: the same tile is told a new slot and glides there.
+        row.reconcile(List.of(30, 10, 20));
+        row.layout(slots, 400);
+        row.advance(5);
+        near("a reordered tile glides to its new slot", row.x(30), 100);
+        near("the displaced tiles shift over", row.x(10), 160);
+
+        // Dragging: the held tile follows the cursor and the display order parts around it.
+        int from = row.beginDrag(160, 400);   // grab the middle slot's tile (id 10 after the reorder)
+        checkInt("beginDrag reports the model index", from, 1);
+        row.dragTo(230, 380);
+        near("the held tile snaps to the cursor", row.x(10), 230);
+        check("display order parts toward the cursor", row.displayOrder().get(2) == 10);
+        row.layout(slots, 400);
+        row.advance(5);
+        near("the layout cannot move a held tile", row.x(10), 230);
+
+        // Release inside the band resolves to the nearest slot; the tile itself just glides wherever next.
+        int slot = row.endDrag(230, 380);
+        checkInt("a drop in the band lands on the nearest slot", slot, 2);
+
+        // Release far outside the band resolves to nowhere — and the next layout glides the tile home.
+        row.beginDrag(100, 400);
+        row.dragTo(600, 700);
+        checkInt("a drop outside the band lands nowhere", row.endDrag(600, 700), -1);
+        row.layout(slots, 400);
+        row.advance(5);
+        near("the refused tile glides back to its slot", row.x(30), 100);
+
+        // A tile the model removed leaves the row; the survivors glide into the tightened slots.
+        row.reconcile(List.of(30, 20));
+        row.layout(new double[] { 100, 160 }, 400);
+        row.advance(5);   // hit-testing tracks animated positions, so let the survivors arrive first
+        checkInt("a removed tile leaves the row", row.count(), 2);
+        checkInt("nothing is under its old spot", row.tileAt(220, 400), -1);
     }
 
     private static void checkInt(String label, int actual, int expected) { check(label + " (" + actual + ")", actual == expected); }

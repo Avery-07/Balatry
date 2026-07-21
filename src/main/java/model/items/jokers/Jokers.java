@@ -157,6 +157,7 @@ public enum Jokers {
     SUPERNOVA("Supernova", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().addMult(run.getStats().getHandPlays(run.getScoring().getHand().type())))),
     RIDE_THE_BUS("Ride the Bus", Rarity.COMMON, 6, b -> b
+            .state(self -> "Current streak: +" + (self.getCounter() >> 1) + " Mult")
             .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) self.setCounter(self.getCounter() | 1); })   // low bit = a scoring face appeared this hand
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 int streak = self.getCounter() >> 1;
@@ -175,7 +176,9 @@ public enum Jokers {
                 if (run.getScoring().getHand().hasStraight()) self.addCounter(15);
                 run.getScoring().addChips(self.getCounter());
             })),
-    ICE_CREAM("Ice Cream", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+    ICE_CREAM("Ice Cream", Rarity.COMMON, 5, b -> b
+            .state(self -> "Chips left: " + Math.max(0, 100 - 5 * self.getCounter()))
+            .on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
                 run.getScoring().addChips(Math.max(0, 100 - 5 * self.getCounter()));
                 self.addCounter(1);
@@ -219,6 +222,7 @@ public enum Jokers {
                 if (faces >= 3) run.addMoney(6);
             })),
     GREEN_JOKER("Green Joker", Rarity.COMMON, 4, b -> b
+            .state(self -> "Current bonus: +" + self.getCounter() + " Mult")
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> { self.addCounter(1); run.getScoring().addMult(self.getCounter()); })
             .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.setCounter(Math.max(0, self.getCounter() - 1)))),
     SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
@@ -231,6 +235,7 @@ public enum Jokers {
                 }
             })),
     TO_DO_LIST("To Do List", Rarity.COMMON, 4, b -> b
+            .state(self -> "Listed hand this round: " + handTypeName(self.getCounter()))
             .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(HandType.values().length)))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (run.getScoring().getHand().type().ordinal() == self.getCounter()) run.addMoney(4); })),
 
@@ -329,6 +334,7 @@ public enum Jokers {
     RESERVED_PARKING("Reserved Parking", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HELD_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),   // new: $2
     MAIL_IN_REBATE("Mail-In Rebate", Rarity.COMMON, 4, b -> b
+            .state(self -> "Rebate rank this round: " + rankName(self.getCounter()))
             .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(Rank.values().length)))
             .on(Trigger.ON_HAND_DISCARDED, (run, self) -> {
                 int n = 0;
@@ -363,12 +369,15 @@ public enum Jokers {
     FLASH_CARD("Flash Card", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().addMult(2L * run.getStats().getRerolls()))),
     POPCORN("Popcorn", Rarity.COMMON, 5, b -> b
+            .state(self -> "Mult left: " + Math.max(0, 20 - 4 * self.getCounter()))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(Math.max(0, 20 - 4 * self.getCounter())))
             .on(Trigger.ON_ROUND_END, (run, self) -> self.addCounter(1))),
     ANCIENT_JOKER("Ancient Joker", Rarity.RARE, 8, b -> b
+            .state(self -> self.getCounter() > 0 ? "Suit this round: " + suitIndexName(self.getCounter() - 1) : "Suit chosen at round start")
             .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(4) + 1))
             .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && self.getCounter() > 0 && matchesSuit(c, self.getCounter() - 1)) run.getScoring().multiplyMult(x("1.5")); })),
     RAMEN("Ramen", Rarity.UNCOMMON, 6, b -> b
+            .state(self -> "Current mult: X" + new BigDecimal("2").subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(self.getCounter()))).max(BigDecimal.ZERO))
             .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.addCounter(run.getLastDiscarded().size()))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 BigDecimal mult = x("2").subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(self.getCounter())));
@@ -378,7 +387,9 @@ public enum Jokers {
     // Jokers 101-105  (skipped : 102 Seltzer)
     WALKIE_TALKIE("Walkie Talkie", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.TEN || c.getRank() == Rank.FOUR)) { run.getScoring().addChips(10); run.getScoring().addMult(4); } })),
-    CASTLE("Castle", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+    CASTLE("Castle", Rarity.UNCOMMON, 6, b -> b
+            .state(self -> "Current bonus: +" + self.getCounter() + " Chips")
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 if (run.getScoring().getHand().hasFlush() && run.getScoring().getHand().playedCount() == 5)
                     self.addCounter(run.getScoring().getHand().playedCount());
                 run.getScoring().addChips(self.getCounter());
@@ -461,6 +472,7 @@ public enum Jokers {
 
     // Jokers 126-130  (skipped : 126 Oops! All 6s)
     THE_IDOL("The Idol", Rarity.UNCOMMON, 6, b -> b
+            .state(self -> "Idolized card this round: " + rankName(self.getCounter() / 4) + " of " + suitIndexName(self.getCounter() % 4))
             .on(Trigger.ON_ROUND_START, (run, self) -> {
                 RandomGenerator g = gen(run, RngSource.MISC);
                 self.setCounter(g.nextInt(Rank.values().length) * 4 + g.nextInt(4));
@@ -471,7 +483,9 @@ public enum Jokers {
                     run.getScoring().multiplyMult(x("2"));
             })),
     // Siamese Cat (#98, formerly Spare Trousers): placed here where Seeing Double (removed) used to sit.
-    SIAMESE_CAT("Siamese Cat", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+    SIAMESE_CAT("Siamese Cat", Rarity.UNCOMMON, 6, b -> b
+            .state(self -> "Current bonus: +" + self.getCounter() + " Mult")
+            .on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
                 if (run.getScoring().getHand().hasTwoPair()) self.addCounter(2);
                 run.getScoring().addMult(self.getCounter());
@@ -926,6 +940,33 @@ public enum Jokers {
     // --- effect helpers ---
 
     private enum Suit { SPADE, HEART, CLUB, DIAMOND }
+
+    // --- tooltip state helpers (feed JokerSpec.stateOf; keep these words readable, they face the player) ---
+
+    /** "King" from a {@code Rank} ordinal. */
+    private static String rankName(int ord) {
+        String[] names = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King", "Ace" };
+        return ord >= 0 && ord < names.length ? names[ord] : "?";
+    }
+
+    /** "Spades" from the matchesSuit index (0=spade,1=heart,2=club,3=diamond). */
+    private static String suitIndexName(int idx) {
+        return switch (idx) { case 0 -> "Spades"; case 1 -> "Hearts"; case 2 -> "Clubs"; default -> "Diamonds"; };
+    }
+
+    /** "Four of a Kind" from a {@code HandType} ordinal. */
+    private static String handTypeName(int ord) {
+        if (ord < 0 || ord >= HandType.values().length) return "?";
+        String[] words = HandType.values()[ord].name().toLowerCase().split("_");
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            String w = words[i];
+            if (i > 0) out.append(' ');
+            if (i > 0 && (w.equals("of") || w.equals("a"))) out.append(w);
+            else out.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+        }
+        return out.toString();
+    }
 
     private static DeckCard scored(model.game.player.Run run) {
         return run.getScoring().getCurrentScoredCard();

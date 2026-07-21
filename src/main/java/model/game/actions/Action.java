@@ -31,6 +31,8 @@ public sealed interface Action {
     record SellConsumable(PlayerId actor, int index) implements Action { }
     record SellRelic(PlayerId actor, int index) implements Action { }
     record MoveJoker(PlayerId actor, int from, int to) implements Action { }
+    record MoveConsumable(PlayerId actor, int from, int to) implements Action { }
+    record MoveRelic(PlayerId actor, int from, int to) implements Action { }
     record OpenPack(PlayerId actor, int pendingIndex) implements Action { }
     /** {@code relicTarget} is read only when the picked option is a relic (cast immediately); null means untargeted. */
     record PickFromPack(PlayerId actor, int optionIndex, RelicTarget relicTarget) implements Action { }

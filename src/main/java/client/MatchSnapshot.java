@@ -92,8 +92,12 @@ public record MatchSnapshot(
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
 
-    /** One card in hand: a stable {@code id} (for cross-frame animation) plus rank/suit ordinals for sorting. */
-    public record HandCardView(int id, String label, int rank, int suit) { }
+    /**
+     * One card in hand: a stable {@code id} (for cross-frame animation) plus rank/suit ordinals for sorting.
+     * A card the boss dealt {@code faceDown} is masked at the boundary — rank and suit are {@code -1} and the
+     * label is blank — so no tooltip, sort or preview can leak what its owner is not allowed to see.
+     */
+    public record HandCardView(int id, String label, int rank, int suit, boolean faceDown) { }
 
     /**
      * One card of the full deck, for the deck-pile hover: rank/suit ordinals and whether it is still {@code live}
@@ -110,7 +114,7 @@ public record MatchSnapshot(
      * it is currently doing nothing. The badge exists because stickers are drawbacks the player agreed to — they
      * have to stay visible after the purchase, not just in the shop.
      */
-    public record JokerView(String name, String description, String badge, boolean debuffed) { }
+    public record JokerView(int id, String name, String description, String state, String badge, boolean debuffed) { }
 
     /**
      * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
@@ -129,7 +133,7 @@ public record MatchSnapshot(
      * kind} names who it lands on, {@code selector} what choice it needs ("NONE" for consumables), and {@code
      * needsSeat} is true only for relics the caster aims by hand.
      */
-    public record ItemView(String label, String description, boolean isRelic, int modelIndex,
+    public record ItemView(int id, String label, String description, String badge, boolean isRelic, int modelIndex,
                            String kind, String selector, boolean needsSeat, int minTargets) { }
 
     /** One seat's line in the final standings; {@code isMe} marks the local seat, {@code departed} a player who left. */
@@ -144,10 +148,10 @@ public record MatchSnapshot(
      * {@code badge} naming its edition and stickers — empty for a plain card, but a Sticky or Perishable roll is
      * a real drawback, so the buyer must see it on the tile <em>before</em> paying.
      */
-    public record ShopItem(String label, int price, String tooltip, String badge) { }
+    public record ShopItem(int id, String label, int price, String tooltip, String badge) { }
 
     /** One offered voucher: name, price, hover text, and whether it can be redeemed now (one per ante). */
-    public record VoucherItem(String label, int price, String tooltip, boolean redeemable) { }
+    public record VoucherItem(int id, String label, int price, String tooltip, boolean redeemable) { }
 
     /** A booster pack being opened: its name, the remaining pick budget, and each option's label (null = taken). */
     public record PackOpeningView(String packName, int picksLeft, List<String> options) { }
@@ -265,16 +269,22 @@ public record MatchSnapshot(
 
     /** The seat's hand as structured cards, in model order (index i here is index i in the round's hand). */
     private static List<HandCardView> hand(Run run) {
+        Round round = run.getRound();
         List<HandCardView> out = new ArrayList<>();
-        for (DeckCard c : run.getHeld())
-            out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal()));
+        for (DeckCard c : run.getHeld()) {
+            if (round != null && round.isFaceDown(c))
+                out.add(new HandCardView(c.id(), "", -1, -1, true));
+            else
+                out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal(), false));
+        }
         return out;
     }
 
     /**
-     * The whole deck for the pile's hover view. During a round a card is {@code live} while it can still turn up
-     * — in the draw pile or held — and greys out once played, discarded or destroyed this round; outside a round
-     * the next deal could bring anything, so everything is live.
+     * The whole deck for the pile's hover view — the deck as it exists <em>now</em>, so destroyed cards are
+     * simply absent and created ones appear. During a round a card is {@code live} only while it is still in the
+     * draw pile; a card in hand, played, or discarded greys out (the pile view answers "what can I still draw",
+     * and a held card cannot be drawn). Outside a round the next deal could bring anything, so everything is live.
      */
     private static List<DeckCardView> deckCards(Run run) {
         Round r = run.getRound();
@@ -282,7 +292,6 @@ public record MatchSnapshot(
         if (r != null) {
             liveIds = new java.util.HashSet<>();
             for (DeckCard c : r.getDrawPile()) liveIds.add(c.id());
-            for (DeckCard c : r.getHand())     liveIds.add(c.id());
         }
         List<DeckCardView> out = new ArrayList<>();
         for (DeckCard c : run.getDeck())
@@ -350,7 +359,7 @@ public record MatchSnapshot(
             if (c == null) { slots.add(null); continue; }
             int price = shop.slotPrice(i);
             String badge = badgeOf(c);
-            slots.add(new ShopItem(nameOf(c), price,
+            slots.add(new ShopItem(c.id(), nameOf(c), price,
                     tooltip(nameOf(c), descriptionOf(c), categoryOf(c) + (badge.isEmpty() ? "" : " · " + badge), price),
                     badge));
         }
@@ -360,7 +369,7 @@ public record MatchSnapshot(
             if (p == null) { packs.add(null); continue; }
             int price = shop.packPrice(i);
             String label = String.valueOf(p);
-            packs.add(new ShopItem(label, price, tooltip(label, "", "Booster Pack", price), ""));
+            packs.add(new ShopItem(p.id(), label, price, tooltip(label, "", "Booster Pack", price), ""));
         }
         List<VoucherItem> vouchers = new ArrayList<>();
         for (int i = 0; i < shop.getVoucherCount(); i++) {
@@ -368,7 +377,7 @@ public record MatchSnapshot(
             if (v == null) { vouchers.add(null); continue; }
             int price = v.getSpec().getCost();
             String label = v.getSpec().getName();
-            vouchers.add(new VoucherItem(label, price, tooltip(label, v.getSpec().getDescription(), "Voucher", price), run.canRedeem(v)));
+            vouchers.add(new VoucherItem(v.id(), label, price, tooltip(label, v.getSpec().getDescription(), "Voucher", price), run.canRedeem(v)));
         }
         return new ShopView(slots, packs, vouchers, shop.rerollCost(), shop.purchasesRemaining());
     }
@@ -435,42 +444,48 @@ public record MatchSnapshot(
         List<ItemView> out = new ArrayList<>();
         List<ConsumableCard> consumables = run.getConsumables();
         for (int i = 0; i < consumables.size(); i++) {
-            var spec = consumables.get(i).getSpec();
-            out.add(new ItemView(spec.getName(), spec.getDescription(), false, i, null, "NONE", false,
+            var card = consumables.get(i);
+            var spec = card.getSpec();
+            out.add(new ItemView(card.id(), spec.getName(), spec.getDescription(), badgeOf(card), false, i, null, "NONE", false,
                     spec.getMinTargets()));
         }
         List<RelicCard> relics = run.getRelics();
         for (int i = 0; i < relics.size(); i++) {
-            var spec = relics.get(i).getSpec();
+            var card = relics.get(i);
+            var spec = card.getSpec();
             boolean needsSeat = switch (spec.getKind()) {
                 case OPPONENT -> true;             // a freely-chosen seat (no current relic uses this)
                 case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false; // random / standings-driven / no target
             };
-            out.add(new ItemView(spec.getName(), spec.getDescription(), true, i,
+            out.add(new ItemView(card.id(), spec.getName(), spec.getDescription(), badgeOf(card), true, i,
                     spec.getKind().name(), spec.getSelector().name(), needsSeat, 0));
         }
         return out;
     }
 
-    /** The board as the top bar shows it: each joker's name, effect text, edition/sticker badge, and liveness. */
+    /** The board as the top bar shows it: each joker's name, effect text, live state, badge, and liveness. */
     private static List<JokerView> jokerViews(Run run) {
         List<JokerView> out = new ArrayList<>();
-        for (JokerCard j : run.getJokers())
-            out.add(new JokerView(j.getSpec().getName(), j.getSpec().getDescription(), badgeOf(j), j.isDebuffed()));
+        for (JokerCard j : run.getJokers()) {
+            String state = j.getSpec().stateOf(j);
+            out.add(new JokerView(j.id(), j.getSpec().getName(), j.getSpec().getDescription(),
+                    state == null ? "" : state, badgeOf(j), j.isDebuffed()));
+        }
         return out;
     }
 
     /**
-     * A readable label for one item. {@link DeckCard}s render as {@code RANK-SUIT} with any enhancement/seal
-     * appended; everything else falls back to {@link String#valueOf}. Card types other than {@code DeckCard}
-     * (jokers, consumables, relics) rely on their own {@code toString} for now — worth tightening once we can
-     * see their real output in the debug view.
+     * A readable label for one item. {@link DeckCard}s render as {@code RANK-SUIT} with any enhancement/seal/
+     * edition appended ({@code [GOLD]{RED}<FOIL>}); everything else falls back to {@link String#valueOf}. Card
+     * types other than {@code DeckCard} (jokers, consumables, relics) rely on their own {@code toString} for now
+     * — worth tightening once we can see their real output in the debug view.
      */
     private static String describe(Object o) {
         if (o instanceof DeckCard c) {
             StringBuilder sb = new StringBuilder(c.getRank().name()).append('-').append(c.getSuit().name());
             if (c.getEnhancement() != null) sb.append('[').append(c.getEnhancement()).append(']');
             if (c.getSeal() != null) sb.append('{').append(c.getSeal()).append('}');
+            if (c.getEdition() != null) sb.append('<').append(c.getEdition()).append('>');
             return sb.toString();
         }
         return String.valueOf(o);

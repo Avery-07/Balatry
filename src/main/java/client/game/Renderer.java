@@ -54,11 +54,25 @@ public final class Renderer {
 
     /** Draws a card centered at (cx,cy), tilted {@code deg}, with an optional selection ring. */
     public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected) {
+        card(rankOrd, suitOrd, cx, cy, w, h, deg, selected, 0);
+    }
+
+    /**
+     * As {@link #card}, plus a flip: {@code flipT} 0 is face up, 1 face down (the deck's back), and anything in
+     * between squashes the card horizontally through its edge-on midpoint — the turn animation itself.
+     */
+    public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h,
+                     double deg, boolean selected, double flipT) {
         g.save();
         g.translate(cx, cy);
         g.rotate(deg);
+        double squash = Math.abs(1 - 2 * flipT);
+        if (squash < 0.02) squash = 0.02;   // never scale to zero; the stroke would vanish oddly
+        g.scale(squash, 1);
         double x = -w / 2, y = -h / 2, arc = 10;
-        if (sheet != null) {
+        if (flipT > 0.5 || rankOrd < 0) {   // the back: past edge-on, or a card we are not allowed to see
+            back(x, y, w, h, arc);
+        } else if (sheet != null) {
             g.drawImage(sheet, rankOrd * cellW, spriteRow(suitOrd) * cellH, cellW, cellH, x, y, w, h);
         } else {
             g.setFill(Color.web("#f6f4ee")); g.fillRoundRect(x, y, w, h, arc, arc);
@@ -74,6 +88,31 @@ public final class Renderer {
         if (selected) { g.setStroke(Color.web("#f0a92b")); g.setLineWidth(4); g.strokeRoundRect(x, y, w, h, arc, arc); }
         g.restore();
     }
+
+    /**
+     * The card back — the deck's face to the world. Uses the back texture when one is loaded ({@link #backSheet});
+     * until then, a vector back: felt-dark panel, double border, diamond lattice.
+     */
+    private void back(double x, double y, double w, double h, double arc) {
+        if (backImage != null) { g.drawImage(backImage, x, y, w, h); return; }
+        g.setFill(Color.web("#27436e")); g.fillRoundRect(x, y, w, h, arc, arc);
+        g.setStroke(Color.web("#182a47")); g.setLineWidth(3); g.strokeRoundRect(x + 2, y + 2, w - 4, h - 4, arc, arc);
+        g.setStroke(Color.web("#3c619c")); g.setLineWidth(1);
+        double step = 9;
+        for (double d = -h; d < w; d += step) {   // the lattice, clipped by hand to the inset rect
+            double x1 = Math.max(x + 6, x + d), y1 = d < 0 ? y + 6 - d : y + 6;
+            double x2 = Math.min(x + w - 6, x + d + h), y2 = y1 + (x2 - x1);
+            if (x1 < x2 && y2 <= y + h - 6) g.strokeLine(x1, y1, x2, y2);
+            double y3 = d < 0 ? y + h - 6 + d : y + h - 6;
+            double y4 = y3 - (x2 - x1);
+            if (x1 < x2 && y4 >= y + 6) g.strokeLine(x1, y3, x2, y4);
+        }
+    }
+
+    /** Installs the deck-back texture (the table's deck art); null keeps the vector back. */
+    public void backSheet(Image img) { if (img != null && !img.isError()) backImage = img; }
+
+    private Image backImage;
 
     private static int spriteRow(int suit) { return switch (suit) { case 1 -> 0; case 2 -> 1; case 3 -> 2; default -> 3; }; }
 }

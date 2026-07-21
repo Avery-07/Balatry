@@ -27,8 +27,11 @@ final class Hud {
     private final Counter mult  = new Counter(0, 0.3, Easing.EASE_OUT_CUBIC);
     private final Counter money = new Counter(0, 0.4, Easing.EASE_OUT_CUBIC);
 
+    private double time;   // frame clock for the tiles' idle bob
+
     /** Advanced from the game loop alongside the hand. */
     void advance(double dt) {
+        time += dt;
         score.advance(dt); chips.advance(dt); mult.advance(dt); money.advance(dt);
     }
 
@@ -121,8 +124,10 @@ final class Hud {
     private static MatchSnapshot.HandLevelView detectSelection(Ui ui) {
         if (ui.s.phase() != MatchPhase.BLIND) return null;
         List<DeckCard> cards = new ArrayList<>();
-        for (CardEntity e : ui.hand.selectedCards())
+        for (CardEntity e : ui.hand.selectedCards()) {
+            if (e.rank() < 0) return null;   // a face-down card is selected: its identity is hidden, so no preview
             cards.add(new DeckCard(DeckCard.Rank.values()[e.rank()], DeckCard.Suit.values()[e.suit()]));
+        }
         if (cards.isEmpty()) return null;
         String type = new HandEvaluator().evaluate(cards).type().name();
         for (MatchSnapshot.HandLevelView hv : ui.s.handLevels())
@@ -147,47 +152,84 @@ final class Hud {
     private void drawTopSlots(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
         MatchSnapshot s = ui.s;
+        double tileW = 54, tileH = Ui.SLOT_H - 30, tileCY = y + 22 + tileH / 2;
+
+        // Jokers: a retained, draggable row — reconcile by card id, lay slots out, draw at animated positions.
         r.textLeftBold(s.jokerSlotsUsed() + "/" + s.jokerSlotsMax(), x, y, 18, INK);
-        double jx = x;
+        List<Integer> jokerIds = new ArrayList<>();
+        for (MatchSnapshot.JokerView jv : s.jokers()) jokerIds.add(jv.id());
+        ui.jokerRow.reconcile(jokerIds);
+        double[] jokerSlots = new double[jokerIds.size()];
+        for (int j = 0; j < jokerSlots.length; j++) jokerSlots[j] = x + tileW / 2 + j * 62;
+        ui.jokerRow.layout(jokerSlots, tileCY);
+
         for (int j = 0; j < s.jokers().size(); j++) {
             MatchSnapshot.JokerView jv = s.jokers().get(j);
-            Layout.Rect rr = new Layout.Rect(jx, y + 22, 54, Ui.SLOT_H - 30);
-            // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
-            mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
-            if (!jv.badge().isEmpty()) {
-                r.panel(rr.x(), rr.y() + rr.h() - 16, rr.w(), 16, Color.web("#000a"), null, 6, 0);
-                r.textCenter(jv.badge(), rr.centerX(), rr.y() + rr.h() - 8, 8, GOLD);
-            }
-            if (j == ui.jokerTarget) r.panel(rr.x() - 3, rr.y() - 3, rr.w() + 6, rr.h() + 6, null, ORANGE, 10, 3);
-            ui.jokerSel.add(new Ui.Sel(rr, "joker", j));
-            ui.tip(rr, jokerTip(jv));
-            jx += 62;
+            if (ui.jokerRow.isDragged(jv.id())) continue;   // the held tile draws last, above its row
+            drawJokerTile(ui, jv, j, tileW, tileH, client.engine.Idle.bobPx(time, j, 1.6));
         }
+        for (int j = 0; j < s.jokers().size(); j++)   // at most one: the dragged tile, on top
+            if (ui.jokerRow.isDragged(s.jokers().get(j).id())) drawJokerTile(ui, s.jokers().get(j), j, tileW, tileH, 0);
+
+        // Consumables/relics: same treatment, right-aligned (slot i's center ascends left→right in model order).
         r.textLeftBold(s.consumableSlotsUsed() + "/" + s.consumableSlotsMax(), x + w - 40, y, 18, INK);
-        double kx = x + w - 54;
-        for (int i = s.inventory().size() - 1; i >= 0; i--) {
+        List<Integer> itemIds = new ArrayList<>();
+        for (MatchSnapshot.ItemView it : s.inventory()) itemIds.add(it.id());
+        ui.itemRow.reconcile(itemIds);
+        double[] itemSlots = new double[itemIds.size()];
+        for (int i = 0; i < itemSlots.length; i++)
+            itemSlots[i] = x + w - 54 + tileW / 2 - (itemSlots.length - 1 - i) * 62;
+        ui.itemRow.layout(itemSlots, tileCY);
+
+        for (int i = 0; i < s.inventory().size(); i++) {
             MatchSnapshot.ItemView it = s.inventory().get(i);
-            Layout.Rect rr = new Layout.Rect(kx, y + 22, 54, Ui.SLOT_H - 30);
-            mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
-            ui.selectables.add(new Ui.Sel(rr, "item", i));
-            ui.tip(rr, itemTip(it));
-            kx -= 62;
+            if (ui.itemRow.isDragged(it.id())) continue;
+            drawItemTile(ui, it, i, tileW, tileH, client.engine.Idle.bobPx(time, 40 + i, 1.6));
         }
+        for (int i = 0; i < s.inventory().size(); i++)
+            if (ui.itemRow.isDragged(s.inventory().get(i).id())) drawItemTile(ui, s.inventory().get(i), i, tileW, tileH, 0);
     }
 
-    /** A joker's hover text: its name, effect, badge (edition/stickers), and whether it is dead right now. */
+    private void drawJokerTile(Ui ui, MatchSnapshot.JokerView jv, int index, double tileW, double tileH, double bob) {
+        Renderer r = ui.r;
+        Layout.Rect rr = new Layout.Rect(ui.jokerRow.x(jv.id()) - tileW / 2, ui.jokerRow.y(jv.id()) - tileH / 2 + bob, tileW, tileH);
+        // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
+        mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
+        if (!jv.badge().isEmpty()) {
+            r.panel(rr.x(), rr.y() + rr.h() - 16, rr.w(), 16, Color.web("#000a"), null, 6, 0);
+            r.textCenter(jv.badge(), rr.centerX(), rr.y() + rr.h() - 8, 8, GOLD);
+        }
+        if (index == ui.jokerTarget) r.panel(rr.x() - 3, rr.y() - 3, rr.w() + 6, rr.h() + 6, null, ORANGE, 10, 3);
+        ui.jokerSel.add(new Ui.Sel(rr, "joker", index));
+        ui.tip(rr, jokerTip(jv));
+    }
+
+    private void drawItemTile(Ui ui, MatchSnapshot.ItemView it, int index, double tileW, double tileH, double bob) {
+        Renderer r = ui.r;
+        Layout.Rect rr = new Layout.Rect(ui.itemRow.x(it.id()) - tileW / 2, ui.itemRow.y(it.id()) - tileH / 2 + bob, tileW, tileH);
+        mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
+        ui.selectables.add(new Ui.Sel(rr, "item", index));
+        ui.tip(rr, itemTip(it));
+    }
+
+    /**
+     * A joker's hover text: name, effect, its live variable (the hidden pick or accumulated bonus the player
+     * otherwise cannot see), badge (edition/stickers), and whether it is dead right now.
+     */
     private static String jokerTip(MatchSnapshot.JokerView jv) {
         StringBuilder tip = new StringBuilder(jv.name());
         if (!jv.description().isEmpty()) tip.append('\n').append(jv.description());
+        if (!jv.state().isEmpty()) tip.append('\n').append(jv.state());
         if (!jv.badge().isEmpty()) tip.append('\n').append(jv.badge());
         if (jv.debuffed()) tip.append('\n').append("DEBUFFED — no effect right now");
         return tip.toString();
     }
 
-    /** A held item's hover text: name, effect, and — for targeted cards — what it needs selected. */
+    /** A held item's hover text: name, effect, edition/stickers, and — for targeted cards — what it needs selected. */
     private static String itemTip(MatchSnapshot.ItemView it) {
         StringBuilder tip = new StringBuilder(it.label());
         if (!it.description().isEmpty()) tip.append('\n').append(it.description());
+        if (!it.badge().isEmpty()) tip.append('\n').append(it.badge());
         if (it.minTargets() > 0)
             tip.append('\n').append("Needs ").append(it.minTargets())
                .append(" selected card").append(it.minTargets() > 1 ? "s" : "");

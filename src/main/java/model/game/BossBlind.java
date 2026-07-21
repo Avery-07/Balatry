@@ -12,11 +12,11 @@ public enum BossBlind {
 
     THE_HOOK     ("The Hook",      "Discards 2 random held cards after each hand played", b -> b.afterPlayDiscard(2).playTriggered()),
     THE_OX       ("The Ox",        "Playing your most-played hand type sets your money to $0", b -> b.oxZeroMoney().playTriggered()),
-    THE_HOUSE    ("The House",     "First hand is drawn face down", b -> b),
+    THE_HOUSE    ("The House",     "First hand is drawn face down", b -> b.hideFirstDeal()),
     THE_WALL     ("The Wall",      "Extra-large blind (4× base chips)", b -> b.target(2)),
-    THE_WHEEL    ("The Wheel",     "1 in 5 cards drawn face down", b -> b),
+    THE_WHEEL    ("The Wheel",     "1 in 5 cards drawn face down", b -> b.hideOneIn(5)),
     THE_ARM      ("The Arm",       "Levels down the hand type you play", b -> b.levelDownPlayed().playTriggered()),
-    THE_FISH     ("The Fish",      "Cards drawn face down after each hand", b -> b),
+    THE_FISH     ("The Fish",      "Cards drawn face down after each hand", b -> b.hideDrawsAfterPlay()),
     THE_PSYCHIC  ("The Psychic",   "You must play 5 cards each hand", b -> b.mustPlayFive()),
     THE_WATER    ("The Water",     "Start the round with 1 fewer discard", b -> b.discards(-1)),
     THE_MANACLE  ("The Manacle",   "−1 hand size this round", b -> b.handSize(-1)),
@@ -27,7 +27,7 @@ public enum BossBlind {
     THE_NEEDLE   ("The Needle",    "Only one hand", b -> b.singleHand()),
     THE_TOOTH    ("The Tooth",     "Lose $1 per card played", b -> b.toothLoss().playTriggered()),
     THE_FLINT    ("The Flint",     "Base chips and mult are halved", b -> b.halveBase()),
-    THE_MARK     ("The Mark",      "Face cards are drawn face down", b -> b),
+    THE_MARK     ("The Mark",      "Face cards are drawn face down", b -> b.hideFaceCards()),
 
     // New Balatry regular blinds. The Quartz and The Mirage are single-player, resolved in Round/RoundSettlement.
     THE_QUARTZ   ("The Quartz",    "~1 in 7 of your cards are debuffed this round", b -> b.randomDebuffOneIn(7)),
@@ -57,6 +57,8 @@ public enum BossBlind {
     private boolean toothLoss, oxZero, debuffUntilSold, playTriggered, finisher;
     private boolean crossPlayer, dropsOwnHighest, dropsGlobalHighest;
     private boolean debuffAntePlayed, jokerPerHand, forcedSelection, shuffleJokers;
+    private boolean firstDealFaceDown, drawsFaceDownAfterPlay, faceCardsFaceDown;
+    private int faceDownOneIn = 0;
     private Predicate<DeckCard> debuff = c -> false;
 
     BossBlind(String displayName, String effect, UnaryOperator<BossBlind> define) {
@@ -91,6 +93,10 @@ public enum BossBlind {
     private BossBlind forceCardSelection()          { this.forcedSelection = true; return this; }
     private BossBlind shuffleJokers()               { this.shuffleJokers = true; return this; }
     private BossBlind debuff(Predicate<DeckCard> p) { this.debuff = p; return this; }
+    private BossBlind hideFirstDeal()               { this.firstDealFaceDown = true; return this; }
+    private BossBlind hideDrawsAfterPlay()          { this.drawsFaceDownAfterPlay = true; return this; }
+    private BossBlind hideFaceCards()               { this.faceCardsFaceDown = true; return this; }
+    private BossBlind hideOneIn(int n)              { this.faceDownOneIn = n; return this; }
 
     // --- accessors ---
     public String displayName()              { return displayName; }
@@ -102,6 +108,10 @@ public enum BossBlind {
     public int afterPlayDiscard()            { return afterPlayDiscard; }
     public int discardDelta()                { return discardDelta; }
     public int randomDebuffOneIn()           { return randomDebuffOneIn; }
+    public boolean firstDealFaceDown()       { return firstDealFaceDown; }       // The House
+    public boolean drawsFaceDownAfterPlay()  { return drawsFaceDownAfterPlay; }  // The Fish
+    public boolean faceCardsFaceDown()       { return faceCardsFaceDown; }       // The Mark
+    public int faceDownOneIn()               { return faceDownOneIn; }           // The Wheel; 0 = never
     public boolean oneHandOnly()             { return singleHand; }
     public boolean halvesBase()              { return halveBase; }
     public boolean levelsDownPlayed()        { return levelDownPlayed; }

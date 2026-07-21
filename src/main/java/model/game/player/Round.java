@@ -40,6 +40,9 @@ public final class Round {
     private DeckCard forcedCard;           // Cerulean Bell: must be included in every play and discard; null when inactive
     private boolean acted;                 // whether this seat has played or discarded (skipping requires an untouched round)
     private int handsPlayedThisRound;      // keys Floating's drift and gates Delayed's first-hand silence
+    private final java.util.Set<Integer> faceDownIds = new java.util.HashSet<>();   // cards hidden by the boss
+    private boolean afterFirstDeal;        // false only during the opening deal (The House / The Fish windows)
+    private int drawCount;                 // replay-safe salt for The Wheel's per-draw roll
 
     Round(Run run, long target, int handSize, int hands, int discards, RandomGenerator shuffle) {
         this.run = run;
@@ -175,21 +178,50 @@ public final class Round {
 
     private void draw() {
         while (hand.size() < handSize && !drawPile.isEmpty()) {
-            hand.add(drawPile.remove(drawPile.size() - 1));
+            DeckCard drawn = drawPile.remove(drawPile.size() - 1);
+            hand.add(drawn);
+            maybeFaceDown(drawn);
         }
     }
 
     /** Post-action draw: The Serpent always draws a fixed count; otherwise refill to hand size. */
     private void redraw() {
+        afterFirstDeal = true;   // anything drawn from here on is a mid-round draw (The Fish's window)
         BossBlind boss = run.effectiveBoss();
         if (boss != null && boss.fixedDraw() > 0) {
-            for (int i = 0; i < boss.fixedDraw() && !drawPile.isEmpty(); i++)
-                hand.add(drawPile.remove(drawPile.size() - 1));
+            for (int i = 0; i < boss.fixedDraw() && !drawPile.isEmpty(); i++) {
+                DeckCard drawn = drawPile.remove(drawPile.size() - 1);
+                hand.add(drawn);
+                maybeFaceDown(drawn);
+            }
         } else {
             draw();
         }
         refreshForcedCard();   // Cerulean Bell: re-pick if the forced card left the hand
     }
+
+    /**
+     * Applies the boss's face-down rules to one just-drawn card. The House hides the opening deal, The Fish
+     * every card drawn after a play or discard, The Mark face cards, and The Wheel a seeded 1-in-N. The Wheel's
+     * roll is salted by the round's own draw counter, never by {@code DeckCard.id} — ids come from a JVM-global
+     * counter that UI-side throwaway cards also advance, so they are not replay-safe; the draw sequence is.
+     * Face-down is a visibility state, not a debuff: the card plays and scores normally, its owner just cannot
+     * see what it is.
+     */
+    private void maybeFaceDown(DeckCard drawn) {
+        int drawIndex = drawCount++;
+        BossBlind boss = run.effectiveBoss();
+        if (boss == null) return;
+        boolean hide = (boss.firstDealFaceDown() && !afterFirstDeal)
+                || (boss.drawsFaceDownAfterPlay() && afterFirstDeal)
+                || (boss.faceCardsFaceDown() && drawn.isFace())
+                || (boss.faceDownOneIn() > 0
+                    && run.getRng().chance(model.game.rng.RngSource.MISC, drawIndex, 1, boss.faceDownOneIn()));
+        if (hide) faceDownIds.add(drawn.id());
+    }
+
+    /** Whether {@code card} sits face down in the hand (its owner cannot see it). */
+    public boolean isFaceDown(DeckCard card) { return faceDownIds.contains(card.id()); }
 
     /** Cerulean Bell: keeps one random hand card forced into every play and discard. */
     private void refreshForcedCard() {

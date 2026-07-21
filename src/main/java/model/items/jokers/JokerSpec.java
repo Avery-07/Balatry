@@ -6,6 +6,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 public final class JokerSpec {
     private final String name;
@@ -17,6 +18,7 @@ public final class JokerSpec {
     private final CardRetrigger heldRetrigger;     // extra passes this joker grants a held card
     private final int debtAllowance;               // how far below $0 this joker lets the balance go
     private final int cost;                        // base shop price
+    private final Function<JokerCard, String> state;   // live-variable text for the tooltip, or null
 
     private JokerSpec(Builder b) {
         this.name = b.name;
@@ -28,6 +30,19 @@ public final class JokerSpec {
         this.heldRetrigger = b.heldRetrigger;
         this.debtAllowance = b.debtAllowance;
         this.cost = b.cost;
+        this.state = b.state;
+    }
+
+    /**
+     * The live value this joker instance is playing with, as tooltip text — the counter given meaning. This
+     * exists because some jokers make a hidden pick (Mail-In Rebate's rank, The Idol's card) or accumulate a
+     * bonus (Ride the Bus) that the player cannot act on without seeing it. Specs that declared a state renderer
+     * get their own words; any other joker with a non-zero counter falls back to a bare "Value: n"; jokers with
+     * no live state return null and the tooltip shows nothing.
+     */
+    public String stateOf(JokerCard card) {
+        if (state != null) return state.apply(card);
+        return card.getCounter() != 0 ? "Value: " + card.getCounter() : null;
     }
 
     public JokerEffect effectFor(Trigger t) {
@@ -56,9 +71,12 @@ public final class JokerSpec {
         private CardRetrigger heldRetrigger = CardRetrigger.NONE;
         private int debtAllowance = 0;
         private int cost = 0;
+        private Function<JokerCard, String> state;
         private Builder(String name, Rarity rarity) { this.name = name; this.rarity = rarity; }
         /** Sets the human-readable effect text shown on hover (optional; defaults to none). */
         public Builder description(String d) { this.description = d; return this; }
+        /** Renders this joker's live variable for the tooltip (optional; see {@link JokerSpec#stateOf}). */
+        public Builder state(Function<JokerCard, String> s) { this.state = s; return this; }
         public Builder on(Trigger t, JokerEffect e) { effects.put(t, e); return this; }
         public Builder trait(JokerTrait... ts)          { for (JokerTrait t : ts) traits.add(t); return this; }
         public Builder retriggerPlayed(CardRetrigger r) { this.playedRetrigger = r; return this; }

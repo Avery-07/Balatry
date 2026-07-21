@@ -32,6 +32,8 @@ public final class SnapshotTests {
         shopPurchaseSnapshot();
         packOpeningSnapshot();
         jokerBadgeSnapshot();
+        jokerStateSnapshot();
+        editionLabelSnapshot();
         deckAndLevelsSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
@@ -211,23 +213,75 @@ public final class SnapshotTests {
         check("a debuffed joker is greyed", s.jokers().get(2).debuffed());
     }
 
+    /** The joker's live variable reaches the tooltip: named picks, accumulated bonuses, and the raw fallback. */
+    private static void jokerStateSnapshot() {
+        Match m = Match.create(55L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        Run run = m.getRun(a);
+
+        // A hidden pick renders as words the player can act on (Mail-In Rebate's counter is a Rank ordinal).
+        var rebate = model.items.jokers.Jokers.MAIL_IN_REBATE.make();
+        // An accumulator renders as the bonus it is worth (Green Joker's counter is +Mult).
+        var green = model.items.jokers.Jokers.GREEN_JOKER.make();
+        run.acquire(rebate);
+        run.acquire(green);
+        m.start();
+        // Set after start: the round's ON_ROUND_START re-rolls Rebate's pick, and the test needs a known one.
+        rebate.setCounter(model.items.DeckCard.Rank.KING.ordinal());
+        green.setCounter(7);
+
+        MatchSnapshot s = MatchSnapshot.of(m, a);
+        check("a hidden pick names itself", s.jokers().get(0).state().contains("King"));
+        check("an accumulator shows its bonus", s.jokers().get(1).state().contains("+7 Mult"));
+
+        // A spec with no state renderer: non-zero counters fall back to a bare value, zero shows nothing.
+        var anon = model.items.jokers.JokerSpec.named("Anon", model.items.jokers.Rarity.COMMON).build();
+        var card = new model.items.jokers.JokerCard(anon);
+        check("no counter, no state", anon.stateOf(card) == null);
+        card.setCounter(3);
+        check("an unnamed counter still surfaces", "Value: 3".equals(anon.stateOf(card)));
+    }
+
+    /** An edition on a hand card reaches its label, where the client's tooltip reads it. */
+    private static void editionLabelSnapshot() {
+        Match m = Match.create(66L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        m.start();
+        Run run = m.getRun(a);
+        run.getRound().getHand().get(0).apply(model.modifiers.Edition.FOIL);
+
+        MatchSnapshot s = MatchSnapshot.of(m, a);
+        check("the edition reaches the hand label", s.hand().get(0).label().contains("<FOIL>"));
+        check("plain cards stay plain", !s.hand().get(1).label().contains("<"));
+    }
+
     /** The deck-hover view and the play-preview table: spent cards grey out, hand levels price a play. */
     private static void deckAndLevelsSnapshot() {
         Match m = Match.create(44L, List.of("A", "B"));
         PlayerId a = m.getSeats().get(0);
         m.start();   // straight into a round: 8 dealt, 44 in the pile
 
+        Run run = m.getRun(a);
         MatchSnapshot fresh = MatchSnapshot.of(m, a);
         checkInt("the whole deck projects", fresh.deckCards().size(), 52);
-        check("nothing is spent before a play", fresh.deckCards().stream().allMatch(MatchSnapshot.DeckCardView::live));
+        // Live means "still drawable": the 8 dealt cards are in hand, not in the pile, so they grey immediately.
+        long liveFresh = fresh.deckCards().stream().filter(MatchSnapshot.DeckCardView::live).count();
+        checkInt("only the draw pile is live", (int) liveFresh, run.getRound().getDrawPile().size());
 
-        Run run = m.getRun(a);
-        int played = Math.min(5, run.getRound().getHand().size());
+        int handBefore = run.getRound().getHand().size();
+        int played = Math.min(5, handBefore);
         run.getRound().play(new ArrayList<>(run.getRound().getHand().subList(0, played)));
 
         MatchSnapshot after = MatchSnapshot.of(m, a);
-        long spent = after.deckCards().stream().filter(c -> !c.live()).count();
-        checkInt("played cards grey out in the deck view", (int) spent, played);
+        long liveAfter = after.deckCards().stream().filter(MatchSnapshot.DeckCardView::live).count();
+        checkInt("the live set tracks the shrinking pile", (int) liveAfter, run.getRound().getDrawPile().size());
+        check("playing consumed draws", liveAfter < liveFresh);
+
+        // Destroy a card outright: the deck view must lose the entry entirely, not grey it.
+        int deckBefore = after.deckCards().size();
+        run.destroyDeckCards(List.of(run.getDeck().get(0)));
+        checkInt("a destroyed card vanishes from the view",
+                MatchSnapshot.of(m, a).deckCards().size(), deckBefore - 1);
 
         checkInt("every hand type is priced", after.handLevels().size(), HandType.values().length);
         MatchSnapshot.HandLevelView pair = after.handLevels().stream()

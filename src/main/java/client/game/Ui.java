@@ -3,6 +3,7 @@ package client.game;
 import client.MatchSnapshot;
 import client.MatchViewModel;
 import client.engine.Layout;
+import client.engine.TileRow;
 import javafx.scene.paint.Color;
 
 import java.util.ArrayList;
@@ -37,6 +38,14 @@ final class Ui {
 
     double mouseX = -1, mouseY = -1;                   // last mouse position, canvas coordinates
     Layout.Rect deckRect;                              // the deck pile's screen area; hovering it opens the deck view
+
+    // Every tile row is retained and draggable — the same part-and-glide treatment the hand gets. The rows live
+    // here because two parties share them: Hud/ShopScreen lay them out and draw, GameClient routes the input.
+    final TileRow jokerRow      = new TileRow(54, Ui.SLOT_H - 30);
+    final TileRow itemRow       = new TileRow(54, Ui.SLOT_H - 30);
+    final TileRow shopSlotRow   = new TileRow(108, 130);   // shop drags have nowhere to land; they lift and glide home
+    final TileRow shopVoucherRow = new TileRow(108, 130);
+    final TileRow shopPackRow   = new TileRow(108, 130);
 
     Ui(Renderer r, Hand hand) { this.r = r; this.hand = hand; }
 

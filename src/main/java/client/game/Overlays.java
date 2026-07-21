@@ -183,39 +183,49 @@ final class Overlays {
     }
 
     /**
-     * The deck-pile hover: the whole deck laid out by suit row and rank column, with cards that can no longer
-     * turn up this round (played, discarded, destroyed) greyed out. Duplicates stack a count on the cell.
+     * The deck-pile hover: the deck <em>as it exists now</em>, one drawn card per physical card — a destroyed
+     * card is simply absent, a created one appears, duplicates sit side by side (no counts). Each suit is a row,
+     * sorted by rank; rows longer than the panel overlap their cards like a hand fan. A card is greyed once it
+     * can no longer be drawn this round — played, discarded, or currently held in hand.
      */
     void deckContents(Ui ui) {
         Renderer r = ui.r;
         r.gc().setFill(Color.web("#040a08", 0.72)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
 
-        int ranks = 13, suits = 4;
-        double cw = 62, ch = 88, gap = 8;
-        double gw = ranks * cw + (ranks - 1) * gap, gh = suits * ch + (suits - 1) * gap;
+        // Group the actual cards by suit row, then sort each row by rank (live ones draw the same as spent —
+        // order must stay stable whatever happens to the cards, so the eye can track a rank column-ish).
+        @SuppressWarnings("unchecked")
+        List<MatchSnapshot.DeckCardView>[] rows = new List[4];
+        for (int s = 0; s < 4; s++) rows[s] = new ArrayList<>();
+        for (MatchSnapshot.DeckCardView c : ui.s.deckCards())
+            if (c.suit() >= 0 && c.suit() < 4) rows[c.suit()].add(c);
+        for (List<MatchSnapshot.DeckCardView> row : rows)
+            row.sort((a, b) -> a.rank() != b.rank() ? a.rank() - b.rank() : 0);
+
+        double cw = 62, ch = 88, rowGap = 12;
+        double gw = Ui.W - 160, gh = 4 * ch + 3 * rowGap;
         double gx = (Ui.W - gw) / 2, gy = (Ui.H - gh) / 2 + 14;
 
         r.textCenterBold("DECK — " + ui.s.deckRemaining() + " of " + ui.s.deckTotal() + " still to come",
                 Ui.W / 2.0, gy - 40, 20, ORANGE);
-        r.textCenter("greyed cards are already out of this round", Ui.W / 2.0, gy - 18, 12, DIM);
+        r.textCenter("greyed cards can no longer be drawn this round (played, discarded, or in your hand)",
+                Ui.W / 2.0, gy - 18, 12, DIM);
 
-        // The deck may hold duplicates and gaps (Erratic, destroyed cards), so count live/spent per rank+suit.
-        int[][] live = new int[suits][ranks], spent = new int[suits][ranks];
-        for (MatchSnapshot.DeckCardView c : ui.s.deckCards())
-            if (c.live()) live[c.suit()][c.rank()]++; else spent[c.suit()][c.rank()]++;
-
-        for (int s = 0; s < suits; s++)
-            for (int k = 0; k < ranks; k++) {
-                int total = live[s][k] + spent[s][k];
-                if (total == 0) continue;   // this deck simply has no such card
-                double x = gx + k * (cw + gap), y = gy + s * (ch + gap);
-                boolean anyLive = live[s][k] > 0;
-                r.gc().setGlobalAlpha(anyLive ? 1.0 : 0.30);
-                r.card(k, s, x + cw / 2, y + ch / 2, cw, ch, 0, false);
-                r.gc().setGlobalAlpha(1.0);
-                if (total > 1)   // duplicates (Crowded, Erratic): show how many remain live
-                    r.textCenterBold(live[s][k] + "/" + total, x + cw / 2, y + ch + 2, 11, anyLive ? INK : FAINT);
+        for (int s = 0; s < 4; s++) {
+            List<MatchSnapshot.DeckCardView> row = rows[s];
+            if (row.isEmpty()) continue;
+            double y = gy + s * (ch + rowGap);
+            // Fit the row: full spacing when it fits, overlapping cards when the deck is fat (Crowded).
+            double step = row.size() == 1 ? 0 : Math.min(cw + 6, (gw - cw) / (row.size() - 1));
+            double rowW = cw + step * (row.size() - 1);
+            double x = gx + (gw - rowW) / 2;
+            for (MatchSnapshot.DeckCardView c : row) {
+                r.gc().setGlobalAlpha(c.live() ? 1.0 : 0.28);
+                r.card(c.rank(), c.suit(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
+                x += step;
             }
+            r.gc().setGlobalAlpha(1.0);
+        }
     }
 
     /** The Run Info overlay: the ranked standings table, honoring the information boundary. */

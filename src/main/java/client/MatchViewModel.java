@@ -113,6 +113,16 @@ public final class MatchViewModel {
         submit(new Action.MoveJoker(client.getSeat(), from, to));
     }
 
+    /** Reorders the consumable area (drag-and-drop): the card at {@code from} reinserts at {@code to}. */
+    public void moveConsumable(int from, int to) {
+        submit(new Action.MoveConsumable(client.getSeat(), from, to));
+    }
+
+    /** Reorders the relic area (drag-and-drop): the card at {@code from} reinserts at {@code to}. */
+    public void moveRelic(int from, int to) {
+        submit(new Action.MoveRelic(client.getSeat(), from, to));
+    }
+
     /** The seat sitting at {@code index} in the match's seat order — for aiming a hand-targeted relic. */
     public PlayerId seatAt(int index) {
         List<PlayerId> seats = client.getLocalHost().getMatch().getSeats();

@@ -41,6 +41,8 @@ public final class ActionCodec {
             case Action.SellConsumable x -> join("SELLCONS", x.actor(), x.index());
             case Action.SellRelic x      -> join("SELLRELIC", x.actor(), x.index());
             case Action.MoveJoker x      -> join("MOVE", x.actor(), x.from(), x.to());
+            case Action.MoveConsumable x -> join("MOVECONS", x.actor(), x.from(), x.to());
+            case Action.MoveRelic x      -> join("MOVERELIC", x.actor(), x.from(), x.to());
             case Action.OpenPack x       -> join("OPENPACK", x.actor(), x.pendingIndex());
             case Action.PickFromPack x   -> join("PICK", x.actor(), x.optionIndex(), target(x.relicTarget()));
             case Action.BuyCard x        -> join("BUY", x.actor(), x.slotIndex());
@@ -76,6 +78,8 @@ public final class ActionCodec {
             case "SELLCONS"  -> new Action.SellConsumable(actor, i(f[2]));
             case "SELLRELIC" -> new Action.SellRelic(actor, i(f[2]));
             case "MOVE"      -> new Action.MoveJoker(actor, i(f[2]), i(f[3]));
+            case "MOVECONS"  -> new Action.MoveConsumable(actor, i(f[2]), i(f[3]));
+            case "MOVERELIC" -> new Action.MoveRelic(actor, i(f[2]), i(f[3]));
             case "OPENPACK"  -> new Action.OpenPack(actor, i(f[2]));
             case "PICK"      -> new Action.PickFromPack(actor, i(f[2]), target(f, 3));
             case "BUY"       -> new Action.BuyCard(actor, i(f[2]));

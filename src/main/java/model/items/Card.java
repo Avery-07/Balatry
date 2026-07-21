@@ -7,13 +7,25 @@ import model.modifiers.StickerState;
 import java.util.EnumMap;
 import java.util.Map;
 
-/** Common state for every card: edition, stickers (with per-sticker state), and shop value. */
+/** Common state for every card: identity, edition, stickers (with per-sticker state), and shop value. */
 public abstract class Card {
+
+    private static final java.util.concurrent.atomic.AtomicInteger IDS = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * Stable per-instance identity, purely for the client: retained tile entities match across frames by this,
+     * which is what lets a joker slide when the board reorders instead of teleporting. NEVER use it as an RNG
+     * salt or in any model decision — the counter is JVM-global and advances differently on every process.
+     */
+    private final int id = IDS.incrementAndGet();
 
     private Edition edition;
     private final Map<Sticker, StickerState> stickers = new EnumMap<>(Sticker.class);
     private int shopValue;
     private boolean suppressed;   // transient silence owned by whoever set it; see isSuppressed()
+
+    /** Cross-frame animation identity; cosmetic only (see the field note). */
+    public int id() { return id; }
 
     public Edition getEdition() { return edition; }
 

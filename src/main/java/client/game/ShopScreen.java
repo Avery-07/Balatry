@@ -2,11 +2,23 @@ package client.game;
 
 import client.MatchSnapshot;
 import client.engine.Layout;
+import client.engine.TileRow;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.IntFunction;
 
 import static client.game.Palette.*;
 
-/** The shop: Next Round / Reroll, a card shelf, and separate voucher and pack shelves. Items are click-to-select. */
+/**
+ * The shop: Next Round / Reroll, a card shelf, and separate voucher and pack shelves. Items are click-to-select,
+ * and every shelf is a retained {@link TileRow} — shop tiles have nowhere to be dragged <em>to</em>, but they
+ * lift with the cursor and glide back like everything else, so the whole table obeys one grammar. Sold slots
+ * stay as static "(sold)" holes; a fresh reroll's tiles spawn in place.
+ */
 final class ShopScreen implements Screen {
+
+    private static final double TILE_W = 108, TILE_H = 130, STEP = 118;
 
     @Override
     public void render(Ui ui, double x, double y, double w, double h) {
@@ -21,48 +33,73 @@ final class ShopScreen implements Screen {
         cy += 60;
 
         r.textLeftBold("Cards", ix, cy, 12, FAINT); cy += 18;
-        double px = ix;
-        for (int i = 0; i < shop.slots().size(); i++) {
-            MatchSnapshot.ShopItem it = shop.slots().get(i);
-            tile(ui, px, cy, it == null ? null : it.label(), it == null ? 0 : it.price(), javafx.scene.paint.Color.web("#c0392b"), it != null, "shopSlot", i);
-            // The drawback strip: a stickered/editioned card announces it on the tile, before the purchase.
-            if (it != null && !it.badge().isEmpty()) {
-                r.panel(px, cy + 16 + 130 - 18, 108, 18, javafx.scene.paint.Color.web("#000a"), null, 6, 0);
-                r.textCenter(it.badge(), px + 54, cy + 16 + 130 - 9, 9, GOLD);
-            }
-            if (it != null) ui.tip(new Layout.Rect(px, cy + 16, 108, 130), it.tooltip());
-            px += 118;
-        }
+        shelf(ui, ui.shopSlotRow, shop.slots().size(), ix, cy,
+                i -> shop.slots().get(i) == null ? null : new Tile(
+                        shop.slots().get(i).id(), shop.slots().get(i).label(), shop.slots().get(i).price(),
+                        javafx.scene.paint.Color.web("#c0392b"), true, "shopSlot",
+                        shop.slots().get(i).badge(), shop.slots().get(i).tooltip(), i));
         cy += 150;
 
         r.textLeftBold("Voucher", ix, cy, 12, FAINT);
         r.textLeftBold("Booster Packs", ix + iw / 2, cy, 12, FAINT); cy += 18;
-        for (int i = 0; i < shop.vouchers().size(); i++) {
-            MatchSnapshot.VoucherItem v = shop.vouchers().get(i);
-            tile(ui, ix + i * 118, cy, v == null ? null : v.label(), v == null ? 0 : v.price(), BLUE, v != null && v.redeemable(), "shopVoucher", i);
-            if (v != null) ui.tip(new Layout.Rect(ix + i * 118, cy + 16, 108, 130),
-                    v.tooltip() + (v.redeemable() ? "" : "\n(one voucher per ante — already redeemed)"));
-        }
-        double ppx = ix + iw / 2;
-        for (int i = 0; i < shop.packs().size(); i++) {
-            MatchSnapshot.ShopItem p = shop.packs().get(i);
-            tile(ui, ppx, cy, p == null ? null : p.label(), p == null ? 0 : p.price(), PURPLE, p != null, "shopPack", i);
-            if (p != null) ui.tip(new Layout.Rect(ppx, cy + 16, 108, 130), p.tooltip());
-            ppx += 118;
-        }
+        shelf(ui, ui.shopVoucherRow, shop.vouchers().size(), ix, cy,
+                i -> {
+                    MatchSnapshot.VoucherItem v = shop.vouchers().get(i);
+                    return v == null ? null : new Tile(v.id(), v.label(), v.price(), BLUE, v.redeemable(), "shopVoucher", "",
+                            v.tooltip() + (v.redeemable() ? "" : "\n(one voucher per ante — already redeemed)"), i);
+                });
+        shelf(ui, ui.shopPackRow, shop.packs().size(), ix + iw / 2, cy,
+                i -> {
+                    MatchSnapshot.ShopItem p = shop.packs().get(i);
+                    return p == null ? null : new Tile(p.id(), p.label(), p.price(), PURPLE, true, "shopPack", "", p.tooltip(), i);
+                });
     }
 
-    private void tile(Ui ui, double x, double y, String label, int price, javafx.scene.paint.Color c, boolean enabled, String kind, int index) {
-        Renderer r = ui.r;
-        Layout.Rect rr = new Layout.Rect(x, y + 16, 108, 130);
-        r.panel(rr.x(), rr.y(), rr.w(), rr.h(), c, javafx.scene.paint.Color.web("#0006"), 8, 2);
-        if (label != null) {
-            r.textCenter(label, x + 54, y + 70, 11, INK);
-            r.panel(x + 30, y + 2, 48, 22, PANEL, GOLD, 8, 2);
-            r.textCenterBold("$" + price, x + 54, y + 13, 12, ORANGE);
-            if (enabled) ui.selectables.add(new Ui.Sel(rr, kind, index));
-        } else {
-            r.textCenter("(sold)", x + 54, y + 80, 11, FAINT);
+    /** Everything one shelf tile needs to draw and register itself; {@code slotIndex} is the MODEL's slot. */
+    private record Tile(int id, String label, int price, javafx.scene.paint.Color color,
+                        boolean enabled, String kind, String badge, String tooltip, int slotIndex) { }
+
+    /**
+     * Lays one shelf out on its retained row and draws it: sold (null) positions render as static holes and are
+     * left out of the row, live tiles animate — which is what makes a dragged one lift and glide home.
+     */
+    private void shelf(Ui ui, TileRow row, int slotCount, double x, double y, IntFunction<Tile> tileAt) {
+        List<Integer> ids = new ArrayList<>();
+        List<Tile> tiles = new ArrayList<>();
+        List<Double> slotsX = new ArrayList<>();
+        for (int i = 0; i < slotCount; i++) {
+            Tile t = tileAt.apply(i);
+            double cx = x + i * STEP + TILE_W / 2;
+            if (t == null) {   // a spent slot: a hole in the shelf, not a tile in the row
+                ui.r.panel(x + i * STEP, y + 16, TILE_W, TILE_H, javafx.scene.paint.Color.web("#1a1b1f"), EDGE, 8, 2);
+                ui.r.textCenter("(sold)", cx, y + 80, 11, FAINT);
+                continue;
+            }
+            ids.add(t.id()); tiles.add(t); slotsX.add(cx);
         }
+        row.reconcile(ids);
+        double[] xs = new double[slotsX.size()];
+        for (int i = 0; i < xs.length; i++) xs[i] = slotsX.get(i);
+        double cy = y + 16 + TILE_H / 2;
+        row.layout(xs, cy);
+
+        for (int i = 0; i < tiles.size(); i++) if (!row.isDragged(tiles.get(i).id())) draw(ui, row, tiles.get(i), i);
+        for (int i = 0; i < tiles.size(); i++) if (row.isDragged(tiles.get(i).id()))  draw(ui, row, tiles.get(i), i);
+    }
+
+    private void draw(Ui ui, TileRow row, Tile t, int index) {
+        Renderer r = ui.r;
+        double tx = row.x(t.id()) - TILE_W / 2, ty = row.y(t.id()) - TILE_H / 2;
+        Layout.Rect rr = new Layout.Rect(tx, ty, TILE_W, TILE_H);
+        r.panel(rr.x(), rr.y(), rr.w(), rr.h(), t.color(), javafx.scene.paint.Color.web("#0006"), 8, 2);
+        r.textCenter(t.label(), rr.centerX(), ty + 54, 11, INK);
+        r.panel(tx + 30, ty - 14, 48, 22, PANEL, GOLD, 8, 2);
+        r.textCenterBold("$" + t.price(), rr.centerX(), ty - 3, 12, ORANGE);
+        if (!t.badge().isEmpty()) {   // the drawback strip: stickers/editions announce themselves pre-purchase
+            r.panel(tx, ty + TILE_H - 18, TILE_W, 18, javafx.scene.paint.Color.web("#000a"), null, 6, 0);
+            r.textCenter(t.badge(), rr.centerX(), ty + TILE_H - 9, 9, GOLD);
+        }
+        if (t.enabled()) ui.selectables.add(new Ui.Sel(rr, t.kind(), t.slotIndex()));
+        ui.tip(rr, t.tooltip());
     }
 }

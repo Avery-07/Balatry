@@ -588,6 +588,8 @@ public final class Match {
             case Action.SellConsumable a-> run.sellConsumable(a.index());
             case Action.SellRelic a     -> run.sellRelic(a.index());
             case Action.MoveJoker a     -> { run.board().move(a.from(), a.to()); yield null; }
+            case Action.MoveConsumable a -> { run.moveConsumable(a.from(), a.to()); yield null; }
+            case Action.MoveRelic a     -> { run.moveRelic(a.from(), a.to()); yield null; }
             case Action.OpenPack a      -> { run.beginOpening(run.openPendingPack(a.pendingIndex())); yield run.getCurrentOpening(); }
             case Action.PickFromPack a  -> applyPick(run, a);
 
