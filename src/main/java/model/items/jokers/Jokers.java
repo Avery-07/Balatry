@@ -32,40 +32,62 @@ import java.util.random.RandomGenerator;
 /** The joker catalog, in document order with a comment before every group of five. */
 public enum Jokers {
 
-    // Jokers 001-005
+    // region Jokers 001-005
     JOKER("Joker", Rarity.COMMON, 2, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().addMult(4))),
-    GREEDY_JOKER("Greedy Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND)) run.getScoring().addMult(3); })),
-    LUSTY_JOKER("Lusty Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART)) run.getScoring().addMult(3); })),
-    WRATHFUL_JOKER("Wrathful Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.SPADE)) run.getScoring().addMult(3); })),
-    GLUTTONOUS_JOKER("Gluttonous Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.CLUB)) run.getScoring().addMult(3); })),
-
-    // Jokers 006-010
-
-    // Jokers 011-015
-
-    // Jokers 016-020  (skipped : 018 Four Fingers)
+    BANNER("Banner", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getRound() != null) run.getScoring().addChips(30L * run.getRound().getDiscardsRemaining()); })),
+    BLUE_JOKER("Blue Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addChips(2L * run.getDeck().size()))),
+    BULL("Bull", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addChips(2L * Math.max(0, run.getMoney())))),
+    SQUARE_JOKER("Square Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                if (run.getScoring().getHand().playedCount() == 4) self.addCounter(4);
+                run.getScoring().addChips(self.getCounter());
+            })),
+    // endregion
+    // region Jokers 006-010 (missing : Hiker)
+    HIKER("HIKER", Rarity.UNCOMMON, 5, b -> b),
     HALF_JOKER("Half Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> { if (run.getScoring().getHand().playedCount() <= 3) run.getScoring().addMult(20); })),
-    JOKER_STENCIL("Joker Stencil", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+    MYSTIC_SUMMIT("Mystic Summit", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                int jokers = 0;
-                for (JokerCard j : run.getJokers()) if (j.getSpec() != self.getSpec()) jokers++;
-                int empty = run.getJokerSlots() - jokers;
-                if (empty > 0) run.getScoring().multiplyMult(BigDecimal.valueOf(empty));
+                if (run.getRound() != null && run.getRound().getDiscardsRemaining() == 0)
+                    run.getScoring().addMult(15);
             })),
-    MIME("Mime", Rarity.UNCOMMON, 5, b -> b.retriggerHeld((run, self, card) -> 1)),
-    CREDIT_CARD("Credit Card", Rarity.COMMON, 2, b -> b
-            .debtAllowance(20)
-            .on(Trigger.ON_SPEND, (run, self) -> self.setCounter(self.getCounter() + run.getLastInDebtSpend()))
-            .on(Trigger.ON_EARN, (run, self) -> { if (run.getMoney() >= 0) self.setCounter(0); })
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
-
-    // Jokers 021-025
+    RAISED_FIST("Raised Fist", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                DeckCard low = null;
+                for (DeckCard c : run.getHeld()) if (low == null || c.getRank().getChips() < low.getRank().getChips()) low = c;
+                if (low != null) run.getScoring().addMult(2L * low.getRank().getChips());
+            })),
+    MISPRINT("Misprint", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                RandomGenerator g = gen(run, RngSource.MISC);
+                run.getScoring().addMult(g.nextInt(16));
+                run.getScoring().multiplyMult(BigDecimal.valueOf(75 + 25L * g.nextInt(4), 2));
+            })),
+    // endregion
+    // region Jokers 011-015
+    SWASHBUCKLER("Swashbuckler", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                int sum = 0;
+                for (JokerCard j : run.getJokers()) if (j != self) sum += j.getSellValue();
+                run.getScoring().addMult(sum);
+            })),
+    ABSTRACT_JOKER("Abstract Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(3L * run.getJokers().size()))),
+    GREEN_JOKER("Green Joker", Rarity.COMMON, 4, b -> b
+            .state(self -> "Current bonus: +" + self.getCounter() + " Mult")
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { self.addCounter(1); run.getScoring().addMult(self.getCounter()); })
+            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.setCounter(Math.max(0, self.getCounter() - 1)))),
+    BOOTSTRAPS("Bootstraps", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(2L * (Math.max(0, run.getMoney()) / 5)))),
+    EROSION("Erosion", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(4L * Math.max(0, 52 - run.getDeck().size())))),
+    // endregion
+    // region Jokers 016-020 (missing : Red Joker)
     CEREMONIAL_DAGGER("Ceremonial Dagger", Rarity.UNCOMMON, 6, b -> b
             .on(Trigger.ON_ROUND_START, (run, self) -> {
                 List<JokerCard> jokers = run.getJokers();
@@ -77,127 +99,72 @@ public enum Jokers {
                 }
             })
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
-    BANNER("Banner", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getRound() != null) run.getScoring().addChips(30L * run.getRound().getDiscardsRemaining()); })),
-    MYSTIC_SUMMIT("Mystic Summit", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+    RED_JOKER("Red Joker", Rarity.COMMON, 5, b -> b),
+    FLASH_CARD("Flash Card", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(2L * run.getStats().getRerolls()))),
+    ACROBAT("Acrobat", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getRound() != null && run.getRound().getHandsRemaining() == 1) run.getScoring().multiplyMult(x("3")); })),
+    CARD_SHARP("Card Sharp", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getStats().getHandPlaysThisRound(run.getScoring().getHand().type()) > 1) run.getScoring().multiplyMult(x("3")); })),
+    // endregion
+    // region Jokers 021-025
+    JOKER_STENCIL("Joker Stencil", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                if (run.getRound() != null && run.getRound().getDiscardsRemaining() == 0)
-                    run.getScoring().addMult(15);
+                int jokers = 0;
+                for (JokerCard j : run.getJokers()) if (j.getSpec() != self.getSpec()) jokers++;
+                int empty = run.getJokerSlots() - jokers;
+                if (empty > 0) run.getScoring().multiplyMult(BigDecimal.valueOf(empty));
             })),
-    MARBLE_JOKER("Marble Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
+    THROWBACK("Throwback", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("0.3", run.getStats().getBlindsSkipped())))),
+    CHALLENGER("Challenger", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);
-                stone.apply(Enhancement.STONE);
-                long salt = run.getDeck().size();
-                if (run.getRng().chance(RngSource.MISC, salt, 1, 2)) {
-                    Seal[] seals = Seal.values();
-                    stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt, seals.length)]);
-                }
-                run.addCardToDeck(stone);
+                int stickers = 0;
+                for (JokerCard j : run.getJokers())      stickers += j.getStickers().size();
+                for (ConsumableCard cc : run.getConsumables()) stickers += cc.getStickers().size();
+                for (DeckCard d : run.getDeck())         stickers += d.getStickers().size();
+                if (stickers > 0) run.getScoring().multiplyMult(onePlus("0.25", stickers));
             })),
-    LOYALTY_CARD("Loyalty Card", Rarity.UNCOMMON, 7, b -> b
-            // counter = completed purchases since acquisition; the grant is a pure read at pricing time,
-            // so a failed buy neither advances the count nor burns the free purchase.
-            .on(Trigger.ON_PURCHASE_PRICING,
-                    (run, self) -> { if ((self.getCounter() + 1) % 4 == 0) run.makePurchaseFree(); })
-            .on(Trigger.ON_BOUGHT,
-                    (run, self) -> self.setCounter(self.getCounter() + 1))),
-
-    // Jokers 026-030  (skipped : 030 Chaos the Clown)
-    EIGHT_BALL("8 Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+    HOLOGRAM("Hologram", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("0.25", run.getStats().getCardsAdded())))),
+    MADNESS("Madness", Rarity.UNCOMMON, 7, b -> b
+            .on(Trigger.ON_ROUND_START, (run, self) -> {
+                if (run.getMatch() == null || run.getMatch().getBlind() == Blind.BOSS) return;
+                self.addCounter(1);
+                List<JokerCard> js = run.getJokers();
+                int i = js.indexOf(self);
+                List<Integer> adj = new ArrayList<>();
+                if (i - 1 >= 0 && !js.get(i - 1).hasSticker(Sticker.ETERNAL)) adj.add(i - 1);
+                if (i + 1 < js.size() && !js.get(i + 1).hasSticker(Sticker.ETERNAL)) adj.add(i + 1);
+                if (!adj.isEmpty()) run.destroyJoker(js.get(adj.get(gen(run, RngSource.MISC).nextInt(adj.size()))));
+            })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.5", self.getCounter())))),
+    // endregion
+    // region Jokers 026-030 (missing : Scalper, Vulture, Transparent Joker)
+    GRUDGE("Grudge", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                DeckCard c = scored(run);
-                if (c != null && c.getRank() == Rank.EIGHT && run.roll(RngSource.TAROT_GENERATION, 1, 4))
-                    createEditioned(run, new ConsumableCard(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()));
+                int hits = run.getStats().getTimesTargeted();
+                if (hits > 0) run.getScoring().multiplyMult(onePlus("0.2", hits));
             })),
-    MISPRINT("Misprint", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+    SCALPER("Scalper", Rarity.COMMON, 5, b -> b),
+    GENERATIONAL_HATER("Generational Hater", Rarity.UNCOMMON, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_BOSS_DEFEATED,
             (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null || run.getPlayerId() == null) return;
+                List<PlayerId> above = m.seatsAbove(run.getPlayerId());
+                if (above.isEmpty()) return;
                 RandomGenerator g = gen(run, RngSource.MISC);
-                run.getScoring().addMult(g.nextInt(16));                                            // new: +0 to +15 Mult
-                run.getScoring().multiplyMult(BigDecimal.valueOf(75 + 25L * g.nextInt(4), 2));      // and X0.75 to X1.5 in quarter steps
+                List<JokerCard> theirs = m.getRun(above.get(g.nextInt(above.size()))).getJokers();
+                if (theirs.isEmpty()) return;
+                Sticker[] pool = { Sticker.ETERNAL, Sticker.PERISHABLE, Sticker.RENTAL, Sticker.STICKY, Sticker.DELAYED, Sticker.FLOATING, Sticker.FRAGILE };
+                theirs.get(g.nextInt(theirs.size())).apply(pool[g.nextInt(pool.length)]);
             })),
-    DUSK("Dusk", Rarity.UNCOMMON, 5, b -> b.retriggerPlayed(
-            (run, self, card) -> (run.getRound() != null && run.getRound().getHandsRemaining() == 1) ? 1 : 0)),
-    RAISED_FIST("Raised Fist", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                DeckCard low = null;
-                for (DeckCard c : run.getHeld()) if (low == null || c.getRank().getChips() < low.getRank().getChips()) low = c;
-                if (low != null) run.getScoring().addMult(2L * low.getRank().getChips());
-            })),
-
-    // Jokers 031-035
+    VULTURE("Vulture", Rarity.UNCOMMON, 7, b -> b),              // TODO: an "opponent failed a blind" event
+    TRANSPARENT_JOKER("Transparent Joker", Rarity.UNCOMMON, 7, b -> b),   // TODO: sell-to-copy a leader's joker
+    // endregion
+    // region Jokers 031-035
     FIBONACCI("Fibonacci", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && isFibonacci(c.getRank())) run.getScoring().addMult(8); })),
-    STEEL_JOKER("Steel Joker", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("0.2", deckCount(run, Enhancement.STEEL))))),
-    SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addChips(30); })),
-    ABSTRACT_JOKER("Abstract Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(3L * run.getJokers().size()))),
-    DELAYED_GRATIFICATION("Delayed Gratification", Rarity.COMMON, 4, b -> b.on(Trigger.ON_ROUND_END,
-            (run, self) -> { if (run.getRound() != null) run.addMoney(2 * run.getRound().getDiscardsRemaining()); })),   // new: $2 per unused discard
-
-    // Jokers 036-040  (skipped : 037 Pareidolia)
-    HACK("Hack", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
-            (run, self, card) -> switch (card.getRank()) { case TWO, THREE, FOUR, FIVE -> 1; default -> 0; })),
-    GROS_MICHEL("Gros Michel", Rarity.COMMON, 5, b -> b
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(15))
-            .on(Trigger.ON_ROUND_END, (run, self) -> { if (run.roll(RngSource.MISC, 1, 6)) self.setCounter(1); })   // doomed (1 in 6)
-            .on(Trigger.ON_ROUND_START, (run, self) -> { if (self.getCounter() == 1) run.destroyJoker(self); })),   // destroyed at next blind select (safe; ON_ROUND_END iterates the live board)
-    EVEN_STEVEN("Even Steven", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && isEven(c.getRank())) run.getScoring().addMult(4); })),
-    ODD_TODD("Odd Todd", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && isOdd(c.getRank())) run.getScoring().addChips(31); })),
-
-    // Jokers 041-045
-    SCHOLAR("Scholar", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.ACE) { run.getScoring().addChips(20); run.getScoring().addMult(4); } })),
-    BUSINESS_CARD("Business Card", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
-    SUPERNOVA("Supernova", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(run.getStats().getHandPlays(run.getScoring().getHand().type())))),
-    RIDE_THE_BUS("Ride the Bus", Rarity.COMMON, 6, b -> b
-            .state(self -> "Current streak: +" + (self.getCounter() >> 1) + " Mult")
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) self.setCounter(self.getCounter() | 1); })   // low bit = a scoring face appeared this hand
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
-                int streak = self.getCounter() >> 1;
-                streak = (self.getCounter() & 1) == 1 ? 0 : streak + 1;
-                run.getScoring().addMult(streak);
-                self.setCounter(streak << 1);
-            })),
-    SPACE_JOKER("Space Joker", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.roll(RngSource.MISC, 1, 4)) run.levelUpHand(run.getScoring().getHand().type()); })),
-
-    // Jokers 046-050  (skipped : 047 Burglar)
-    EGG("Egg", Rarity.COMMON, 4, b -> b.on(Trigger.ON_ROUND_END,
-            (run, self) -> self.setSellValue(self.getSellValue() + 3))),
-    CHEETAH("Cheetah", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                if (run.getScoring().getHand().hasStraight()) self.addCounter(15);
-                run.getScoring().addChips(self.getCounter());
-            })),
-    ICE_CREAM("Ice Cream", Rarity.COMMON, 5, b -> b
-            .state(self -> "Chips left: " + Math.max(0, 100 - 5 * self.getCounter()))
-            .on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                run.getScoring().addChips(Math.max(0, 100 - 5 * self.getCounter()));
-                self.addCounter(1);
-            })),
-
-    // Jokers 051-055  (skipped : 052 Splash)
-    DNA("DNA", Rarity.RARE, 8, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> {
-                DeckCard c = scored(run);
-                int hand = run.getStats().getTotalHandsPlayed();
-                if (c != null && self.getCounter() != hand
-                        && run.getStats().getHandsPlayedThisRound() == 1
-                        && run.getScoring().getHand().playedCount() == 1) {
-                    self.setCounter(hand);
-                    run.addCardToHand(copyOf(c));
-                }
-            })),
-    BLUE_JOKER("Blue Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addChips(2L * run.getDeck().size()))),
     SIXTH_SENSE("Sixth Sense", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
@@ -211,182 +178,74 @@ public enum Jokers {
                     run.createConsumable(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
                 }
             })),
-    CONSTELLATION("Constellation", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("0.1", run.getStats().getConsumablesUsed(ConsumableType.PLANET))))),
-
-    // Jokers 056-060  (skipped : 056 Hiker)
-    FACELESS_JOKER("Faceless Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_DISCARDED,
-            (run, self) -> {
-                int faces = 0;
-                for (DeckCard c : run.getLastDiscarded()) if (c.isFace()) faces++;
-                if (faces >= 3) run.addMoney(6);
-            })),
-    GREEN_JOKER("Green Joker", Rarity.COMMON, 4, b -> b
-            .state(self -> "Current bonus: +" + self.getCounter() + " Mult")
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { self.addCounter(1); run.getScoring().addMult(self.getCounter()); })
-            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.setCounter(Math.max(0, self.getCounter() - 1)))),
-    SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+    EIGHT_BALL("8 Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
-                int hand = run.getStats().getTotalHandsPlayed();
-                if (c != null && c.getRank() == Rank.ACE && run.getScoring().getHand().hasStraight() && self.getCounter() != hand) {
-                    self.setCounter(hand);
-                    run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
-                }
+                if (c != null && c.getRank() == Rank.EIGHT && run.roll(RngSource.TAROT_GENERATION, 1, 4))
+                    createEditioned(run, new ConsumableCard(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()));
             })),
-    TO_DO_LIST("To Do List", Rarity.COMMON, 4, b -> b
-            .state(self -> "Listed hand this round: " + handTypeName(self.getCounter()))
-            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(HandType.values().length)))
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (run.getScoring().getHand().type().ordinal() == self.getCounter()) run.addMoney(4); })),
-
-    // Jokers 061-065  (skipped : 063 Red Joker)
-    CAVENDISH("Cavendish", Rarity.COMMON, 4, b -> b
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(x("3")))
-            .on(Trigger.ON_ROUND_END, (run, self) -> { if (run.roll(RngSource.MISC, 1, 1000)) self.setCounter(1); })
-            .on(Trigger.ON_ROUND_START, (run, self) -> { if (self.getCounter() == 1) run.destroyJoker(self); })),
-    CARD_SHARP("Card Sharp", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getStats().getHandPlaysThisRound(run.getScoring().getHand().type()) > 1) run.getScoring().multiplyMult(x("3")); })),
-    MADNESS("Madness", Rarity.UNCOMMON, 7, b -> b
-            .on(Trigger.ON_ROUND_START, (run, self) -> {
-                if (run.getMatch() == null || run.getMatch().getBlind() == Blind.BOSS) return;
-                self.addCounter(1);
-                List<JokerCard> js = run.getJokers();
-                int i = js.indexOf(self);
-                List<Integer> adj = new ArrayList<>();
-                if (i - 1 >= 0 && !js.get(i - 1).hasSticker(Sticker.ETERNAL)) adj.add(i - 1);
-                if (i + 1 < js.size() && !js.get(i + 1).hasSticker(Sticker.ETERNAL)) adj.add(i + 1);
-                if (!adj.isEmpty()) run.destroyJoker(js.get(adj.get(gen(run, RngSource.MISC).nextInt(adj.size()))));
-            })
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.5", self.getCounter())))),
-    SQUARE_JOKER("Square Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
+    CELESTIAL_7("Celestial 7", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
-                if (run.getScoring().getHand().playedCount() == 4) self.addCounter(4);
-                run.getScoring().addChips(self.getCounter());
-            })),
-
-    // Jokers 066-070  (skipped : 069 Shortcut)
-    SEANCE("Séance", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                var hand = run.getScoring().getHand();
-                if (hand.hasStraight() && hand.hasFlush()) {   // a straight and a flush together is a straight flush
-                    ConsumableCard card = new ConsumableCard(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
-                    card.apply(Edition.NEGATIVE);
-                    run.addConsumable(card);
-                }
-            })),
-    RIFF_RAFF("Riff-Raff", Rarity.COMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
-            (run, self) -> {
-                for (int k = 0; k < 2; k++)
-                    run.createJoker(Jokers.randomOfRarity(Rarity.COMMON, gen(run, RngSource.JOKER_GENERATION)).make());
-            })),
-    VAMPIRE("Vampire", Rarity.UNCOMMON, 7, b -> b
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> {
                 DeckCard c = scored(run);
-                if (c != null && c.getEnhancement() != null) { self.addCounter(1); c.remove(c.getEnhancement()); }
-            })
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.1", self.getCounter())))),
-    HOLOGRAM("Hologram", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("0.25", run.getStats().getCardsAdded())))),
-
-    // Jokers 071-075
-    VAGABOND("Vagabond", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getMoney() <= 4) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()); })),
-    BARON("Baron", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HELD_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.KING) run.getScoring().multiplyMult(x("1.5")); })),
+                if (c != null && c.getRank() == Rank.SEVEN && run.roll(RngSource.MISC, 1, 4))
+                    createEditioned(run, new ConsumableCard(Planets.random(gen(run, RngSource.PLANET_GENERATION)).spec()));
+            })),
     CLOUD_9("Cloud 9", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
                 int nines = 0;
                 for (DeckCard c : run.getDeck()) if (c.getRank() == Rank.NINE) nines++;
                 run.addMoney(nines);
             })),
-    ROCKET("Rocket", Rarity.UNCOMMON, 6, b -> b
-            .on(Trigger.ON_ROUND_END, (run, self) -> run.addMoney(1 + 2 * self.getCounter()))
-            .on(Trigger.ON_BOSS_DEFEATED, (run, self) -> self.addCounter(1))),
-    OBELISK("Obelisk", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+    // endregion
+    // region Jokers 036-040
+    SEVEN_ATE_NINE("7 Ate 9", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                List<HandType> recent = run.getStats().getRecentHands(3);
-                HandType cur = recent.get(0);
-                boolean repeat = (recent.size() > 1 && recent.get(1) == cur) || (recent.size() > 2 && recent.get(2) == cur);
-                if (repeat) self.setCounter(0); else self.addCounter(1);
-                run.getScoring().multiplyMult(onePlus("0.2", self.getCounter()));
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                int n = cards.size();
+                if (n >= 3 && cards.get(n - 3).getRank() == Rank.SEVEN && cards.get(n - 2).getRank() == Rank.EIGHT)
+                    run.destroyDeckCards(List.of(cards.get(n - 1)));
             })),
-
-    // Jokers 076-080  (skipped : 080 Turtle Bean)
-    MIDAS_MASK("Midas Mask", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) c.apply(Enhancement.GOLD); })),
-    LUCHADOR("Luchador", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_SOLD,
-            (run, self) -> run.disableBossForRound())),
+    WALKIE_TALKIE("Walkie Talkie", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.TEN || c.getRank() == Rank.FOUR)) { run.getScoring().addChips(10); run.getScoring().addMult(4); } })),
+    HIT_THE_ROAD("Hit the Road", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("0.5", run.getStats().getDiscardedThisRound(Rank.JACK))))),
+    SHOOT_THE_MOON("Shoot the Moon", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HELD_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.QUEEN) run.getScoring().addMult(13); })),
+    BARON("Baron", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HELD_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.KING) run.getScoring().multiplyMult(x("1.5")); })),
+    // endregion
+    // region Jokers 041-045
+    SCHOLAR("Scholar", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.ACE) { run.getScoring().addChips(20); run.getScoring().addMult(4); } })),
+    SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addChips(30); })),
+    SMILEY_FACE("Smiley Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addMult(5); })),
     PHOTOGRAPH("Photograph", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
                 int hand = run.getStats().getTotalHandsPlayed();
                 if (c != null && c.isFace() && self.getCounter() != hand) { run.getScoring().multiplyMult(x("2")); self.setCounter(hand); }
             })),
-    GIFT_CARD("Gift Card", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_END,
-            (run, self) -> {
-                for (JokerCard j : run.getJokers()) j.setSellValue(j.getSellValue() + 1);
-                for (ConsumableCard cc : run.getConsumables()) cc.setSellValue(cc.getSellValue() + 1);
-            })),
-
-    // Jokers 081-085  (skipped : 084 To the Moon, 085 Hallucination)
-    EROSION("Erosion", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(4L * Math.max(0, 52 - run.getDeck().size())))),
-    RESERVED_PARKING("Reserved Parking", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HELD_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),   // new: $2
-    MAIL_IN_REBATE("Mail-In Rebate", Rarity.COMMON, 4, b -> b
-            .state(self -> "Rebate rank this round: " + rankName(self.getCounter()))
-            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(Rank.values().length)))
-            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> {
-                int n = 0;
-                for (DeckCard c : run.getLastDiscarded()) if (c.getRank().ordinal() == self.getCounter()) n++;
-                if (n > 0) run.addMoney(4 * n);
-            })),
-
-    // Jokers 086-090  (skipped : 087 Juggler, 088 Drunkard)
-    FORTUNE_TELLER("Fortune Teller", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(run.getStats().getConsumablesUsed(ConsumableType.TAROT)))),
-    STONE_JOKER("Stone Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addChips(35L * deckCount(run, Enhancement.STONE)))),
-    YELLOW_JOKER("Yellow Joker", Rarity.COMMON, 6, b -> b.on(Trigger.ON_ROUND_END,
-            (run, self) -> run.addMoney(4))),
-
-    // Jokers 091-095  (skipped : 091 Lucky Cat, 094 Diet Cola)
-    BASEBALL_CARD("Baseball Card", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                for (JokerCard j : run.getJokers()) if (j.getSpec().getRarity() == Rarity.UNCOMMON) run.getScoring().multiplyMult(x("1.5"));
-            })),
-    BULL("Bull", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addChips(2L * Math.max(0, run.getMoney())))),
-    TRADING_CARD("Trading Card", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_DISCARDED,
-            (run, self) -> {
-                if (run.getStats().getDiscardsUsedThisRound() == 1 && run.getLastDiscarded().size() == 1) {
-                    run.destroyDeckCards(run.getLastDiscarded());
-                    run.addMoney(3);
-                }
-            })),
-
-    // Jokers 096-100
-    FLASH_CARD("Flash Card", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(2L * run.getStats().getRerolls()))),
-    POPCORN("Popcorn", Rarity.COMMON, 5, b -> b
-            .state(self -> "Mult left: " + Math.max(0, 20 - 4 * self.getCounter()))
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(Math.max(0, 20 - 4 * self.getCounter())))
-            .on(Trigger.ON_ROUND_END, (run, self) -> self.addCounter(1))),
-    ANCIENT_JOKER("Ancient Joker", Rarity.RARE, 8, b -> b
-            .state(self -> self.getCounter() > 0 ? "Suit this round: " + suitIndexName(self.getCounter() - 1) : "Suit chosen at round start")
-            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(4) + 1))
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && self.getCounter() > 0 && matchesSuit(c, self.getCounter() - 1)) run.getScoring().multiplyMult(x("1.5")); })),
-    RAMEN("Ramen", Rarity.UNCOMMON, 6, b -> b
-            .state(self -> "Current mult: X" + new BigDecimal("2").subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(self.getCounter()))).max(BigDecimal.ZERO))
-            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.addCounter(run.getLastDiscarded().size()))
+    RIDE_THE_BUS("Ride the Bus", Rarity.COMMON, 6, b -> b
+            .state(self -> "Current streak: +" + (self.getCounter() >> 1) + " Mult")
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) self.setCounter(self.getCounter() | 1); })   // low bit = a scoring face appeared this hand
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
-                BigDecimal mult = x("2").subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(self.getCounter())));
-                run.getScoring().multiplyMult(mult.max(BigDecimal.ZERO));
+                int streak = self.getCounter() >> 1;
+                streak = (self.getCounter() & 1) == 1 ? 0 : streak + 1;
+                run.getScoring().addMult(streak);
+                self.setCounter(streak << 1);
             })),
-
-    // Jokers 101-105  (skipped : 102 Seltzer)
-    WALKIE_TALKIE("Walkie Talkie", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.TEN || c.getRank() == Rank.FOUR)) { run.getScoring().addChips(10); run.getScoring().addMult(4); } })),
+    // endregion
+    // region Jokers 046-050
+    GREEDY_JOKER("Greedy Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND)) run.getScoring().addMult(3); })),
+    LUSTY_JOKER("Lusty Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART)) run.getScoring().addMult(3); })),
+    WRATHFUL_JOKER("Wrathful Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.SPADE)) run.getScoring().addMult(3); })),
+    GLUTTONOUS_JOKER("Gluttonous Joker", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.CLUB)) run.getScoring().addMult(3); })),
     CASTLE("Castle", Rarity.UNCOMMON, 6, b -> b
             .state(self -> "Current bonus: +" + self.getCounter() + " Chips")
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
@@ -394,58 +253,16 @@ public enum Jokers {
                     self.addCounter(run.getScoring().getHand().playedCount());
                 run.getScoring().addChips(self.getCounter());
             })),
-    SMILEY_FACE("Smiley Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addMult(5); })),
-    CAMPFIRE("Campfire", Rarity.RARE, 9, b -> b
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.25", run.getStats().getCardsSold() - self.getCounter())))
-            .on(Trigger.ON_BOSS_DEFEATED, (run, self) -> self.setCounter(run.getStats().getCardsSold()))),
-
-    // Jokers 106-110
-    GOLDEN_TICKET("Golden Ticket", Rarity.COMMON, 5, b -> b
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getEnhancement() == Enhancement.GOLD) run.addMoney(3); })
-            .on(Trigger.ON_HELD_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getSeal() == Seal.GOLD_SEAL) run.addMoney(2); })),
-    MR_BONES("Mr. Bones", Rarity.UNCOMMON, 5, b -> b.trait(JokerTrait.PREVENTS_LOSS)),
-    ACROBAT("Acrobat", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getRound() != null && run.getRound().getHandsRemaining() == 1) run.getScoring().multiplyMult(x("3")); })),
-    SOCK_AND_BUSKIN("Sock and Buskin", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
-            (run, self, card) -> card.isFace() ? 1 : 0)),
-    SWASHBUCKLER("Swashbuckler", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                int sum = 0;
-                for (JokerCard j : run.getJokers()) if (j != self) sum += j.getSellValue();
-                run.getScoring().addMult(sum);
-            })),
-
-    // Jokers 111-115  (skipped : 111 Troubadour, 113 Smeared Joker)
-    CERTIFICATE("Certificate", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
-            (run, self) -> {
-                RandomGenerator g = gen(run, RngSource.MISC);
-                DeckCard c = new DeckCard(Rank.values()[g.nextInt(Rank.values().length)], DeckCard.Suit.values()[g.nextInt(4)]);
-                c.apply(Seal.values()[g.nextInt(Seal.values().length)]);
-                c.apply(Enhancement.values()[g.nextInt(Enhancement.values().length)]);
-                run.addCardToHand(c);
-            })),
-    THROWBACK("Throwback", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("0.3", run.getStats().getBlindsSkipped())))),
-    HANGING_CHAD("Hanging Chad", Rarity.COMMON, 4, b -> b.retriggerPlayed((run, self, card) -> {
-                int hand = run.getStats().getTotalHandsPlayed();
-                if (self.getCounter() != hand) { self.setCounter(hand); return 2; }
-                return 0;
-            })),
-
-    // Jokers 116-120
-    ROUGH_GEM("Rough Gem", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
-    BLOODSTONE("Bloodstone", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().multiplyMult(x("1.5")); })),
+    // endregion
+    // region Jokers 051-055
     ARROWHEAD("Arrowhead", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { if (isSuit(run.getScoring(), Suit.SPADE) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().addChips(75); })),
+    BLOODSTONE("Bloodstone", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().multiplyMult(x("1.5")); })),
     ONYX_AGATE("Onyx Agate", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { if (isSuit(run.getScoring(), Suit.CLUB) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().addMult(16); })),
-    GLASS_JOKER("Glass Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("0.75", run.getStats().getGlassDestroyed())))),
-
-    // Jokers 121-125  (skipped : 121 Showman, 125 Merry Andy)
+    ROUGH_GEM("Rough Gem", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
     FLOWER_POT("Flower Pot", Rarity.UNCOMMON, 6, b -> b
             .on(Trigger.ON_SCORED_CARD, (run, self) -> {
                 int hand = run.getStats().getTotalHandsPlayed();
@@ -460,17 +277,12 @@ public enum Jokers {
                 int suits = Integer.bitCount(mask);
                 if (suits > 1) run.getScoring().multiplyMult(BigDecimal.valueOf(suits));
             })),
-    BLUEPRINT("Blueprint", Rarity.RARE, 10, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<JokerCard> js = run.getJokers();
-                int i = js.indexOf(self);
-                if (i >= 0 && i + 1 < js.size()) run.getScoring().retriggerJoker(js.get(i + 1));
-            })),
-    WEE_JOKER("Wee Joker", Rarity.RARE, 8, b -> b
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.TWO) self.addCounter(8); })
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addChips(self.getCounter()))),
-
-    // Jokers 126-130  (skipped : 126 Oops! All 6s)
+    // endregion
+    // region Jokers 056-060
+    ODD_TODD("Odd Todd", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && isOdd(c.getRank())) run.getScoring().addChips(31); })),
+    EVEN_STEVEN("Even Steven", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && isEven(c.getRank())) run.getScoring().addMult(4); })),
     THE_IDOL("The Idol", Rarity.UNCOMMON, 6, b -> b
             .state(self -> "Idolized card this round: " + rankName(self.getCounter() / 4) + " of " + suitIndexName(self.getCounter() % 4))
             .on(Trigger.ON_ROUND_START, (run, self) -> {
@@ -482,20 +294,51 @@ public enum Jokers {
                 if (c != null && c.getRank().ordinal() == self.getCounter() / 4 && matchesSuit(c, self.getCounter() % 4))
                     run.getScoring().multiplyMult(x("2"));
             })),
-    // Siamese Cat (#98, formerly Spare Trousers): placed here where Seeing Double (removed) used to sit.
+    ANCIENT_JOKER("Ancient Joker", Rarity.RARE, 8, b -> b
+            .state(self -> self.getCounter() > 0 ? "Suit this round: " + suitIndexName(self.getCounter() - 1) : "Suit chosen at round start")
+            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(4) + 1))
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && self.getCounter() > 0 && matchesSuit(c, self.getCounter() - 1)) run.getScoring().multiplyMult(x("1.5")); })),
+    SUPERNOVA("Supernova", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(run.getStats().getHandPlays(run.getScoring().getHand().type())))),
+    // endregion
+    // region Jokers 061-065
     SIAMESE_CAT("Siamese Cat", Rarity.UNCOMMON, 6, b -> b
             .state(self -> "Current bonus: +" + self.getCounter() + " Mult")
             .on(Trigger.ON_HAND_PLAYED,
+                    (run, self) -> {
+                        if (run.getScoring().getHand().hasTwoPair()) self.addCounter(2);
+                        run.getScoring().addMult(self.getCounter());
+                    })),
+    CUCKOO_BIRD("Cuckoo Bird", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                if (run.getScoring().getHand().hasTwoPair()) self.addCounter(2);
-                run.getScoring().addMult(self.getCounter());
+                List<DeckCard> held = run.getHeld();
+                if (run.getScoring().getHand().hasThreeOfAKind() && !held.isEmpty()) {
+                    Rank r = dominantRank(run.getScoring().getScoringCards());
+                    if (r != null) held.get(0).setRank(r);
+                }
             })),
-    MATADOR("Matador", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.bossTriggeredThisPlay()) run.addMoney(8); })),
-    HIT_THE_ROAD("Hit the Road", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("0.5", run.getStats().getDiscardedThisRound(Rank.JACK))))),
-
-    // Jokers 131-135
+    CHEETAH("Cheetah", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                if (run.getScoring().getHand().hasStraight()) self.addCounter(15);
+                run.getScoring().addChips(self.getCounter());
+            })),
+    CHAMELEON("Chameleon", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                List<DeckCard> held = run.getHeld();
+                if (run.getScoring().getHand().hasFlush() && !cards.isEmpty() && !held.isEmpty())
+                    held.get(0).setSuit(cards.get(0).getSuit());
+            })),
+    BUTTERFLY("Butterfly", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                if (run.getScoring().getHand().type() == HandType.FULL_HOUSE && !cards.isEmpty()) {
+                    Enhancement[] all = Enhancement.values();
+                    cards.get(0).apply(all[gen(run, RngSource.MISC).nextInt(all.length)]);
+                }
+            })),
+    // endregion
+    // region Jokers 066-070
     THE_DUO("The Duo", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> { if (run.getScoring().getHand().hasPair()) run.getScoring().multiplyMult(x("2")); })),
     THE_TRIO("The Trio", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
@@ -506,82 +349,22 @@ public enum Jokers {
             (run, self) -> { if (run.getScoring().getHand().hasStraight()) run.getScoring().multiplyMult(x("3")); })),
     THE_TRIBE("The Tribe", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> { if (run.getScoring().getHand().hasFlush()) run.getScoring().multiplyMult(x("2")); })),
-
-    // Jokers 136-140  (skipped : 136 Stuntman, 137 Invisible Joker)
-    BRAINSTORM("Brainstorm", Rarity.RARE, 10, b -> b.on(Trigger.ON_HAND_PLAYED,
+    // endregion
+    // region Jokers 071-075
+    RABBIT("Rabbit", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                List<JokerCard> js = run.getJokers();
-                if (!js.isEmpty() && js.get(0) != self) run.getScoring().retriggerJoker(js.get(0));
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                if (run.getScoring().getHand().hasFourOfAKind() && !cards.isEmpty())
+                    run.addCardToHand(copyOf(cards.get(0)));
             })),
-    SATELLITE("Satellite", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_END,
+    SEANCE("Séance", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                HandType most = run.getStats().getMostPlayedHand();
-                if (most != null) run.addMoney(run.getHandLevels().levelOf(most) / 3);
-            })),
-    SHOOT_THE_MOON("Shoot the Moon", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HELD_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.QUEEN) run.getScoring().addMult(13); })),
-
-    // Jokers 141-145  (skipped : 143 Astronomer)
-    DRIVERS_LICENSE("Driver's License", Rarity.RARE, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                int enhanced = 0;
-                for (DeckCard c : run.getDeck()) if (c.getEnhancement() != null) enhanced++;
-                if (enhanced >= 16) run.getScoring().multiplyMult(x("3"));
-            })),
-    CARTOMANCER("Cartomancer", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
-            (run, self) -> run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()))),
-    BURNT_JOKER("Burnt Joker", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_DISCARDED,
-            (run, self) -> {
-                if (run.getStats().getDiscardsUsedThisRound() == 1 && !run.getLastDiscarded().isEmpty())
-                    run.levelUpHand(new HandEvaluator().evaluate(run.getLastDiscarded()).type());
-            })),
-    BOOTSTRAPS("Bootstraps", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().addMult(2L * (Math.max(0, run.getMoney()) / 5)))),
-
-    // Jokers 146-150  (skipped : 146 Canio)
-    TRIBOULET("Triboulet", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.KING || c.getRank() == Rank.QUEEN)) run.getScoring().multiplyMult(x("2")); })),
-    YORICK("Yorick", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> run.getScoring().multiplyMult(onePlus("1", run.getStats().getCardsDiscarded() / 23)))),
-    CHICOT("Chicot", Rarity.LEGENDARY, 20, b -> b.trait(JokerTrait.DISABLES_BOSS)),
-    PERKEO("Perkeo", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_SHOP_END,
-            (run, self) -> {
-                List<ConsumableCard> cs = run.getConsumables();
-                if (!cs.isEmpty()) run.createConsumable(cs.get(gen(run, RngSource.MISC).nextInt(cs.size())).getSpec());
-            })),
-
-    // --- placeholders: catalogued with correct name/rarity/cost, no effect implemented yet ---
-    CHAOS_THE_CLOWN("Chaos the Clown", Rarity.COMMON, 4, b -> b),
-    DRUNKARD("Drunkard", Rarity.COMMON, 4, b -> b),
-    HALLUCINATION("Hallucination", Rarity.COMMON, 4, b -> b),
-    JUGGLER("Juggler", Rarity.COMMON, 4, b -> b),
-    RED_JOKER("Red Joker", Rarity.COMMON, 5, b -> b),
-    SPLASH("Splash", Rarity.COMMON, 7, b -> b),
-    ASTRONOMER("Astronomer", Rarity.UNCOMMON, 8, b -> b),
-    BURGLAR("Burglar", Rarity.UNCOMMON, 6, b -> b),
-    DIET_COLA("Diet Cola", Rarity.UNCOMMON, 6, b -> b),
-    FOUR_FINGERS("Four Fingers", Rarity.UNCOMMON, 7, b -> b),
-    HIKER("Hiker", Rarity.UNCOMMON, 5, b -> b),
-    LUCKY_CAT("Lucky Cat", Rarity.UNCOMMON, 6, b -> b),
-    MERRY_ANDY("Merry Andy", Rarity.UNCOMMON, 7, b -> b),
-    OOPS_ALL_6S("Oops! All 6s", Rarity.UNCOMMON, 4, b -> b),
-    PAREIDOLIA("Pareidolia", Rarity.UNCOMMON, 5, b -> b),
-    SELTZER("Seltzer", Rarity.UNCOMMON, 6, b -> b),
-    SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b),
-    SMEARED_JOKER("Smeared Joker", Rarity.UNCOMMON, 7, b -> b),
-    TO_THE_MOON("To the Moon", Rarity.UNCOMMON, 5, b -> b),
-    TROUBADOUR("Troubadour", Rarity.UNCOMMON, 6, b -> b),
-    TURTLE_BEAN("Turtle Bean", Rarity.UNCOMMON, 6, b -> b),
-    INVISIBLE_JOKER("Invisible Joker", Rarity.RARE, 8, b -> b),
-    STUNTMAN("Stuntman", Rarity.RARE, 7, b -> b),
-    CANIO("Canio", Rarity.LEGENDARY, 20, b -> b),
-
-    // --- new Balatry jokers (single-player + read-only multiplayer) ---
-    CELESTIAL_7("Celestial 7", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> {
-                DeckCard c = scored(run);
-                if (c != null && c.getRank() == Rank.SEVEN && run.roll(RngSource.MISC, 1, 4))
-                    createEditioned(run, new ConsumableCard(Planets.random(gen(run, RngSource.PLANET_GENERATION)).spec()));
+                var hand = run.getScoring().getHand();
+                if (hand.hasStraight() && hand.hasFlush()) {   // a straight and a flush together is a straight flush
+                    ConsumableCard card = new ConsumableCard(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
+                    card.apply(Edition.NEGATIVE);
+                    run.addConsumable(card);
+                }
             })),
     MATERIALIST("Materialist", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
@@ -590,28 +373,286 @@ public enum Jokers {
                 Enhancement e = c.getEnhancement();
                 if (e == Enhancement.GOLD || e == Enhancement.STONE || e == Enhancement.STEEL) run.getScoring().addMult(7);
             })),
+    GOLDEN_TICKET("Golden Ticket", Rarity.COMMON, 5, b -> b
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getEnhancement() == Enhancement.GOLD) run.addMoney(3); })
+            .on(Trigger.ON_HELD_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getSeal() == Seal.GOLD_SEAL) run.addMoney(2); })),
+    STONE_JOKER("Stone Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addChips(35L * deckCount(run, Enhancement.STONE)))),
+    // endregion
+    // region Jokers 076-080 (missing : Lucky Cat)
+    STEEL_JOKER("Steel Joker", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("0.2", deckCount(run, Enhancement.STEEL))))),
+    GLASS_JOKER("Glass Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("0.75", run.getStats().getGlassDestroyed())))),
+    LUCKY_CAT("Lucky Cat", Rarity.UNCOMMON, 6, b -> b),
+    MARBLE_JOKER("Marble Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
+            (run, self) -> {
+                DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);
+                stone.apply(Enhancement.STONE);
+                long salt = run.getDeck().size();
+                if (run.getRng().chance(RngSource.MISC, salt, 1, 2)) {
+                    Seal[] seals = Seal.values();
+                    stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt, seals.length)]);
+                }
+                run.addCardToDeck(stone);
+            })),
+    MIDAS_MASK("Midas Mask", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) c.apply(Enhancement.GOLD); })),
+    // endregion
+    // region Jokers 081-085 (missing : Dyscalculie, Pareidolie)
+    CERTIFICATE("Certificate", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
+            (run, self) -> {
+                RandomGenerator g = gen(run, RngSource.MISC);
+                DeckCard c = new DeckCard(Rank.values()[g.nextInt(Rank.values().length)], DeckCard.Suit.values()[g.nextInt(4)]);
+                c.apply(Seal.values()[g.nextInt(Seal.values().length)]);
+                c.apply(Enhancement.values()[g.nextInt(Enhancement.values().length)]);
+                run.addCardToHand(c);
+            })),
+    VAMPIRE("Vampire", Rarity.UNCOMMON, 7, b -> b
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> {
+                DeckCard c = scored(run);
+                if (c != null && c.getEnhancement() != null) { self.addCounter(1); c.remove(c.getEnhancement()); }
+            })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.1", self.getCounter())))),
+    DRIVERS_LICENSE("Driver's License", Rarity.RARE, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                int enhanced = 0;
+                for (DeckCard c : run.getDeck()) if (c.getEnhancement() != null) enhanced++;
+                if (enhanced >= 16) run.getScoring().multiplyMult(x("3"));
+            })),
+    DYSCALCULIE("Dyscalculie", Rarity.UNCOMMON, 7, b -> b),        // TODO: rank-flexibility in HandEvaluator (cf. Shortcut/Four Fingers)
+    PAREIDOLIA("Pareidolia", Rarity.UNCOMMON, 5, b -> b),
+    // endregion
+    // region Jokers 086-090 (missing : Smeared Joker, Four Fingers, Superposition, Shortcut, Oops! All 6s)
+    SMEARED_JOKER("Smeared Joker", Rarity.UNCOMMON, 7, b -> b),
+    FOUR_FINGERS("Four Fingers", Rarity.UNCOMMON, 7, b -> b),
+    SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b),
+    SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b),
+    OOPS_ALL_6S("Oops! All 6s", Rarity.UNCOMMON, 4, b -> b),
+    // endregion
+    // region Jokers 091-095 (missing : Splash)
+    SPLASH("Splash", Rarity.COMMON, 7, b -> b),
+    HANGING_CHAD("Hanging Chad", Rarity.COMMON, 4, b -> b.retriggerPlayed((run, self, card) -> {
+        int hand = run.getStats().getTotalHandsPlayed();
+        if (self.getCounter() != hand) { self.setCounter(hand); return 2; }
+        return 0;
+    })),
+    DUSK("Dusk", Rarity.UNCOMMON, 5, b -> b.retriggerPlayed(
+            (run, self, card) -> (run.getRound() != null && run.getRound().getHandsRemaining() == 1) ? 1 : 0)),
+    HACK("Hack", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
+            (run, self, card) -> switch (card.getRank()) { case TWO, THREE, FOUR, FIVE -> 1; default -> 0; })),
+    SOCK_AND_BUSKIN("Sock and Buskin", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
+            (run, self, card) -> card.isFace() ? 1 : 0)),
+    // endregion
+    // region Jokers 096-100
+    MIME("Mime", Rarity.UNCOMMON, 5, b -> b.retriggerHeld((run, self, card) -> 1)),
+    BUSINESS_CARD("Business Card", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+    RESERVED_PARKING("Reserved Parking", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HELD_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+    TO_DO_LIST("To Do List", Rarity.COMMON, 4, b -> b
+            .state(self -> "Listed hand this round: " + handTypeName(self.getCounter()))
+            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(HandType.values().length)))
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (run.getScoring().getHand().type().ordinal() == self.getCounter()) run.addMoney(4); })),
+    TELESCOPE("Telescope", Rarity.COMMON, 4, b -> b),             // TODO: cross-player last-hand-type comparison
+    // endregion
+    // region Jokers 101-105
+    MAIL_IN_REBATE("Mail-In Rebate", Rarity.COMMON, 4, b -> b
+            .state(self -> "Rebate rank this round: " + rankName(self.getCounter()))
+            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(Rank.values().length)))
+            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> {
+                int n = 0;
+                for (DeckCard c : run.getLastDiscarded()) if (c.getRank().ordinal() == self.getCounter()) n++;
+                if (n > 0) run.addMoney(4 * n);
+            })),
+    FACELESS_JOKER("Faceless Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_DISCARDED,
+            (run, self) -> {
+                int faces = 0;
+                for (DeckCard c : run.getLastDiscarded()) if (c.isFace()) faces++;
+                if (faces >= 3) run.addMoney(6);
+            })),
+    DELAYED_GRATIFICATION("Delayed Gratification", Rarity.COMMON, 4, b -> b.on(Trigger.ON_ROUND_END,
+            (run, self) -> { if (run.getRound() != null) run.addMoney(2 * run.getRound().getDiscardsRemaining()); })),
+    MATADOR("Matador", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.bossTriggeredThisPlay()) run.addMoney(8); })),
+    TRADING_CARD("Trading Card", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_DISCARDED,
+            (run, self) -> {
+                if (run.getStats().getDiscardsUsedThisRound() == 1 && run.getLastDiscarded().size() == 1) {
+                    run.destroyDeckCards(run.getLastDiscarded());
+                    run.addMoney(3);
+                }
+            })),
+    // endregion
+    // region Jokers 106-110
+    YELLOW_JOKER("Yellow Joker", Rarity.COMMON, 6, b -> b.on(Trigger.ON_ROUND_END,
+            (run, self) -> run.addMoney(4))),
+    SATELLITE("Satellite", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_END,
+            (run, self) -> {
+                HandType most = run.getStats().getMostPlayedHand();
+                if (most != null) run.addMoney(run.getHandLevels().levelOf(most) / 3);
+            })),
+    ROCKET("Rocket", Rarity.UNCOMMON, 6, b -> b
+            .on(Trigger.ON_ROUND_END, (run, self) -> run.addMoney(1 + 2 * self.getCounter()))
+            .on(Trigger.ON_BOSS_DEFEATED, (run, self) -> self.addCounter(1))),
+    TO_THE_MOON("To the Moon", Rarity.UNCOMMON, 5, b -> b),
     INVESTMENT("Investment", Rarity.COMMON, 5, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
                 int value = 0;
                 for (JokerCard j : run.getJokers()) value += j.getSellValue();
                 if (value >= 5) run.addMoney(value / 5);
             })),
-    MERCHANT("Merchant", Rarity.COMMON, 4, b -> b),   // TODO: +3 consumable slots needs a passive joker-slot-bonus hook in Run
-    THE_VOID("The Void", Rarity.UNCOMMON, 6, b -> b), // TODO: +1 joker slot needs a passive joker-slot-bonus hook in Board/Run
-    CHALLENGER("Challenger", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+    // endregion
+    // region Jokers 111-115 (missing : Curator)
+    EGG("Egg", Rarity.COMMON, 4, b -> b.on(Trigger.ON_ROUND_END,
+            (run, self) -> self.setSellValue(self.getSellValue() + 3))),
+    GIFT_CARD("Gift Card", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
-                int stickers = 0;
-                for (JokerCard j : run.getJokers())      stickers += j.getStickers().size();
-                for (ConsumableCard cc : run.getConsumables()) stickers += cc.getStickers().size();
-                for (DeckCard d : run.getDeck())         stickers += d.getStickers().size();
-                if (stickers > 0) run.getScoring().multiplyMult(onePlus("0.25", stickers));
+                for (JokerCard j : run.getJokers()) j.setSellValue(j.getSellValue() + 1);
+                for (ConsumableCard cc : run.getConsumables()) cc.setSellValue(cc.getSellValue() + 1);
             })),
+    CREDIT_CARD("Credit Card", Rarity.COMMON, 2, b -> b
+            .debtAllowance(20)
+            .on(Trigger.ON_SPEND, (run, self) -> self.setCounter(self.getCounter() + run.getLastInDebtSpend()))
+            .on(Trigger.ON_EARN, (run, self) -> { if (run.getMoney() >= 0) self.setCounter(0); })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
+    LOYALTY_CARD("Loyalty Card", Rarity.UNCOMMON, 7, b -> b
+            // counter = completed purchases since acquisition; the grant is a pure read at pricing time,
+            // so a failed buy neither advances the count nor burns the free purchase.
+            .on(Trigger.ON_PURCHASE_PRICING,
+                    (run, self) -> { if ((self.getCounter() + 1) % 4 == 0) run.makePurchaseFree(); })
+            .on(Trigger.ON_BOUGHT,
+                    (run, self) -> self.setCounter(self.getCounter() + 1))),
+    CURATOR("Curator", Rarity.UNCOMMON, 7, b -> b),               // TODO: shop pack-pricing hook (make Standard Packs free)
+    // endregion
+    // region Jokers 116-120 (missing : Copyright)
+    COPYRIGHT("Copyright", Rarity.COMMON, 4, b -> b),
+    ROBIN_HOOD("Robin Hood", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END,
+            (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                for (Player p : m.getPlayers()) if (p.run() != run && p.run().getMoney() < run.getMoney()) return;
+                run.addMoney(6);   // no one is strictly poorer: this seat is (tied) poorest
+            })),
+    ASTRONOMER("Astronomer", Rarity.UNCOMMON, 8, b -> b),
+    SPACE_JOKER("Space Joker", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.roll(RngSource.MISC, 1, 4)) run.levelUpHand(run.getScoring().getHand().type()); })),
+    CONSTELLATION("Constellation", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("0.1", run.getStats().getConsumablesUsed(ConsumableType.PLANET))))),
+    // endregion
+    // region Jokers 121-125
+    BURNT_JOKER("Burnt Joker", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_DISCARDED,
+            (run, self) -> {
+                if (run.getStats().getDiscardsUsedThisRound() == 1 && !run.getLastDiscarded().isEmpty())
+                    run.levelUpHand(new HandEvaluator().evaluate(run.getLastDiscarded()).type());
+            })),
+    HALLUCINATION("Hallucination", Rarity.COMMON, 4, b -> b),
+    CARTOMANCER("Cartomancer", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
+            (run, self) -> run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()))),
+    FORTUNE_TELLER("Fortune Teller", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().addMult(run.getStats().getConsumablesUsed(ConsumableType.TAROT)))),
+    VAGABOND("Vagabond", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> { if (run.getMoney() <= 4) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()); })),
+    // endregion
+    // region Jokers 126-130
+    ICE_CREAM("Ice Cream", Rarity.COMMON, 5, b -> b
+            .state(self -> "Chips left: " + Math.max(0, 100 - 5 * self.getCounter()))
+            .on(Trigger.ON_HAND_PLAYED,
+                    (run, self) -> {
+                        run.getScoring().addChips(Math.max(0, 100 - 5 * self.getCounter()));
+                        self.addCounter(1);
+                    })),
+    POPCORN("Popcorn", Rarity.COMMON, 5, b -> b
+            .state(self -> "Mult left: " + Math.max(0, 20 - 4 * self.getCounter()))
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(Math.max(0, 20 - 4 * self.getCounter())))
+            .on(Trigger.ON_ROUND_END, (run, self) -> self.addCounter(1))),
     MUSHROOM("Mushroom", Rarity.COMMON, 5, b -> b
             .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.addCounter(run.getLastDiscarded().size()))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 int mult = 4 * (self.getCounter() / 3);
                 if (mult > 0) run.getScoring().addMult(mult);
                 if (mult >= 32) run.destroyJoker(self);   // self-destructs once it would grant +32 Mult
+            })),
+    GROS_MICHEL("Gros Michel", Rarity.COMMON, 5, b -> b
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(15))
+            .on(Trigger.ON_ROUND_END, (run, self) -> { if (run.roll(RngSource.MISC, 1, 6)) run.destroyJoker(self); })),
+    CAVENDISH("Cavendish", Rarity.COMMON, 4, b -> b
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(x("3")))
+            .on(Trigger.ON_ROUND_END, (run, self) -> { if (run.roll(RngSource.MISC, 1, 1000)) self.setCounter(1); })
+            .on(Trigger.ON_ROUND_START, (run, self) -> { if (self.getCounter() == 1) run.destroyJoker(self); })),
+    // endregion
+    // region Jokers 131-135 (missing : Strawberry, Turtle Bean, Seltzer, Diet Cola)
+    RAMEN("Ramen", Rarity.UNCOMMON, 6, b -> b
+            .state(self -> "Current mult: X" + new BigDecimal("2").subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(self.getCounter()))).max(BigDecimal.ZERO))
+            .on(Trigger.ON_HAND_DISCARDED, (run, self) -> self.addCounter(run.getLastDiscarded().size()))
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                BigDecimal mult = x("2").subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(self.getCounter())));
+                run.getScoring().multiplyMult(mult.max(BigDecimal.ZERO));
+            })),
+    STRAWBERRY("StrawBerry", Rarity.UNCOMMON, 6, b -> b),          // TODO: "cleared in a single hand?" round hook + X3 Mult
+    TURTLE_BEAN("Turtle Bean", Rarity.UNCOMMON, 6, b -> b),
+    SELTZER("Seltzer", Rarity.UNCOMMON, 6, b -> b),
+    DIET_COLA("Diet Cola", Rarity.UNCOMMON, 6, b -> b),
+    // endregion
+    // region Jokers 136-140 (missing : Chef Joker, Merchant, The Void, Drunkard)
+    CHEF_JOKER("Chef Joker", Rarity.RARE, 8, b -> b),             // TODO: a "food joker" tag + a joker-consumed event
+    MERCHANT("Merchant", Rarity.COMMON, 4, b -> b),   // TODO: +3 consumable slots needs a passive joker-slot-bonus hook in Run// endregion
+    THE_VOID("The Void", Rarity.UNCOMMON, 6, b -> b), // TODO: +1 joker slot needs a passive joker-slot-bonus hook in Board/Run// region Jokers 116-120
+    RIFF_RAFF("Riff-Raff", Rarity.COMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
+            (run, self) -> {
+                for (int k = 0; k < 2; k++)
+                    run.createJoker(Jokers.randomOfRarity(Rarity.COMMON, gen(run, RngSource.JOKER_GENERATION)).make());
+            })),
+    DRUNKARD("Drunkard", Rarity.COMMON, 4, b -> b),
+    // endregion
+    // region Jokers 141-145 (missing : Merry Andy, Burglar, Juggler, Troubadour, Mr_Bones)
+    MERRY_ANDY("Merry Andy", Rarity.UNCOMMON, 7, b -> b),
+    BURGLAR("Burglar", Rarity.UNCOMMON, 6, b -> b),
+    JUGGLER("Juggler", Rarity.COMMON, 4, b -> b),
+    TROUBADOUR("Troubadour", Rarity.UNCOMMON, 6, b -> b),
+    MR_BONES("Mr. Bones", Rarity.UNCOMMON, 5, b -> b.trait(JokerTrait.PREVENTS_LOSS)),
+    // endregion
+    // region Jokers 146-150 (missing : Chaos The Clown, Suntman)
+    LUCHADOR("Luchador", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_SOLD,
+            (run, self) -> run.disableBossForRound())),
+    CHAOS_THE_CLOWN("Chaos the Clown", Rarity.COMMON, 4, b -> b),
+    STUNTMAN("Stuntman", Rarity.RARE, 7, b -> b),
+    WEE_JOKER("Wee Joker", Rarity.RARE, 8, b -> b
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.TWO) self.addCounter(8); })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addChips(self.getCounter()))),
+    BASEBALL_CARD("Baseball Card", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                for (JokerCard j : run.getJokers()) if (j.getSpec().getRarity() == Rarity.UNCOMMON) run.getScoring().multiplyMult(x("1.5"));
+            })),
+    // endregion
+    // region Jokers 151-155
+    OBELISK("Obelisk", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<HandType> recent = run.getStats().getRecentHands(3);
+                HandType cur = recent.get(0);
+                boolean repeat = (recent.size() > 1 && recent.get(1) == cur) || (recent.size() > 2 && recent.get(2) == cur);
+                if (repeat) self.setCounter(0); else self.addCounter(1);
+                run.getScoring().multiplyMult(onePlus("0.2", self.getCounter()));
+            })),
+    CAMPFIRE("Campfire", Rarity.RARE, 9, b -> b
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.25", run.getStats().getCardsSold() - self.getCounter())))
+            .on(Trigger.ON_BOSS_DEFEATED, (run, self) -> self.setCounter(run.getStats().getCardsSold()))),
+    ADVENTURER("Adventurer", Rarity.RARE, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                Match m = run.getMatch();
+                int unique = 0;
+                for (JokerCard mine : run.getJokers()) if (!otherPlayerOwns(m, run, mine)) unique++;
+                if (unique > 0) run.getScoring().multiplyMult(onePlus("0.5", unique));
+            })),
+    DNA("DNA", Rarity.RARE, 8, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> {
+                DeckCard c = scored(run);
+                int hand = run.getStats().getTotalHandsPlayed();
+                if (c != null && self.getCounter() != hand
+                        && run.getStats().getHandsPlayedThisRound() == 1
+                        && run.getScoring().getHand().playedCount() == 1) {
+                    self.setCounter(hand);
+                    run.addCardToHand(copyOf(c));
+                }
             })),
     ALCHEMIST("Alchemist", Rarity.RARE, 7, b -> b.on(Trigger.ON_SHOP_END,
             (run, self) -> {
@@ -620,93 +661,36 @@ public enum Jokers {
                         cc.apply(switch (gen(run, RngSource.CARD_EDITION).nextInt(3)) {
                             case 0 -> Edition.FOIL; case 1 -> Edition.HOLOGRAPHIC; default -> Edition.POLYCHROME; });
             })),
-    GRUDGE("Grudge", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                int hits = run.getStats().getTimesTargeted();
-                if (hits > 0) run.getScoring().multiplyMult(onePlus("0.2", hits));
-            })),
-    ROBIN_HOOD("Robin Hood", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END,
-            (run, self) -> {
-                Match m = run.getMatch();
-                if (m == null) return;
-                for (Player p : m.getPlayers()) if (p.run() != run && p.run().getMoney() < run.getMoney()) return;
-                run.addMoney(6);   // no one is strictly poorer: this seat is (tied) poorest
-            })),
-    COPYRIGHT("Copyright", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END,
-            (run, self) -> {
-                Match m = run.getMatch();
-                if (m == null) return;
-                int shared = 0;
-                for (JokerCard mine : run.getJokers()) if (otherPlayerOwns(m, run, mine)) shared++;
-                if (shared > 0) run.addMoney(2 * shared);
-            })),
-    ADVENTURER("Adventurer", Rarity.RARE, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                Match m = run.getMatch();
-                int unique = 0;
-                for (JokerCard mine : run.getJokers()) if (!otherPlayerOwns(m, run, mine)) unique++;
-                if (unique > 0) run.getScoring().multiplyMult(onePlus("0.5", unique));
-            })),
-    RABBIT("Rabbit", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> cards = run.getScoring().getScoringCards();
-                if (run.getScoring().getHand().hasFourOfAKind() && !cards.isEmpty())
-                    run.addCardToHand(copyOf(cards.get(0)));
-            })),
-    BUTTERFLY("Butterfly", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> cards = run.getScoring().getScoringCards();
-                if (run.getScoring().getHand().type() == HandType.FULL_HOUSE && !cards.isEmpty()) {
-                    Enhancement[] all = Enhancement.values();
-                    cards.get(0).apply(all[gen(run, RngSource.MISC).nextInt(all.length)]);
-                }
-            })),
-    CHAMELEON("Chameleon", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> cards = run.getScoring().getScoringCards();
-                List<DeckCard> held = run.getHeld();
-                if (run.getScoring().getHand().hasFlush() && !cards.isEmpty() && !held.isEmpty())
-                    held.get(0).setSuit(cards.get(0).getSuit());
-            })),
-    CUCKOO_BIRD("Cuckoo Bird", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> held = run.getHeld();
-                if (run.getScoring().getHand().hasThreeOfAKind() && !held.isEmpty()) {
-                    Rank r = dominantRank(run.getScoring().getScoringCards());
-                    if (r != null) held.get(0).setRank(r);
-                }
-            })),
-    SEVEN_ATE_NINE("7 Ate 9", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> cards = run.getScoring().getScoringCards();
-                int n = cards.size();
-                if (n >= 3 && cards.get(n - 3).getRank() == Rank.SEVEN && cards.get(n - 2).getRank() == Rank.EIGHT)
-                    run.destroyDeckCards(List.of(cards.get(n - 1)));
-            })),
-    GENERATIONAL_HATER("Generational Hater", Rarity.UNCOMMON, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_BOSS_DEFEATED,
-            (run, self) -> {
-                Match m = run.getMatch();
-                if (m == null || run.getPlayerId() == null) return;
-                List<PlayerId> above = m.seatsAbove(run.getPlayerId());
-                if (above.isEmpty()) return;
-                RandomGenerator g = gen(run, RngSource.MISC);
-                List<JokerCard> theirs = m.getRun(above.get(g.nextInt(above.size()))).getJokers();
-                if (theirs.isEmpty()) return;
-                Sticker[] pool = { Sticker.ETERNAL, Sticker.PERISHABLE, Sticker.RENTAL };
-                theirs.get(g.nextInt(theirs.size())).apply(pool[g.nextInt(pool.length)]);
-            })),
-
-    // New jokers present and described, but whose effects await engine features (like the base-game stubs
-    // Astronomer, Shortcut, Burglar, ...). TODOs name what each still needs.
-    DYSCALCULIE("Dyscalculie", Rarity.UNCOMMON, 7, b -> b),        // TODO: rank-flexibility in HandEvaluator (cf. Shortcut/Four Fingers)
-    CHEF_JOKER("Chef Joker", Rarity.RARE, 8, b -> b),             // TODO: a "food joker" tag + a joker-consumed event
-    STRAWBERRY("StrawBerry", Rarity.UNCOMMON, 6, b -> b),          // TODO: "cleared in a single hand?" round hook + X3 Mult
-    CURATOR("Curator", Rarity.UNCOMMON, 7, b -> b),               // TODO: shop pack-pricing hook (make Standard Packs free)
-    ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b),            // TODO: cross-player debuff of this slot for seats above
-    TRANSPARENT_JOKER("Transparent Joker", Rarity.UNCOMMON, 7, b -> b),   // TODO: sell-to-copy a leader's joker
+    // endregion
+    // region Jokers 156-160 (missing : Invisible Joker, The Mimic, Espionnage)
+    INVISIBLE_JOKER("Invisible Joker", Rarity.RARE, 8, b -> b),
     THE_MIMIC("The Mimic", Rarity.RARE, 10, b -> b),             // TODO: copy the same-slot joker of the standings leader
-    VULTURE("Vulture", Rarity.UNCOMMON, 7, b -> b),              // TODO: an "opponent failed a blind" event
-    TELESCOPE("Telescope", Rarity.COMMON, 4, b -> b);             // TODO: cross-player last-hand-type comparison
+    ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b),            // TODO: cross-player debuff of this slot for seats above
+    BLUEPRINT("Blueprint", Rarity.RARE, 10, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<JokerCard> js = run.getJokers();
+                int i = js.indexOf(self);
+                if (i >= 0 && i + 1 < js.size()) run.getScoring().retriggerJoker(js.get(i + 1));
+            })),
+    BRAINSTORM("Brainstorm", Rarity.RARE, 10, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<JokerCard> js = run.getJokers();
+                if (!js.isEmpty() && js.get(0) != self) run.getScoring().retriggerJoker(js.get(0));
+            })),
+    // endregion
+    // region Jokers 161-165 (missing : CANIO)
+    CANIO("Canio", Rarity.LEGENDARY, 20, b -> b),
+    YORICK("Yorick", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> run.getScoring().multiplyMult(onePlus("1", run.getStats().getCardsDiscarded() / 23)))),
+    TRIBOULET("Triboulet", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.KING || c.getRank() == Rank.QUEEN)) run.getScoring().multiplyMult(x("2")); })),
+    CHICOT("Chicot", Rarity.LEGENDARY, 20, b -> b.trait(JokerTrait.DISABLES_BOSS)),
+    PERKEO("Perkeo", Rarity.LEGENDARY, 20, b -> b.on(Trigger.ON_SHOP_END,
+            (run, self) -> {
+                List<ConsumableCard> cs = run.getConsumables();
+                if (!cs.isEmpty()) run.createConsumable(cs.get(gen(run, RngSource.MISC).nextInt(cs.size())).getSpec());
+            }));
+    // endregion
 
     private final Rarity rarity;
     private final JokerSpec spec;
