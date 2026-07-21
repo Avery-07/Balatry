@@ -47,6 +47,37 @@ final class Ui {
     final TileRow shopVoucherRow = new TileRow(108, 130);
     final TileRow shopPackRow   = new TileRow(108, 130);
 
+    // --- scoring animation ---------------------------------------------------
+    // The reel walks the snapshot's lastPlay() timeline one beat at a time; scorePop tells whichever card owns
+    // the live beat how hard to pop, and the source's screen position is captured as each tile draws so the
+    // effect square can be anchored under (or over) it.
+
+    final client.engine.ScoreReel reel = new client.engine.ScoreReel();
+    List<MatchSnapshot.ScoreEventView> reelEvents = List.of();   // the timeline being played
+    private final java.util.Map<Integer, Layout.Rect> sourceRects = new java.util.HashMap<>();
+
+    /** How hard the card with {@code cardId} should pop right now: 1 at the start of its beat, fading to 0. */
+    double scorePop(int cardId) {
+        MatchSnapshot.ScoreEventView e = liveEvent();
+        if (e == null || e.sourceId() != cardId) return 0;
+        return 1 - reel.beatProgress();
+    }
+
+    /** The event being shown this instant, or null when the reel is idle or past the end. */
+    MatchSnapshot.ScoreEventView liveEvent() {
+        int i = reel.currentIndex();
+        return i >= 0 && i < reelEvents.size() ? reelEvents.get(i) : null;
+    }
+
+    /** Records where a card drew this frame, so the effect square knows what to point at. */
+    void noteSourceRect(int cardId, Layout.Rect rect) { sourceRects.put(cardId, rect); }
+
+    /** Where the live beat's source last drew, or null if it is off screen (or the beat is ownerless). */
+    Layout.Rect liveSourceRect() {
+        MatchSnapshot.ScoreEventView e = liveEvent();
+        return e == null ? null : sourceRects.get(e.sourceId());
+    }
+
     Ui(Renderer r, Hand hand) { this.r = r; this.hand = hand; }
 
     record Btn(Layout.Rect rect, Runnable action) { }
@@ -54,11 +85,28 @@ final class Ui {
     record Act(String label, Color color, Color text, Runnable run) { }
     record Tip(Layout.Rect rect, String text) { }
 
-    void newFrame() { buttons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); tips.clear(); deckRect = null; }
+    /**
+     * A vertical offset applied to every region registered while it is non-zero. A screen drawing under a
+     * {@code gc.translate} (the menu's slide-in) sets this to the same offset, so hitboxes match what the eye
+     * sees — for every region type, by construction, rather than by patching selected lists afterward.
+     */
+    double regionOffsetY;
+
+    void newFrame() {
+        buttons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); tips.clear();
+        deckRect = null;
+        // Rects are recorded as tiles draw and read by the effect square later in the same frame, so they are
+        // per-frame state: clearing keeps them honest (a sold joker stops being an anchor) and bounded.
+        sourceRects.clear();
+    }
 
     /** Registers a hover region; the topmost one under the mouse draws its text as a tooltip after everything else. */
     void tip(Layout.Rect rect, String text) {
-        if (text != null && !text.isBlank()) tips.add(new Tip(rect, text));
+        if (text != null && !text.isBlank()) tips.add(new Tip(shifted(rect), text));
+    }
+
+    private Layout.Rect shifted(Layout.Rect rect) {
+        return regionOffsetY == 0 ? rect : new Layout.Rect(rect.x(), rect.y() + regionOffsetY, rect.w(), rect.h());
     }
 
     /** Whether the mouse is currently inside {@code rect}. */
@@ -68,6 +116,6 @@ final class Ui {
     void button(double x, double y, double w, double h, String label, Color fill, Color text, Runnable action, boolean enabled) {
         r.panel(x, y, w, h, enabled ? fill : fill.darker().darker(), fill.darker(), 8, 2);
         r.textCenterBold(label, x + w / 2, y + h / 2, 14, enabled ? text : Palette.DIM);
-        if (enabled) buttons.add(new Btn(new Layout.Rect(x, y, w, h), action));
+        if (enabled) buttons.add(new Btn(shifted(new Layout.Rect(x, y, w, h)), action));
     }
 }

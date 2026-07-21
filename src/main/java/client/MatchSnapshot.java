@@ -74,6 +74,7 @@ public record MatchSnapshot(
         List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
         List<DeckCardView> deckCards,   // the whole deck, spent cards flagged — the deck-pile hover view
         List<HandLevelView> handLevels, // every hand type at this seat's current level, for the play preview
+        List<ScoreEventView> lastPlay,  // the last play's scoring timeline, for the scoring animation
         List<JokerView> jokers,
         List<ItemView> inventory,  // consumables and relics as one indexed area; relics carry their casting demands
         List<BlindOption> blinds,  // the ante's three blinds, for the selection screen (empty outside SELECTION)
@@ -109,6 +110,19 @@ public record MatchSnapshot(
     public record HandLevelView(String type, int level, long chips, long mult) { }
 
     /**
+     * One beat of the last play's scoring, in the order the engine performed it — the client replays these as
+     * the trigger/effect animation: the source pops, a small square shows what it did, and the readouts count to
+     * {@code chipsAfter}/{@code multAfter}. Those running totals come straight from the model, so the animation
+     * cannot drift from the score that was actually banked.
+     *
+     * <p>{@code sourceId} matches a {@link HandCardView#id()} or {@link JokerView#id()}; it is {@code -1} for
+     * beats no card owns (the hand's base value, the Plasma balance). {@code kind} is a
+     * {@code ScoringEvent.Kind} name: BASE, CHIPS, MULT, XMULT, MONEY, RETRIGGER, DESTROYED, BALANCE.
+     */
+    public record ScoreEventView(int sourceId, String sourceName, String kind,
+                                 String amount, String chipsAfter, String multAfter) { }
+
+    /**
      * One held joker as the top bar shows it: its name, the authored effect text (for the hover tooltip), a short
      * {@code badge} naming its edition and stickers ("Foil · Sticky $4", empty when it has neither), and whether
      * it is currently doing nothing. The badge exists because stickers are drawbacks the player agreed to — they
@@ -138,6 +152,12 @@ public record MatchSnapshot(
 
     /** One seat's line in the final standings; {@code isMe} marks the local seat, {@code departed} a player who left. */
     public record StandingView(int seat, String name, long points, int rank, boolean isMe, boolean departed) { }
+
+    /** The local seat's own standings line — the result/finish screens all want exactly this row. */
+    public StandingView myStanding() {
+        for (StandingView v : standings) if (v.isMe()) return v;
+        return new StandingView(seat, name, 0, 0, true, false);   // unreachable in a real match; safe default
+    }
 
     /** This seat's most recent blind outcome, for the result summary. */
     public record ResultView(String outcome, String score, long target, String bestHand,
@@ -255,6 +275,7 @@ public record MatchSnapshot(
                 hand(run),
                 deckCards(run),
                 handLevels(run),
+                scoreEvents(run),
                 jokerViews(run),
                 inventory(run),
                 blindOptions(match, run.getStake()),
@@ -297,6 +318,22 @@ public record MatchSnapshot(
         for (DeckCard c : run.getDeck())
             out.add(new DeckCardView(c.getRank().ordinal(), c.getSuit().ordinal(),
                     liveIds == null || liveIds.contains(c.id())));
+        return out;
+    }
+
+    /**
+     * The last play's scoring timeline as display values. Empty outside a round and before the round's first
+     * hand; the client keys a replay off it changing.
+     */
+    private static List<ScoreEventView> scoreEvents(Run run) {
+        Round r = run.getRound();
+        if (r == null) return List.of();
+        List<ScoreEventView> out = new ArrayList<>();
+        for (model.game.scoring.ScoringEvent e : r.getLastEvents())
+            out.add(new ScoreEventView(e.sourceId(), e.sourceName(), e.kind().name(),
+                    e.amount().stripTrailingZeros().toPlainString(),
+                    e.chipsAfter().toBigInteger().toString(),
+                    e.multAfter().stripTrailingZeros().toPlainString()));
         return out;
     }
 
@@ -398,11 +435,8 @@ public record MatchSnapshot(
         return String.join(" · ", parts);
     }
 
-    /** {@code PERISHABLE} → {@code Perishable}. */
-    private static String title(String enumName) {
-        String lower = enumName.toLowerCase().replace('_', ' ');
-        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
-    }
+    /** {@code PERISHABLE} → {@code Perishable}; delegates to the client's one title-caser. */
+    private static String title(String enumName) { return client.game.Fmt.title(enumName); }
 
     /** Hover text: name, the authored effect description when present, then the category and cost line. */
     private static String tooltip(String name, String description, String category, int price) {

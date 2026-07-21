@@ -29,11 +29,15 @@ final class Hand {
     enum Exit { PLAYED, DISCARDED }
 
     /** A card on its way out: it keeps animating but is no longer part of the live hand. */
-    private record Exiting(CardEntity card, Exit reason) { }
+    private static final class Exiting {
+        final CardEntity card;
+        double age;
+        Exiting(CardEntity card) { this.card = card; }
+    }
 
     private final List<CardEntity> cards = new ArrayList<>();
     private final List<Exiting> exiting = new ArrayList<>();
-    private final List<Double> exitAges = new ArrayList<>();   // parallel to exiting
+    private final List<CardEntity> staged = new ArrayList<>();   // just-played cards, held while scoring replays
     private List<CardEntity> ordered = new ArrayList<>();   // last drawn order (for topmost-first hit-testing)
     private int sort;                                        // 0 dealt/manual, 1 rank, 2 suit
     private final Map<Integer, Integer> manualRank = new LinkedHashMap<>();   // id -> drag-chosen position
@@ -72,19 +76,52 @@ final class Hand {
         e.setSelected(false);
         e.endDrag();
         if (dragged == e) dragged = null;
-        if (reason == Exit.PLAYED) e.moveTo(e.x(), e.y() - 260);        // up toward the score
-        else                       e.moveTo(Ui.W + CARD_W, e.y() + 40); // off the right edge
-        exiting.add(new Exiting(e, reason));
-        exitAges.add(0.0);
+        if (reason == Exit.PLAYED) {
+            staged.add(e);   // played cards stand centre-screen while the scoring reel runs, then fly off
+        } else {
+            e.moveTo(Ui.W + CARD_W, e.y() + 40);   // discards leave straight away, off the right edge
+            exiting.add(new Exiting(e));
+        }
     }
+
+    /** Lays the staged (just-played) cards out in a row centre-screen and draws them; call while scoring plays. */
+    void renderStaged(Ui ui, double x, double y, double w) {
+        if (staged.isEmpty()) return;
+        double step = Math.min(CARD_W + 14, (w - CARD_W) / Math.max(1, staged.size()));
+        double rowW = CARD_W + step * (staged.size() - 1);
+        double sx = x + (w - rowW) / 2 + CARD_W / 2;
+        for (int i = 0; i < staged.size(); i++) {
+            CardEntity e = staged.get(i);
+            e.moveTo(sx + i * step, y);
+            double pop = ui.scorePop(e.id());   // the trigger animation: this card's beat is live
+            double size = 1 + 0.18 * pop;
+            double cx = e.x(), cy = e.y() - 18 * pop;
+            ui.r.card(e.rank(), e.suit(), cx, cy, CARD_W * size, CARD_H * size, 0, pop > 0.05, e.flipT());
+            ui.noteSourceRect(e.id(), new Layout.Rect(
+                    cx - CARD_W * size / 2, cy - CARD_H * size / 2, CARD_W * size, CARD_H * size));
+        }
+    }
+
+    /** Releases the staged cards to fly away — called when the scoring reel finishes. */
+    void releaseStaged() {
+        for (CardEntity e : staged) {
+            e.moveTo(e.x(), e.y() - 220);
+            exiting.add(new Exiting(e));
+        }
+        staged.clear();
+    }
+
+    boolean hasStaged() { return !staged.isEmpty(); }
 
     void advance(double dt) {
         time += dt;
         for (CardEntity c : cards) c.advance(dt);
+        for (CardEntity c : staged) c.advance(dt);
         for (int i = exiting.size() - 1; i >= 0; i--) {
-            exiting.get(i).card().advance(dt);
-            exitAges.set(i, exitAges.get(i) + dt);
-            if (exitAges.get(i) >= EXIT_SECONDS) { exiting.remove(i); exitAges.remove(i); }
+            Exiting ex = exiting.get(i);
+            ex.card.advance(dt);
+            ex.age += dt;
+            if (ex.age >= EXIT_SECONDS) exiting.remove(i);
         }
     }
 
@@ -95,8 +132,8 @@ final class Hand {
         Renderer r = ui.r;
         // Leaving cards draw first (under the live hand), fading as they age.
         for (int i = 0; i < exiting.size(); i++) {
-            CardEntity e = exiting.get(i).card();
-            double alpha = Math.max(0, 1 - exitAges.get(i) / EXIT_SECONDS);
+            CardEntity e = exiting.get(i).card;
+            double alpha = Math.max(0, 1 - exiting.get(i).age / EXIT_SECONDS);
             r.gc().setGlobalAlpha(alpha);
             r.card(e.rank(), e.suit(), e.x(), e.y(), CARD_W, CARD_H, 0, false, e.flipT());
             r.gc().setGlobalAlpha(1);
@@ -177,7 +214,6 @@ final class Hand {
         for (int k = 0; k < ordered.size(); k++) manualRank.put(ordered.get(k).id(), k);
     }
 
-    boolean draggingCard() { return dragged != null; }
 
     /** The topmost card under {@code (x,y)}, or null. */
     CardEntity cardAt(double x, double y) {

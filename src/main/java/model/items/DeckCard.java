@@ -60,12 +60,26 @@ public final class DeckCard extends Card {
         final int chips;
         Rank(int chips) { this.chips = chips; }
         public int getChips() { return chips; }
+
+        /** "2".."10", "Jack".."Ace" — the single authority for a rank's player-facing name. */
+        public String displayName() {
+            return switch (this) {
+                case JACK -> "Jack"; case QUEEN -> "Queen"; case KING -> "King"; case ACE -> "Ace";
+                default -> String.valueOf(ordinal() + 2);
+            };
+        }
     }
 
     public enum Suit {
         SPADES,
         HEARTS,
         CLUBS,
-        DIAMONDS
+        DIAMONDS;
+
+        /** "Spades" — the single authority for a suit's player-facing name (indexed by THIS enum's order). */
+        public String displayName() {
+            String lower = name().toLowerCase();
+            return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+        }
     }
 }

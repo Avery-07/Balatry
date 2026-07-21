@@ -36,6 +36,7 @@ public final class Round {
     private HandType debuffedHandType;     // The Hivemind: this type scores no base chips/mult; set by the boss resolver
     private BigDecimal bestHandScore = BigDecimal.ZERO;   // highest single-hand score this round (Mirage/Shave exclusions)
     private BigDecimal lastChips = BigDecimal.ZERO;       // chips of the most recent play this round (UI chips×mult readout)
+    private java.util.List<model.game.scoring.ScoringEvent> lastEvents = java.util.List.of();   // that play's timeline
     private BigDecimal lastMult  = BigDecimal.ZERO;       // mult of the most recent play this round
     private DeckCard forcedCard;           // Cerulean Bell: must be included in every play and discard; null when inactive
     private boolean acted;                 // whether this seat has played or discarded (skipping requires an untouched round)
@@ -91,6 +92,7 @@ public final class Round {
         result = run.balanceIfPlasma(result);   // Plasma deck: chips and mult meet in the middle before multiplying
         lastChips = result.chips();   // for the UI chips×mult readout
         lastMult  = result.mult();
+        lastEvents = result.events();   // the timeline the client replays as the scoring animation
         BigDecimal handScore = result.score();
         if (run.getMatch() != null)   // Lust: the diversity multiplier transforms the hand's final score
             handScore = run.getMatch().getSinModifier().adjustHandScore(run, type, handScore);
@@ -305,6 +307,9 @@ public final class Round {
     public BigDecimal getBestHandScore() { return bestHandScore; }
 
     /** Chips of the most recent play this round (0 before any hand); feeds the UI's blue chips × red mult readout. */
+    /** The most recent play's scoring timeline, in engine order; empty before any hand this round. */
+    public java.util.List<model.game.scoring.ScoringEvent> getLastEvents() { return lastEvents; }
+
     public BigDecimal getLastChips() { return lastChips; }
     /** Mult of the most recent play this round (0 before any hand). */
     public BigDecimal getLastMult()  { return lastMult; }

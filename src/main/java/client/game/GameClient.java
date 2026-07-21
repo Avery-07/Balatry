@@ -53,6 +53,7 @@ public final class GameClient extends Application {
         Canvas canvas = new Canvas(Ui.W, Ui.H);
         r = new Renderer(canvas.getGraphicsContext2D());
         ui = new Ui(r, hand);
+        buildDragTargets();
         loadAssets();
         canvas.setOnMouseClicked(e -> handleClick(e.getX(), e.getY()));
         canvas.setOnMouseMoved(e -> { ui.mouseX = e.getX(); ui.mouseY = e.getY(); });
@@ -95,6 +96,9 @@ public final class GameClient extends Application {
                 ui.shopSlotRow.advance(dt);
                 ui.shopVoucherRow.advance(dt);
                 ui.shopPackRow.advance(dt);
+                boolean wasPlaying = ui.reel.playing();
+                ui.reel.advance(dt);
+                if (wasPlaying && !ui.reel.playing()) hand.releaseStaged();   // reel drained: let the cards fly
                 render();
             }
         }.start();
@@ -105,92 +109,94 @@ public final class GameClient extends Application {
 
     // --- drag & drop --------------------------------------------------------
     // One grammar for the whole table: hand cards, jokers, inventory items and shop tiles all lift with the
-    // cursor and glide. The hand manages its own entities; every tile row is a Ui.TileRow. A drop either lands
-    // (a move is submitted) or doesn't (the next layout simply sends the tile back — no special case).
+    // cursor and glide. The hand manages its own entities; every other draggable surface registers itself as a
+    // DragTarget — the row, whether it is live right now, and what a landed drop does — so adding a new
+    // draggable area is one list entry, not a set of string-keyed switch cases.
 
     private static final double DRAG_THRESHOLD = 7;   // pixels of travel before a press becomes a drag
 
+    /** What a drop that landed in the row's band does; shop shelves land nowhere and pass NOWHERE. */
+    @FunctionalInterface private interface Drop { void land(int from, int slot); }
+    private static final Drop NOWHERE = (from, slot) -> { };
+
+    /** One draggable surface: its row, whether it can be grabbed right now, and its drop policy. */
+    private record DragTarget(TileRow row, java.util.function.BooleanSupplier active, Drop onDrop) { }
+
+    private List<DragTarget> dragTargets;   // built in start(), once ui exists
+
     private double pressX, pressY;
-    private String pressKind;      // what the press landed on: "hand" or a row name, or null
-    private String dragKind;       // the active drag, once the threshold is crossed
-    private int dragFrom = -1;     // the dragged tile's model index (rows), set at beginDrag
-    private boolean suppressClick; // a completed drag must not also fire as a click
+    private boolean pressOnHand;
+    private DragTarget pressTarget;        // the row the press landed on, or null
+    private boolean draggingHand;
+    private DragTarget dragTarget;         // the active row drag, once the threshold is crossed
+    private int dragFrom = -1;             // the dragged tile's model index, set at beginDrag
+    private boolean suppressClick;         // a completed drag must not also fire as a click
+
+    private void buildDragTargets() {
+        dragTargets = List.of(
+                new DragTarget(ui.jokerRow, () -> true,
+                        (from, slot) -> { if (slot != from) vm.moveJoker(from, slot); }),
+                new DragTarget(ui.itemRow, () -> true, this::dropItem),
+                new DragTarget(ui.shopSlotRow, () -> ui.s.inShop(), NOWHERE),
+                new DragTarget(ui.shopVoucherRow, () -> ui.s.inShop(), NOWHERE),
+                new DragTarget(ui.shopPackRow, () -> ui.s.inShop(), NOWHERE));
+    }
 
     /** Records what the press landed on; nothing moves until the cursor travels past the threshold. */
     private void handlePress(double x, double y) {
         pressX = x; pressY = y;
-        pressKind = null;
+        pressOnHand = false; pressTarget = null;
         if (!inMatch() || ui.s == null || ui.s.opening() != null || ui.showRunInfo) return;
 
-        if (ui.s.phase() == MatchPhase.BLIND && hand.cardAt(x, y) != null) { pressKind = "hand"; return; }
-        if (ui.jokerRow.tileAt(x, y) != -1) { pressKind = "joker"; return; }
-        if (ui.itemRow.tileAt(x, y) != -1)  { pressKind = "item"; return; }
-        if (ui.s.inShop()) {
-            if (ui.shopSlotRow.tileAt(x, y) != -1)    { pressKind = "shopSlot"; return; }
-            if (ui.shopVoucherRow.tileAt(x, y) != -1) { pressKind = "shopVoucher"; return; }
-            if (ui.shopPackRow.tileAt(x, y) != -1)    { pressKind = "shopPack"; }
-        }
+        if (ui.s.phase() == MatchPhase.BLIND && hand.cardAt(x, y) != null) { pressOnHand = true; return; }
+        for (DragTarget t : dragTargets)
+            if (t.active().getAsBoolean() && t.row().tileAt(x, y) != -1) { pressTarget = t; return; }
     }
 
     /** Once the cursor travels far enough, the press becomes a drag; from then on the drag owns the cursor. */
     private void handleDrag(double x, double y) {
-        if (dragKind == null && pressKind != null
+        boolean pending = pressOnHand || pressTarget != null;
+        if (!draggingHand && dragTarget == null && pending
                 && Math.hypot(x - pressX, y - pressY) > DRAG_THRESHOLD) {
-            if (pressKind.equals("hand")) {
-                if (hand.beginDrag(pressX, pressY)) dragKind = "hand";
+            if (pressOnHand) {
+                draggingHand = hand.beginDrag(pressX, pressY);
             } else {
-                TileRow row = rowFor(pressKind);
-                dragFrom = row.beginDrag(pressX, pressY);
-                if (dragFrom != -1) dragKind = pressKind;
+                dragFrom = pressTarget.row().beginDrag(pressX, pressY);
+                if (dragFrom != -1) dragTarget = pressTarget;
             }
-            pressKind = null;
+            pressOnHand = false; pressTarget = null;
         }
-        if (dragKind == null) return;
-        if (dragKind.equals("hand")) hand.dragTo(x, y);
-        else rowFor(dragKind).dragTo(x, y);
+        if (draggingHand) hand.dragTo(x, y);
+        else if (dragTarget != null) dragTarget.row().dragTo(x, y);
     }
 
     /**
-     * Ends a drag. The hand commits its new order; the joker and item rows submit a move when the drop lands in
-     * their band (an invalid drop just glides back, since the layout retargets every tile every frame); the shop
-     * rows have nowhere to be dragged to, so their tiles always glide home.
+     * Ends a drag: the hand commits its new order; a row asks its drop policy what a landed slot means. An
+     * invalid or nowhere drop needs no handling — the next layout glides the tile back where it belongs.
      */
     private void handleRelease(double x, double y) {
-        if (dragKind == null) { pressKind = null; return; }
+        if (!draggingHand && dragTarget == null) { pressOnHand = false; pressTarget = null; return; }
         suppressClick = true;
-        switch (dragKind) {
-            case "hand" -> hand.endDrag();
-            case "joker" -> {
-                int slot = ui.jokerRow.endDrag(x, y);
-                if (slot != -1 && slot != dragFrom) vm.moveJoker(dragFrom, slot);
-            }
-            case "item" -> dropItem(ui.itemRow.endDrag(x, y));
-            default -> rowFor(dragKind).endDrag(x, y);   // shop shelves: lift, release, glide home
+        if (draggingHand) {
+            hand.endDrag();
+        } else {
+            int slot = dragTarget.row().endDrag(x, y);
+            if (slot != -1) dragTarget.onDrop().land(dragFrom, slot);
         }
-        dragKind = null; dragFrom = -1;
+        draggingHand = false; dragTarget = null; dragFrom = -1;
     }
 
     /**
      * An inventory drop: consumables reorder among consumables, relics among relics — the two share the display
      * row but live in different model lists, so a cross-class drop just glides back with a hint.
      */
-    private void dropItem(int slot) {
-        if (slot == -1 || slot == dragFrom || slot >= ui.s.inventory().size()) return;
-        MatchSnapshot.ItemView from = ui.s.inventory().get(dragFrom);
-        MatchSnapshot.ItemView to = ui.s.inventory().get(slot);
-        if (to.isRelic() != from.isRelic()) { ui.status = "Consumables and relics keep to their own areas."; return; }
-        if (from.isRelic()) vm.moveRelic(from.modelIndex(), to.modelIndex());
-        else vm.moveConsumable(from.modelIndex(), to.modelIndex());
-    }
-
-    private TileRow rowFor(String kind) {
-        return switch (kind) {
-            case "joker"       -> ui.jokerRow;
-            case "item"        -> ui.itemRow;
-            case "shopSlot"    -> ui.shopSlotRow;
-            case "shopVoucher" -> ui.shopVoucherRow;
-            default            -> ui.shopPackRow;
-        };
+    private void dropItem(int from, int slot) {
+        if (slot == from || slot >= ui.s.inventory().size()) return;
+        MatchSnapshot.ItemView src = ui.s.inventory().get(from);
+        MatchSnapshot.ItemView dst = ui.s.inventory().get(slot);
+        if (dst.isRelic() != src.isRelic()) { ui.status = "Consumables and relics keep to their own areas."; return; }
+        if (src.isRelic()) vm.moveRelic(src.modelIndex(), dst.modelIndex());
+        else vm.moveConsumable(src.modelIndex(), dst.modelIndex());
     }
 
     /** Opens a lobby in this process and joins it as seat 0, so this player picks who plays and when to start. */
@@ -305,10 +311,22 @@ public final class GameClient extends Application {
         }
     }
 
-    /** FX thread: a new frame — reconcile the hand into retained entities (keeps selection + motion). */
+    /**
+     * FX thread: a new frame — reconcile the hand into retained entities (keeps selection + motion). A frame
+     * carrying a <em>new</em> scoring timeline starts the reel: the model has already banked the score and dealt
+     * fresh cards, so the client holds the played cards centre-screen and replays how that score was reached.
+     */
     private void onSnapshot(MatchSnapshot snap) {
+        MatchSnapshot previous = ui.s;
         ui.s = snap;
         hand.reconcile(snap.hand(), Ui.W - 90, Ui.H * 0.55);
+
+        boolean newTimeline = !snap.lastPlay().isEmpty()
+                && (previous == null || !snap.lastPlay().equals(previous.lastPlay()));
+        if (newTimeline) {
+            ui.reelEvents = snap.lastPlay();
+            ui.reel.play(snap.lastPlay().size());
+        }
     }
 
     private void render() {
@@ -334,6 +352,10 @@ public final class GameClient extends Application {
         if (!ui.status.isEmpty()) r.textLeft(ui.status, Ui.PAD + 8, Ui.H - 20, 12, Palette.DIM);
         if (ui.showRunInfo) overlays.runInfo(ui);
 
+        // The scoring reel: the played cards stand centre-screen and the acting card's effect square floats.
+        if (hand.hasStaged()) hand.renderStaged(ui, cx, cTop + cH * 0.34, cW);
+        if (ui.reel.playing()) overlays.scoreEffect(ui);
+
         // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
         if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
         else overlays.tooltip(ui);
@@ -349,10 +371,13 @@ public final class GameClient extends Application {
         r.gc().fillRect(0, 0, Ui.W, Ui.H);
     }
 
+    /** The table felt — a constant gradient, built once (this paints 60x/sec; no per-frame allocation). */
+    private static final javafx.scene.paint.RadialGradient FELT = new javafx.scene.paint.RadialGradient(
+            0, 0, 0.5, 0.1, 1.1, true, javafx.scene.paint.CycleMethod.NO_CYCLE,
+            new javafx.scene.paint.Stop(0, Palette.FELT_A), new javafx.scene.paint.Stop(1, Palette.FELT_B));
+
     private void paintFelt() {
-        r.gc().setFill(new javafx.scene.paint.RadialGradient(0, 0, 0.5, 0.1, 1.1, true,
-                javafx.scene.paint.CycleMethod.NO_CYCLE,
-                new javafx.scene.paint.Stop(0, Palette.FELT_A), new javafx.scene.paint.Stop(1, Palette.FELT_B)));
+        r.gc().setFill(FELT);
         r.gc().fillRect(0, 0, Ui.W, Ui.H);
     }
 

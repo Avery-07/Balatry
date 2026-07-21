@@ -12,4 +12,5 @@ final class Palette {
     static final Color ORANGE = Color.web("#f0a92b"), RED = Color.web("#d1442f"), GREEN = Color.web("#37a862");
     static final Color BLUE = Color.web("#2f6fb0"), GOLD = Color.web("#b8912c"), PURPLE = Color.web("#8a4f9e");
     static final Color DARK = Color.web("#241a05");   // text on orange buttons
+    static final Color PODIUM_GOLD = Color.web("#ffd45e");   // first place, in standings and the finish screen
 }

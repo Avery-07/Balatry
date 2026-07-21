@@ -61,10 +61,18 @@ final class Hud {
         // (at this seat's levels) and its name appears above them; with nothing selected they show the last play.
         MatchSnapshot.HandLevelView preview = detectSelection(ui);
 
-        // The juicy readouts: each counter chases its value and pops when it grows.
+        // The juicy readouts: each counter chases its value and pops when it grows. While the scoring reel runs,
+        // chips and mult follow the timeline's running totals instead of the snapshot's finished ones — that is
+        // what makes the numbers climb beat by beat rather than jumping straight to the answer.
+        MatchSnapshot.ScoreEventView beat = ui.liveEvent();
         score.retarget(numeric(s.round() != null ? s.round().score() : "0"));
-        chips.retarget(preview != null ? preview.chips() : numeric(s.chips()));
-        mult.retarget(preview != null ? preview.mult() : numeric(s.mult()));
+        if (beat != null) {
+            chips.retarget(numeric(beat.chipsAfter()));
+            mult.retarget(numeric(beat.multAfter()));
+        } else {
+            chips.retarget(preview != null ? preview.chips() : numeric(s.chips()));
+            mult.retarget(preview != null ? preview.mult() : numeric(s.mult()));
+        }
         money.retarget(s.money());
 
         cy = statBoxPopped(r, ix, cy, iw, "Round score", score);
@@ -121,10 +129,28 @@ final class Hud {
      * and deterministic, the same evaluator the model scores with), and the pricing comes from the snapshot's
      * {@code handLevels} table, so the preview always matches what a play would actually earn.
      */
-    private static MatchSnapshot.HandLevelView detectSelection(Ui ui) {
+    // The preview is memoized: the selection only changes on a click, so re-running the evaluator every frame
+    // in between is pure waste. Keyed by the selected ids plus the snapshot the levels came from.
+    private List<Integer> previewKey = List.of();
+    private MatchSnapshot previewSnap;
+    private MatchSnapshot.HandLevelView previewCached;
+
+    private MatchSnapshot.HandLevelView detectSelection(Ui ui) {
         if (ui.s.phase() != MatchPhase.BLIND) return null;
+        List<CardEntity> selected = ui.hand.selectedCards();
+        List<Integer> key = new ArrayList<>(selected.size());
+        for (CardEntity e : selected) key.add(e.id());
+        if (ui.s == previewSnap && key.equals(previewKey)) return previewCached;
+
+        previewSnap = ui.s;
+        previewKey = key;
+        previewCached = evaluateSelection(ui, selected);
+        return previewCached;
+    }
+
+    private static MatchSnapshot.HandLevelView evaluateSelection(Ui ui, List<CardEntity> selected) {
         List<DeckCard> cards = new ArrayList<>();
-        for (CardEntity e : ui.hand.selectedCards()) {
+        for (CardEntity e : selected) {
             if (e.rank() < 0) return null;   // a face-down card is selected: its identity is hidden, so no preview
             cards.add(new DeckCard(DeckCard.Rank.values()[e.rank()], DeckCard.Suit.values()[e.suit()]));
         }
@@ -163,13 +189,13 @@ final class Hud {
         for (int j = 0; j < jokerSlots.length; j++) jokerSlots[j] = x + tileW / 2 + j * 62;
         ui.jokerRow.layout(jokerSlots, tileCY);
 
-        for (int j = 0; j < s.jokers().size(); j++) {
-            MatchSnapshot.JokerView jv = s.jokers().get(j);
-            if (ui.jokerRow.isDragged(jv.id())) continue;   // the held tile draws last, above its row
-            drawJokerTile(ui, jv, j, tileW, tileH, client.engine.Idle.bobPx(time, j, 1.6));
-        }
-        for (int j = 0; j < s.jokers().size(); j++)   // at most one: the dragged tile, on top
-            if (ui.jokerRow.isDragged(s.jokers().get(j).id())) drawJokerTile(ui, s.jokers().get(j), j, tileW, tileH, 0);
+        // Pass 0 draws the settled tiles (with their idle bob), pass 1 the held one on top of everything.
+        for (int pass = 0; pass < 2; pass++)
+            for (int j = 0; j < s.jokers().size(); j++) {
+                MatchSnapshot.JokerView jv = s.jokers().get(j);
+                if (ui.jokerRow.isDragged(jv.id()) != (pass == 1)) continue;
+                drawJokerTile(ui, jv, j, tileW, tileH, pass == 0 ? client.engine.Idle.bobPx(time, j, 1.6) : 0);
+            }
 
         // Consumables/relics: same treatment, right-aligned (slot i's center ascends left→right in model order).
         r.textLeftBold(s.consumableSlotsUsed() + "/" + s.consumableSlotsMax(), x + w - 40, y, 18, INK);
@@ -181,18 +207,23 @@ final class Hud {
             itemSlots[i] = x + w - 54 + tileW / 2 - (itemSlots.length - 1 - i) * 62;
         ui.itemRow.layout(itemSlots, tileCY);
 
-        for (int i = 0; i < s.inventory().size(); i++) {
-            MatchSnapshot.ItemView it = s.inventory().get(i);
-            if (ui.itemRow.isDragged(it.id())) continue;
-            drawItemTile(ui, it, i, tileW, tileH, client.engine.Idle.bobPx(time, 40 + i, 1.6));
-        }
-        for (int i = 0; i < s.inventory().size(); i++)
-            if (ui.itemRow.isDragged(s.inventory().get(i).id())) drawItemTile(ui, s.inventory().get(i), i, tileW, tileH, 0);
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < s.inventory().size(); i++) {
+                MatchSnapshot.ItemView it = s.inventory().get(i);
+                if (ui.itemRow.isDragged(it.id()) != (pass == 1)) continue;
+                drawItemTile(ui, it, i, tileW, tileH, pass == 0 ? client.engine.Idle.bobPx(time, 40 + i, 1.6) : 0);
+            }
     }
 
     private void drawJokerTile(Ui ui, MatchSnapshot.JokerView jv, int index, double tileW, double tileH, double bob) {
         Renderer r = ui.r;
-        Layout.Rect rr = new Layout.Rect(ui.jokerRow.x(jv.id()) - tileW / 2, ui.jokerRow.y(jv.id()) - tileH / 2 + bob, tileW, tileH);
+        // The trigger animation: a joker whose beat is live swells and lifts while its effect square floats.
+        double pop = ui.scorePop(jv.id());
+        double w = tileW * (1 + 0.22 * pop), h = tileH * (1 + 0.22 * pop);
+        Layout.Rect rr = new Layout.Rect(ui.jokerRow.x(jv.id()) - w / 2,
+                ui.jokerRow.y(jv.id()) - h / 2 + bob - 10 * pop, w, h);
+        ui.noteSourceRect(jv.id(), rr);
+        tileW = w; tileH = h;
         // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
         mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
         if (!jv.badge().isEmpty()) {

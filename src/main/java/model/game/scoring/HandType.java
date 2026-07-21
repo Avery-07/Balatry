@@ -31,4 +31,20 @@ public enum HandType {
     public int getBaseMult()      { return baseMult; }
     public int getChipsPerLevel() { return chipsPerLevel; }
     public int getMultPerLevel()  { return multPerLevel; }
+
+    /**
+     * "Four of a Kind" — the single authority for a hand type's player-facing name. Both the client and the
+     * joker tooltips render through this, so the prettifying rules live in exactly one place.
+     */
+    public String displayName() {
+        String[] words = name().toLowerCase().split("_");
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            String w = words[i];
+            if (i > 0) out.append(' ');
+            if (i > 0 && (w.equals("of") || w.equals("a"))) out.append(w);
+            else out.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+        }
+        return out.toString();
+    }
 }

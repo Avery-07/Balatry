@@ -1,7 +1,10 @@
 package client.game;
 
-/** Small display-string helpers shared across screens. */
-final class Fmt {
+import model.items.DeckCard;
+import model.game.scoring.HandType;
+
+/** Small display-string helpers shared across screens (public: {@code client.MatchSnapshot} shares them too). */
+public final class Fmt {
     private Fmt() { }
 
     static String blindName(String blind) {
@@ -26,25 +29,21 @@ final class Fmt {
         return cut > 0 ? s.substring(0, cut) : (s.length() > 7 ? s.substring(0, 7) : s);
     }
 
-    /** {@code FOUR_OF_A_KIND} → {@code Four of a Kind}; keeps the little words lowercase. */
+    /** {@code FOUR_OF_A_KIND} → {@code Four of a Kind}, via the model's single naming authority. */
     static String handName(String enumName) {
-        String[] words = enumName.toLowerCase().split("_");
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < words.length; i++) {
-            String w = words[i];
-            if (i > 0) out.append(' ');
-            if (i > 0 && (w.equals("of") || w.equals("a"))) out.append(w);
-            else out.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+        try {
+            return HandType.valueOf(enumName).displayName();
+        } catch (IllegalArgumentException e) {
+            return title(enumName);   // an unknown type still renders readably
         }
-        return out.toString();
     }
 
-    /** "King of Hearts" from rank/suit ordinals (the sprite-sheet order the whole client uses). */
+    /** "King of Hearts" from rank/suit ordinals ({@code Rank}/{@code Suit} enum order, as the snapshot ships). */
     static String cardTitle(int rankOrd, int suitOrd) {
-        String[] ranks = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King", "Ace" };
-        String[] suits = { "Hearts", "Clubs", "Diamonds", "Spades" };
-        String rank = rankOrd >= 0 && rankOrd < ranks.length ? ranks[rankOrd] : "?";
-        String suit = suitOrd >= 0 && suitOrd < suits.length ? suits[suitOrd] : "?";
+        DeckCard.Rank[] ranks = DeckCard.Rank.values();
+        DeckCard.Suit[] suits = DeckCard.Suit.values();
+        String rank = rankOrd >= 0 && rankOrd < ranks.length ? ranks[rankOrd].displayName() : "?";
+        String suit = suitOrd >= 0 && suitOrd < suits.length ? suits[suitOrd].displayName() : "?";
         return rank + " of " + suit;
     }
 
@@ -63,8 +62,8 @@ final class Fmt {
         return tip.toString();
     }
 
-    /** {@code GOLD} → {@code Gold}. */
-    static String title(String s) {
+    /** {@code GOLD} → {@code Gold}; public — the one title-caser for enum-name display everywhere. */
+    public static String title(String s) {
         if (s.isEmpty()) return s;
         String lower = s.toLowerCase().replace('_', ' ');
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);

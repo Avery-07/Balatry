@@ -945,27 +945,22 @@ public enum Jokers {
 
     /** "King" from a {@code Rank} ordinal. */
     private static String rankName(int ord) {
-        String[] names = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King", "Ace" };
-        return ord >= 0 && ord < names.length ? names[ord] : "?";
+        Rank[] ranks = Rank.values();
+        return ord >= 0 && ord < ranks.length ? ranks[ord].displayName() : "?";
     }
 
-    /** "Spades" from the matchesSuit index (0=spade,1=heart,2=club,3=diamond). */
+    /** "Spades" from the matchesSuit index — NOTE: 0=spade,1=heart,2=club,3=diamond, not Suit enum order. */
     private static String suitIndexName(int idx) {
-        return switch (idx) { case 0 -> "Spades"; case 1 -> "Hearts"; case 2 -> "Clubs"; default -> "Diamonds"; };
+        DeckCard.Suit suit = switch (idx) {
+            case 0 -> DeckCard.Suit.SPADES; case 1 -> DeckCard.Suit.HEARTS;
+            case 2 -> DeckCard.Suit.CLUBS;  default -> DeckCard.Suit.DIAMONDS;
+        };
+        return suit.displayName();
     }
 
-    /** "Four of a Kind" from a {@code HandType} ordinal. */
+    /** "Four of a Kind" from a {@code HandType} ordinal, via the model's single naming authority. */
     private static String handTypeName(int ord) {
-        if (ord < 0 || ord >= HandType.values().length) return "?";
-        String[] words = HandType.values()[ord].name().toLowerCase().split("_");
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < words.length; i++) {
-            String w = words[i];
-            if (i > 0) out.append(' ');
-            if (i > 0 && (w.equals("of") || w.equals("a"))) out.append(w);
-            else out.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
-        }
-        return out.toString();
+        return ord >= 0 && ord < HandType.values().length ? HandType.values()[ord].displayName() : "?";
     }
 
     private static DeckCard scored(model.game.player.Run run) {

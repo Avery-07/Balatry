@@ -8,6 +8,7 @@ import client.engine.Idle;
 import client.engine.Layout;
 import client.engine.Motion;
 import client.engine.Reconciler;
+import client.engine.ScoreReel;
 import client.engine.TileRow;
 import client.engine.Tween;
 
@@ -37,6 +38,7 @@ public final class EngineTests {
         fader();
         idle();
         tileRow();
+        scoreReel();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -281,6 +283,50 @@ public final class EngineTests {
         row.advance(5);   // hit-testing tracks animated positions, so let the survivors arrive first
         checkInt("a removed tile leaves the row", row.count(), 2);
         checkInt("nothing is under its old spot", row.tileAt(220, 400), -1);
+    }
+
+    /** The scoring reel: every beat plays, in order, accelerating — and it always drains to idle. */
+    private static void scoreReel() {
+        ScoreReel reel = new ScoreReel();
+        check("a fresh reel is idle", !reel.playing() && reel.currentIndex() == -1);
+
+        reel.play(0);
+        check("an empty timeline leaves it idle", !reel.playing());
+
+        reel.play(4);
+        check("playing starts on the first beat", reel.playing() && reel.currentIndex() == 0);
+        near("and at the start of it", reel.beatProgress(), 0);
+
+        reel.advance(0.17);   // half of the 0.34s first step
+        check("progress rises within a beat", reel.beatProgress() > 0.4 && reel.beatProgress() < 0.6);
+        checkInt("still the first beat", reel.currentIndex(), 0);
+
+        reel.advance(0.17);
+        checkInt("it steps to the next beat", reel.currentIndex(), 1);
+        checkInt("and counts the one it finished", reel.playedCount(), 1);
+
+        // Every beat is shown — none is ever skipped, however long the chain.
+        ScoreReel serial = new ScoreReel();
+        serial.play(30);
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 4000 && serial.playing(); i++) { seen.add(serial.currentIndex()); serial.advance(0.01); }
+        checkInt("every beat of a long chain was shown", seen.size(), 30);
+        check("and the reel drained to idle", !serial.playing());
+
+        // The acceleration: a long chain must cost less than a naive constant-rate one.
+        ScoreReel fast = new ScoreReel();
+        fast.play(30);
+        double t = 0;
+        while (fast.playing() && t < 60) { fast.advance(0.01); t += 0.01; }
+        check("a 30-beat chain accelerates well under the un-sped time", t < 30 * 0.34);
+        check("but still takes real time", t > 2.0);
+
+        // Stopping mid-flight releases the screen at once.
+        ScoreReel halted = new ScoreReel();
+        halted.play(10);
+        halted.advance(0.5);
+        halted.stop();
+        check("stop makes it idle immediately", !halted.playing() && halted.currentIndex() == -1);
     }
 
     private static void checkInt(String label, int actual, int expected) { check(label + " (" + actual + ")", actual == expected); }

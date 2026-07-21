@@ -15,8 +15,8 @@ final class ResultScreen implements Screen {
         r.panel(px, py, pw, ph, javafx.scene.paint.Color.web("#141517"), GREEN, 12, 3);
         r.textCenterBold(Fmt.blindName(ui.s.blind()) + " Defeated", px + pw / 2, py + 30, 22, GREEN);
 
-        long pts = 0; int rank = 1, total = ui.s.standings().size();
-        for (MatchSnapshot.StandingView sv : ui.s.standings()) if (sv.isMe()) { pts = sv.points(); rank = sv.rank() + 1; }
+        MatchSnapshot.StandingView me = ui.s.myStanding();
+        long pts = me.points(); int rank = me.rank() + 1, total = ui.s.standings().size();
         double hy = py + 60, hw = pw - 60;
         r.panel(px + 30, hy, hw, 120, javafx.scene.paint.Color.web("#231a08"), GOLD, 12, 3);
         r.textCenterBold("TOTAL POINTS", px + pw / 2, hy + 24, 14, DIM);

@@ -15,7 +15,7 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   separate server is needed. A lobby seats **2-4**. To play locally, run
   `mvn javafx:run` twice: host in the first window, join `localhost` in the second, then Start in the first.
   `mvn exec:java@server` still runs a headless dedicated server that auto-starts when its seats fill.
-- 30 harnesses currently pass.
+- 31 harnesses currently pass.
 
 ## Critical working conventions (read these)
 
@@ -180,6 +180,34 @@ model.*  (pure game logic, deterministic, fully tested)
      special case, the layout retargets every tile every frame. **Shop tiles have no drop target by design**:
      they lift and glide home, purely for feel consistency. Sold shop slots render as static holes outside the
      row; `Ui` owns the five rows (Hud/ShopScreen lay out + draw, GameClient routes input).
+   **Maintainability pass (4-agent /simplify), applied:** display names now have single authorities —
+   `HandType.displayName()`, `Rank/Suit.displayName()`, one `Fmt.title` (public; `MatchSnapshot` delegates) —
+   which also fixed `Fmt.cardTitle`'s suit array being in sprite-row order instead of enum order (tooltips called
+   spades "Hearts"). `Palette.PODIUM_GOLD` + `MatchSnapshot.myStanding()` de-dupe the standings screens. The felt
+   gradient is static; the play preview is memoized on (snapshot, selected ids). `Hand`'s exit bookkeeping is one
+   mutable holder; dead methods dropped. Menu hitboxes now shift via `Ui.regionOffsetY` applied at registration
+   (covers every region type), replacing the buttons-only post-hoc patch. Drag routing is a registered
+   `DragTarget(row, active, onDrop)` list — adding a draggable surface is one entry, no string-keyed switches.
+   Skipped knowingly: caching the deck-hover grouping (hover-gated, trivial), unifying `Hand` onto `TileRow`
+   (split justified: fan layout, selection, flip), lazy tooltip building (not worth the plumbing).
+   **Round 5 — the scoring animation (in progress).** Design: played cards stand centre-screen and each
+   contribution plays as a **trigger + effect pair** — the source card/joker pops, a small square beside it names
+   what it did — with the readouts climbing beat by beat.
+   - **Model half, done & tested** (`ScoringEventTests`, 27 checks): `ScoringEvent(sourceId, sourceName, kind,
+     amount, chipsAfter, multAfter)` with kinds BASE/CHIPS/MULT/XMULT/MONEY/RETRIGGER/DESTROYED/BALANCE.
+     `ScoringSession` records every mutator against whichever card the engine last named via `setSource`, so the
+     log's order **is** the engine's execution order for free; `ScoringEngine` names each contributor and emits
+     the ownerless BASE beat; `Run.addMoney` joins the timeline when a session is live (gold seal, Lucky, money
+     jokers); `Run.balanceIfPlasma` appends its BALANCE beat (otherwise the reel would count to totals the model
+     then replaced). **Key invariant, asserted: replaying the log's final `chipsAfter × multAfter` reproduces the
+     banked score** — the client never re-derives arithmetic. Ships as `MatchSnapshot.lastPlay()`.
+   - **Client half, first pass**: `client.engine.ScoreReel` (pure, tested) walks the timeline, accelerating
+     ÷1.1 every 2 beats down to a 0.07s floor — no skipping, no batching, no fast-forward (per design). `Hand`
+     now *stages* played cards centre-screen instead of flying them off, releasing them when the reel drains;
+     `Overlays.scoreEffect` draws the effect square (anchored under the source, above it near the screen bottom);
+     `Hud` counters follow the live beat's running totals while the reel runs.
+   - **Not done yet:** held-card (Steel) and sin/boss beats have no on-screen anchor yet; the staged-row layout
+     and all timings are unverified — **this is the part that most needs eyeballing.**
 5. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would allow Balatro-style skipping.
 6. **Implement the ~35 stub jokers** (24 base-game + Merchant/The Void + 9 multiplayer ones needing engine events).
 7. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`

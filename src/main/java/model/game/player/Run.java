@@ -119,6 +119,10 @@ public final class Run {
     public int getMoney()                     { return money; }
     public void addMoney(int amount) {
         money += amount;
+        // Money earned mid-scoring (gold seal, Lucky, money jokers) is a beat of the scoring animation too, so
+        // it joins the timeline attributed to whatever the engine currently has acting.
+        if (scoring != null && amount != 0)
+            scoring.recordMoney(java.math.BigDecimal.valueOf(amount));
         if (amount > 0) fire(Trigger.ON_EARN);
     }
 
@@ -462,7 +466,13 @@ public final class Run {
         if (getDeckType() != DeckType.PLASMA) return result;
         BigDecimal balanced = result.chips().add(result.mult())
                 .divide(BigDecimal.valueOf(2), java.math.MathContext.DECIMAL64);
-        return new ScoringResult(balanced.multiply(balanced), balanced, balanced, result.destroyed());
+        // The balance rewrites the totals, so it joins the timeline as its own beat — otherwise the animation
+        // would count up to numbers the model then silently replaced.
+        List<model.game.scoring.ScoringEvent> events = new ArrayList<>(result.events());
+        events.add(new model.game.scoring.ScoringEvent(
+                model.game.scoring.ScoringEvent.NO_SOURCE, "Plasma Deck",
+                model.game.scoring.ScoringEvent.Kind.BALANCE, balanced, balanced, balanced));
+        return new ScoringResult(balanced.multiply(balanced), balanced, balanced, result.destroyed(), events);
     }
 
     /** This seat's sleeve; its starting adjustments are already applied (see {@link Sleeves#apply}). */

@@ -34,10 +34,11 @@ final class ShopScreen implements Screen {
 
         r.textLeftBold("Cards", ix, cy, 12, FAINT); cy += 18;
         shelf(ui, ui.shopSlotRow, shop.slots().size(), ix, cy,
-                i -> shop.slots().get(i) == null ? null : new Tile(
-                        shop.slots().get(i).id(), shop.slots().get(i).label(), shop.slots().get(i).price(),
-                        javafx.scene.paint.Color.web("#c0392b"), true, "shopSlot",
-                        shop.slots().get(i).badge(), shop.slots().get(i).tooltip(), i));
+                i -> {
+                    MatchSnapshot.ShopItem it = shop.slots().get(i);
+                    return it == null ? null : new Tile(it.id(), it.label(), it.price(),
+                            javafx.scene.paint.Color.web("#c0392b"), true, "shopSlot", it.badge(), it.tooltip(), i);
+                });
         cy += 150;
 
         r.textLeftBold("Voucher", ix, cy, 12, FAINT);
@@ -83,11 +84,13 @@ final class ShopScreen implements Screen {
         double cy = y + 16 + TILE_H / 2;
         row.layout(xs, cy);
 
-        for (int i = 0; i < tiles.size(); i++) if (!row.isDragged(tiles.get(i).id())) draw(ui, row, tiles.get(i), i);
-        for (int i = 0; i < tiles.size(); i++) if (row.isDragged(tiles.get(i).id()))  draw(ui, row, tiles.get(i), i);
+        // Pass 0 draws the settled tiles, pass 1 the held one on top.
+        for (int pass = 0; pass < 2; pass++)
+            for (Tile t : tiles)
+                if (row.isDragged(t.id()) == (pass == 1)) draw(ui, row, t);
     }
 
-    private void draw(Ui ui, TileRow row, Tile t, int index) {
+    private void draw(Ui ui, TileRow row, Tile t) {
         Renderer r = ui.r;
         double tx = row.x(t.id()) - TILE_W / 2, ty = row.y(t.id()) - TILE_H / 2;
         Layout.Rect rr = new Layout.Rect(tx, ty, TILE_W, TILE_H);

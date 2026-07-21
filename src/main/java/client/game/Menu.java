@@ -91,22 +91,15 @@ final class Menu {
     void advance(double dt) { slide.advance(dt); }
 
     void render(Ui ui) {
+        // Draw under a translate for the slide-in; Ui.regionOffsetY keeps every registered hitbox in sync with
+        // what the eye sees — all region types, by construction.
         ui.r.gc().save();
         ui.r.gc().translate(0, slide.value());
+        ui.regionOffsetY = slide.value();
         if (mode == Mode.MAIN) renderMain(ui); else renderLobby(ui);
+        ui.regionOffsetY = 0;
         ui.r.gc().restore();
-        // The clickable regions registered above moved with the translate; shift them back into screen space.
-        if (slide.value() != 0) shiftRegions(ui, slide.value());
         if (!status.isEmpty()) ui.r.textCenter(status, Ui.W / 2.0, Ui.H - 28, 13, status.startsWith("ERR") ? RED : DIM);
-    }
-
-    /** While the slide runs, hitboxes must match what the eye sees, not the un-translated layout. */
-    private void shiftRegions(Ui ui, double dy) {
-        for (int i = 0; i < ui.buttons.size(); i++) {
-            Ui.Btn b = ui.buttons.get(i);
-            ui.buttons.set(i, new Ui.Btn(new client.engine.Layout.Rect(
-                    b.rect().x(), b.rect().y() + dy, b.rect().w(), b.rect().h()), b.action()));
-        }
     }
 
     /** The main menu is only identity and connection; the loadout is picked in the lobby, where others can see it. */

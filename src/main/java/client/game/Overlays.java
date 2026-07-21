@@ -228,6 +228,57 @@ final class Overlays {
         }
     }
 
+    /**
+     * The effect animation: a small square popping up beside whichever card is acting, naming what it just did
+     * ("+5 Chips", "X1.5 Mult", "Retrigger"). Paired with the source's own trigger pop — one beat of the reel is
+     * always both. The square rises and fades over the beat, so consecutive effects from one card never stack.
+     */
+    void scoreEffect(Ui ui) {
+        MatchSnapshot.ScoreEventView e = ui.liveEvent();
+        if (e == null) return;
+        String text = effectText(e);
+        if (text.isEmpty()) return;
+
+        double t = ui.reel.beatProgress();
+        Layout.Rect src = ui.liveSourceRect();
+        double cx = src != null ? src.centerX() : Ui.W / 2.0;
+        // Anchor below the source, except near the screen's bottom (the hand fan), where below is off-screen.
+        boolean above = src != null && src.y() + src.h() > Ui.H - 200;
+        double baseY = src == null ? Ui.H / 2.0 + 90
+                : (above ? src.y() - 26 : src.y() + src.h() + 22);
+        double cy = baseY - 18 * t;   // drifts as it fades
+
+        Color fill = switch (e.kind()) {
+            case "CHIPS", "BASE" -> BLUE;
+            case "MULT", "XMULT" -> RED;
+            case "MONEY"         -> GOLD;
+            case "DESTROYED"     -> Color.web("#6b6f78");
+            default              -> PURPLE;   // RETRIGGER, BALANCE
+        };
+        double w = Math.max(58, text.length() * 8.0 + 16), h = 26;
+        r(ui).gc().setGlobalAlpha(Math.max(0, 1 - t * t));   // full early in the beat, gone by its end
+        r(ui).panel(cx - w / 2, cy - h / 2, w, h, fill, Color.web("#0009"), 8, 2);
+        r(ui).textCenterBold(text, cx, cy, 13, INK);
+        r(ui).gc().setGlobalAlpha(1);
+    }
+
+    /** The words on an effect square. */
+    private static String effectText(MatchSnapshot.ScoreEventView e) {
+        return switch (e.kind()) {
+            case "BASE"      -> e.sourceName();
+            case "CHIPS"     -> "+" + e.amount() + " Chips";
+            case "MULT"      -> "+" + e.amount() + " Mult";
+            case "XMULT"     -> "X" + e.amount() + " Mult";
+            case "MONEY"     -> (e.amount().startsWith("-") ? "" : "+") + "$" + e.amount();
+            case "RETRIGGER" -> "Retrigger";
+            case "DESTROYED" -> "Destroyed";
+            case "BALANCE"   -> "Balanced";
+            default          -> "";
+        };
+    }
+
+    private static Renderer r(Ui ui) { return ui.r; }
+
     /** The Run Info overlay: the ranked standings table, honoring the information boundary. */
     void runInfo(Ui ui) {
         Renderer r = ui.r;
@@ -243,7 +294,7 @@ final class Overlays {
         double ry = py + 76;
         for (MatchSnapshot.StandingView v : ui.s.standings()) {
             r.panel(px + 20, ry, pw - 40, 46, v.isMe() ? Color.web("#221d10") : Color.web("#1a1b1f"), v.isMe() ? ORANGE : EDGE, 10, 2);
-            r.textCenterBold(String.valueOf(v.rank() + 1), px + 44, ry + 23, 20, v.rank() == 0 ? Color.web("#ffd45e") : DIM);
+            r.textCenterBold(String.valueOf(v.rank() + 1), px + 44, ry + 23, 20, v.rank() == 0 ? PODIUM_GOLD : DIM);
             String tag = v.isMe() ? "  ◄ you" : (v.departed() ? "  (left)" : "");
             r.textLeftBold(v.name() + tag, px + 74, ry + 15, 16, v.departed() ? FAINT : INK);
             r.textCenterBold(v.points() + " pts", px + pw - 70, ry + 23, 16, v.departed() ? FAINT : GREEN);

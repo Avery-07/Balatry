@@ -32,7 +32,7 @@ public final class TileRow {
         ids.clear();
         ids.addAll(modelIds);
         motions.keySet().retainAll(modelIds);
-        if (draggedId != -1 && !motions.containsKey(draggedId) && !modelIds.contains(draggedId)) draggedId = -1;
+        if (draggedId != -1 && !modelIds.contains(draggedId)) draggedId = -1;   // retainAll already dropped its motion
     }
 
     /**
@@ -72,7 +72,6 @@ public final class TileRow {
     public double x(int id) { Motion m = motions.get(id); return m == null ? 0 : m.x(); }
     public double y(int id) { Motion m = motions.get(id); return m == null ? 0 : m.y(); }
     public boolean isDragged(int id) { return id == draggedId; }
-    public boolean dragging() { return draggedId != -1; }
 
     /** The tile under {@code (px,py)} by current animated positions, or -1. Topmost = latest in display order. */
     public int tileAt(double px, double py) {

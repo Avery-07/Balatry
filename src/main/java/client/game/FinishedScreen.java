@@ -14,7 +14,7 @@ import static client.game.Palette.*;
 final class FinishedScreen implements Screen {
 
     /** Rank colors for the podium places; everyone below shares the dim row treatment. */
-    private static final Color[] MEDAL = { Color.web("#ffd45e"), Color.web("#c8ccd2"), Color.web("#c98a4b") };
+    private static final Color[] MEDAL = { PODIUM_GOLD, Color.web("#c8ccd2"), Color.web("#c98a4b") };
 
     @Override
     public void render(Ui ui, double x, double y, double w, double h) {
@@ -25,10 +25,9 @@ final class FinishedScreen implements Screen {
         r.panel(px, py, pw, ph, Color.web("#141517"), GOLD, 14, 3);
         r.textCenterBold("MATCH OVER", px + pw / 2, py + 34, 26, GOLD);
 
-        int myRank = 1, total = Math.max(1, s.standings().size());
-        long myPoints = 0;
-        for (MatchSnapshot.StandingView v : s.standings())
-            if (v.isMe()) { myRank = v.rank() + 1; myPoints = v.points(); }
+        MatchSnapshot.StandingView me = s.myStanding();
+        int myRank = me.rank() + 1, total = Math.max(1, s.standings().size());
+        long myPoints = me.points();
         boolean won = myRank == 1;
 
         double hy = py + 58, hh = 104;
