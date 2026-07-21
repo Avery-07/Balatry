@@ -84,6 +84,7 @@ public final class Match {
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
     private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
     private final Map<PlayerId, Boolean> blindChoice = new LinkedHashMap<>();   // SELECTION: seat -> play(true)/skip(false)
+    private final java.util.Set<PlayerId> readySeats = new java.util.LinkedHashSet<>();   // RESULT/SHOP: signalled ready
     private final Set<PlayerId> departed = new LinkedHashSet<>();               // seats whose players have left
 
     private Match(long seed, MatchConfig config) {
@@ -420,6 +421,36 @@ public final class Match {
 
     /** Whether {@code id} has already made its blind-selection choice this SELECTION. */
     public boolean hasChosenBlind(PlayerId id) { return blindChoice.containsKey(id); }
+
+    // --- ready-to-continue (RESULT and SHOP) --------------------------------
+    // The host drives the barrier, but the state lives here for the same reason blindChoice does: it is
+    // per-seat match state the snapshot has to show, so a player can see their "Next Round" registered and
+    // know they are waiting on someone else rather than on a dead button.
+
+    /** Marks (or clears) a seat's ready-to-continue signal. Host-facing; the barrier check stays in MatchHost. */
+    public void setReady(PlayerId id, boolean ready) {
+        getRun(id);   // seat validation
+        if (ready) readySeats.add(id); else readySeats.remove(id);
+    }
+
+    /** Whether {@code id} has signalled ready to leave the current RESULT/SHOP screen. */
+    public boolean isReady(PlayerId id) { return readySeats.contains(id); }
+
+    /** How many still-playing seats have signalled ready. */
+    public int readyCount() {
+        int n = 0;
+        for (PlayerId id : getActiveSeats()) if (readySeats.contains(id)) n++;
+        return n;
+    }
+
+    /** Whether every seat still playing has signalled ready — the RESULT/SHOP barrier. */
+    public boolean allReady() {
+        for (PlayerId id : getActiveSeats()) if (!readySeats.contains(id)) return false;
+        return true;
+    }
+
+    /** Drops every ready signal; called as each barrier is crossed. */
+    public void clearReady() { readySeats.clear(); }
 
     /** Refreshes the active sin's behaviour after the sin changes and runs its once-per-ante table setup. */
     private void refreshSinForAnte() {

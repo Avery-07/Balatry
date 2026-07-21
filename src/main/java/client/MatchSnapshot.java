@@ -82,6 +82,9 @@ public record MatchSnapshot(
         ShopView shop,             // null outside the shop phase
         PackOpeningView opening,   // a booster pack being picked from, or null
         boolean hasChosen,         // this seat has made its blind-selection choice
+        boolean isReady,           // this seat has signalled ready to leave RESULT/SHOP — waiting on the others
+        int readyCount,            // how many still-playing seats have signalled ready
+        int activeSeats,           // how many seats are still playing (the barrier's denominator)
         ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
         List<StandingView> standings,   // every seat, ranked; for the end-of-match summary
         List<OpponentView> opponents
@@ -283,6 +286,9 @@ public record MatchSnapshot(
                 shopView,
                 packOpening(run),
                 hasChosen,
+                match.isReady(me),
+                match.readyCount(),
+                match.getActiveSeats().size(),
                 lastResult,
                 table,
                 opponents);

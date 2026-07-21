@@ -32,6 +32,7 @@ public final class SnapshotTests {
         shopPurchaseSnapshot();
         packOpeningSnapshot();
         jokerBadgeSnapshot();
+        readinessSnapshot();
         jokerStateSnapshot();
         editionLabelSnapshot();
         deckAndLevelsSnapshot();
@@ -211,6 +212,47 @@ public final class SnapshotTests {
         check("the badge shows Sticky's live toll", s.jokers().get(1).badge().contains("Sticky $4"));
         check("a live joker is not greyed", !s.jokers().get(0).debuffed());
         check("a debuffed joker is greyed", s.jokers().get(2).debuffed());
+    }
+
+    /**
+     * The lockstep barrier a player can see: once a seat signals ready to leave RESULT/SHOP, the snapshot says
+     * so — that is what lets the button become "waiting for others" instead of appearing dead.
+     */
+    private static void readinessSnapshot() {
+        var host = model.game.host.MatchHost.create(77L, List.of("A", "B"));
+        host.start();
+        Match m = host.getMatch();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+
+        // Drive both seats to the result screen.
+        int guard = 0;
+        while (m.getPhase() != MatchPhase.RESULT && guard++ < 50) {
+            if (m.getPhase() == MatchPhase.SELECTION) {
+                for (PlayerId id : m.getSeats()) host.submit(new model.game.actions.Action.PlayBlind(id));
+            } else if (m.getPhase() == MatchPhase.BLIND) {
+                for (PlayerId id : m.getSeats()) host.submit(new model.game.actions.Action.FinishRound(id));
+            }
+        }
+        check("the table reached the result screen", m.getPhase() == MatchPhase.RESULT);
+
+        MatchSnapshot before = MatchSnapshot.of(m, a);
+        check("nobody is ready yet", !before.isReady());
+        checkInt("and the tally agrees", before.readyCount(), 0);
+        checkInt("both seats are active", before.activeSeats(), 2);
+
+        host.submit(new model.game.actions.Action.ReadyForNext(a));
+        MatchSnapshot mine = MatchSnapshot.of(m, a);
+        check("my signal is visible to me", mine.isReady());
+        checkInt("the tally counts it", mine.readyCount(), 1);
+        check("the phase has not moved — we wait on the other seat", m.getPhase() == MatchPhase.RESULT);
+
+        MatchSnapshot theirs = MatchSnapshot.of(m, b);
+        check("the other seat is not ready", !theirs.isReady());
+        checkInt("but sees the same tally", theirs.readyCount(), 1);
+
+        host.submit(new model.game.actions.Action.ReadyForNext(b));
+        check("the barrier crosses once everyone signals", m.getPhase() != MatchPhase.RESULT);
+        check("and readiness resets behind it", !MatchSnapshot.of(m, a).isReady());
     }
 
     /** The joker's live variable reaches the tooltip: named picks, accumulated bonuses, and the raw fallback. */

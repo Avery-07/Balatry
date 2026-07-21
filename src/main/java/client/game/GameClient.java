@@ -42,6 +42,7 @@ public final class GameClient extends Application {
 
     private final Menu menu = new Menu();
     private final client.engine.Fader fader = new client.engine.Fader();
+    private final Background background = new Background();   // the looping animated backdrop
     private MatchClient client;
     private HostedMatch hosted;      // non-null when this client is the one hosting
     private MatchViewModel vm;
@@ -91,6 +92,7 @@ public final class GameClient extends Application {
                 hud.advance(dt);
                 menu.advance(dt);
                 fader.advance(dt);
+                background.advance(dt);
                 ui.jokerRow.advance(dt);
                 ui.itemRow.advance(dt);
                 ui.shopSlotRow.advance(dt);
@@ -331,7 +333,7 @@ public final class GameClient extends Application {
 
     private void render() {
         ui.newFrame();
-        paintFelt();
+        paintBackground();
         if (!inMatch()) { menu.render(ui); drawFade(); return; }   // menu and lobby own the screen until the match begins
         if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
 
@@ -371,14 +373,14 @@ public final class GameClient extends Application {
         r.gc().fillRect(0, 0, Ui.W, Ui.H);
     }
 
-    /** The table felt — a constant gradient, built once (this paints 60x/sec; no per-frame allocation). */
-    private static final javafx.scene.paint.RadialGradient FELT = new javafx.scene.paint.RadialGradient(
-            0, 0, 0.5, 0.1, 1.1, true, javafx.scene.paint.CycleMethod.NO_CYCLE,
-            new javafx.scene.paint.Stop(0, Palette.FELT_A), new javafx.scene.paint.Stop(1, Palette.FELT_B));
-
-    private void paintFelt() {
-        r.gc().setFill(FELT);
-        r.gc().fillRect(0, 0, Ui.W, Ui.H);
+    /**
+     * Paints the animated backdrop under everything else. The context is saved/restored around the call so the
+     * background's own state changes (alpha, blend mode, transforms) can never leak into the game's drawing.
+     */
+    private void paintBackground() {
+        r.gc().save();
+        background.paint(r.gc(), background.time(), Ui.W, Ui.H);
+        r.gc().restore();
     }
 
     private void handleClick(double x, double y) {

@@ -29,7 +29,7 @@ public final class MatchHost {
 
     private final Match match;
     private final List<Action> log = new ArrayList<>();
-    private final Set<PlayerId> readySeats = new HashSet<>();   // ready-to-continue; used for both RESULT and SHOP
+    // Readiness itself lives on the Match (the snapshot has to show it); the host still owns crossing the barrier.
 
     public MatchHost(Match match) { this.match = match; }
 
@@ -66,12 +66,12 @@ public final class MatchHost {
     public synchronized Object submit(Action action) {
         Object result;
         switch (action) {
-            case Action.ReadyForNext a -> { requireReadyPhase(a.actor()); readySeats.add(a.actor()); result = null; }
-            case Action.NotReady a     -> { requireReadyPhase(a.actor()); readySeats.remove(a.actor()); result = null; }
+            case Action.ReadyForNext a -> { requireReadyPhase(a.actor()); match.setReady(a.actor(), true);  result = null; }
+            case Action.NotReady a     -> { requireReadyPhase(a.actor()); match.setReady(a.actor(), false); result = null; }
             default -> {
                 result = match.apply(action);
                 if (match.getPhase() == MatchPhase.SHOP && !(action instanceof Action.SubmitSinChoice))
-                    readySeats.remove(action.actor());   // acting implies not done
+                    match.setReady(action.actor(), false);   // acting implies not done
             }
         }
         log.add(action);
@@ -99,10 +99,10 @@ public final class MatchHost {
             advanced = false;
             List<PlayerId> active = match.getActiveSeats();
             switch (match.getPhase()) {
-                case SELECTION -> { if (match.allChosen())                 { match.enterBlind();          advanced = true; } }
-                case BLIND     -> { if (allRoundsResolved(active))         { match.toResult(); readySeats.clear(); advanced = true; } }
-                case RESULT    -> { if (readySeats.containsAll(active))    { match.openShopsOrFinish(); readySeats.clear(); advanced = true; } }
-                case SHOP      -> { if (readySeats.containsAll(active))    { match.nextBlind(); readySeats.clear(); advanced = true; } }
+                case SELECTION -> { if (match.allChosen())          { match.enterBlind();                             advanced = true; } }
+                case BLIND     -> { if (allRoundsResolved(active))  { match.toResult();         match.clearReady();   advanced = true; } }
+                case RESULT    -> { if (match.allReady())           { match.openShopsOrFinish(); match.clearReady();  advanced = true; } }
+                case SHOP      -> { if (match.allReady())           { match.nextBlind();        match.clearReady();   advanced = true; } }
                 default -> { }
             }
         }

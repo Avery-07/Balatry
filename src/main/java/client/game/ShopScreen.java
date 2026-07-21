@@ -28,8 +28,9 @@ final class ShopScreen implements Screen {
         r.panel(x, y, w, h, javafx.scene.paint.Color.web("#141517"), RED, 12, 3);
         double ix = x + 16, iw = w - 32, cy = y + 16;
 
-        ui.button(ix, cy, 120, 44, "Next Round", RED, INK, () -> ui.vm.readyForNext(), true);
-        ui.button(ix + 130, cy, 120, 44, "Reroll $" + shop.rerollCost(), GREEN, INK, () -> ui.vm.rerollShop(), true);
+        // Leaving the shop is a barrier: once pressed it becomes an acknowledgement until everyone has pressed it.
+        Waiting.button(ui, ix, cy, 150, 44, "Next Round");
+        ui.button(ix + 160, cy, 120, 44, "Reroll $" + shop.rerollCost(), GREEN, INK, () -> ui.vm.rerollShop(), true);
         cy += 60;
 
         r.textLeftBold("Cards", ix, cy, 12, FAINT); cy += 18;

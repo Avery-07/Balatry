@@ -29,6 +29,6 @@ final class ResultScreen implements Screen {
             r.textLeft("Cash out", px + 30, py + 240, 15, DIM);
             r.textCenterBold("+$" + v.moneyEarned(), px + pw - 80, py + 247, 15, ORANGE);
         }
-        ui.button(px + 30, py + ph - 56, pw - 60, 44, "Continue", GREEN, INK, () -> ui.vm.readyForNext(), true);
+        Waiting.button(ui, px + 30, py + ph - 56, pw - 60, 44, "Continue");
     }
 }
