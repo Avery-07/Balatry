@@ -7,6 +7,7 @@ import client.engine.Fader;
 import client.engine.Idle;
 import client.engine.Layout;
 import client.engine.Motion;
+import client.engine.PaintField;
 import client.engine.Reconciler;
 import client.engine.ScoreReel;
 import client.engine.TileRow;
@@ -39,6 +40,7 @@ public final class EngineTests {
         idle();
         tileRow();
         scoreReel();
+        paintField();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
@@ -327,6 +329,58 @@ public final class EngineTests {
         halted.advance(0.5);
         halted.stop();
         check("stop makes it idle immediately", !halted.playing() && halted.currentIndex() == -1);
+    }
+
+    /**
+     * The animated backdrop. Nobody can see this from a headless sandbox, so these checks stand in for eyes:
+     * the field must be finite, varied (not a flat wash), animated, and stable frame to frame — a NaN or an
+     * all-black buffer would otherwise ship silently.
+     */
+    private static void paintField() {
+        PaintField f = new PaintField(64, 40);
+        int[] a = new int[64 * 40], b = new int[64 * 40];
+        f.render(a, 0);
+
+        // Every pixel is a real, opaque colour.
+        boolean opaque = true, finite = true;
+        for (int argb : a) {
+            if ((argb >>> 24) != 0xff) opaque = false;
+            if (argb == 0) finite = false;   // a NaN channel would clamp the whole pixel to 0
+        }
+        check("every pixel is opaque", opaque);
+        check("no pixel collapsed (NaN guard)", finite);
+
+        // Varied: a flat wash would mean the warp did nothing.
+        java.util.Set<Integer> distinct = new java.util.HashSet<>();
+        for (int argb : a) distinct.add(argb);
+        check("the field has real variation", distinct.size() > 200);
+
+        // Animated: the same buffer a second later must differ.
+        f.render(b, 1.0);
+        int changed = 0;
+        for (int i = 0; i < a.length; i++) if (a[i] != b[i]) changed++;
+        check("the field animates over time", changed > a.length / 10);
+
+        // Deterministic: the same time renders the same frame (so it can never shimmer at a fixed clock).
+        int[] again = new int[a.length];
+        f.render(again, 0);
+        check("the same instant renders identically", java.util.Arrays.equals(a, again));
+
+        // Smooth, not noise: neighbours are mostly close, which is what makes it read as paint rather than static.
+        int harsh = 0;
+        for (int y = 0; y < 40; y++)
+            for (int x = 1; x < 64; x++) {
+                int p = a[y * 64 + x], q = a[y * 64 + x - 1];
+                if (Math.abs(((p >> 16) & 0xff) - ((q >> 16) & 0xff)) > 60) harsh++;
+            }
+        check("neighbouring pixels flow rather than jump", harsh < a.length / 20);
+
+        // The tunables are live: turning the turbulence off must visibly change the result.
+        PaintField flat = new PaintField(64, 40);
+        flat.warpSteps = 0;
+        int[] c = new int[a.length];
+        flat.render(c, 0);
+        check("warpSteps actually drives the turbulence", !java.util.Arrays.equals(a, c));
     }
 
     private static void checkInt(String label, int actual, int expected) { check(label + " (" + actual + ")", actual == expected); }

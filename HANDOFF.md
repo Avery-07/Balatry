@@ -54,7 +54,8 @@ model.modifiers.*  Edition, Enhancement, Seal, Sticker, StickerState
 `Easing`, `Tween`, `Motion` (2D tween pair), `Layout` (hand fan + hit-test `Rect`), `CardEntity` (a retained
 card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retained entities),
 `Counter` (count-up + pop), `Fader` (fade-to-black screen transition), `Idle` (permanent sway/bob, pure
-`(time, seed)`), `TileRow` (a retained, draggable row of tiles), `ScoreReel` (plays a scoring timeline back).
+`(time, seed)`), `TileRow` (a retained, draggable row of tiles), `ScoreReel` (plays a scoring timeline back),
+`PaintField` (the animated backdrop's swirling paint math).
 
 **The client is a game-loop Canvas renderer** (chosen over the old retained-node JavaFX because the goal is a
 *shippable, juicy* Balatro-like), decomposed into focused components in `client.game`:
@@ -77,11 +78,12 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 - `Overlays` — contextual Buy/Use/Sell buttons, relic targeting, pack modal, Run Info standings, hover tooltips,
   the deck-contents view, and `scoreEffect` (the scoring animation's effect squares).
 - `Renderer` — **the only untested piece**: draw primitives (panels, text, sprite-or-vector cards, card backs).
-- `Background` — **the seam for the looping animated backdrop.** `GameClient` advances its clock each frame and
-  calls `paint(gc, time, w, h)` first, under everything, with the context saved/restored around it. To write the
-  real animation, replace that method body — it already receives the raw `GraphicsContext`, an ever-increasing
-  `time`, and the canvas size. Currently a placeholder (the old felt gradient + a slow breathing tint, so it is
-  visibly wired up). It must never read the model or snapshot — purely cosmetic.
+- `Background` — the looping animated backdrop's **plumbing** (buffer, image, update cadence, blit). The effect
+  itself is `client.engine.PaintField`: the Balatro-style swirling paint, as pure math — swirl (polar rotation
+  growing with radius + time), iterated domain warp (the marbled turbulence), then three-colour banding with a
+  highlight boost. Rendered small (128px wide) and stretched, so the chunkiness *is* the look; recomputed at
+  30Hz independently of the frame rate. Every knob (colours, spin, zoom, contrast, `warpSteps`) is a public
+  field on `PaintField`. Purely cosmetic — never reads the model or snapshot.
 - `Waiting` — the shared "your move is in, waiting on the others" barrier button (result + shop).
 - `Palette` / `Fmt` — colors, display strings.
 
