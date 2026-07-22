@@ -6,7 +6,7 @@ import model.game.scoring.Trigger;
 
 public final class JokerCard extends MarketCard {
     private final JokerSpec spec;
-    private int counter; // per-instance scaling variable
+    private int counter = 0; // per-instance scaling variable
 
     public JokerCard(JokerSpec spec, int shopValue) {
         this.spec = spec;

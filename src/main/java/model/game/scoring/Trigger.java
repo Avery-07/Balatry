@@ -10,9 +10,7 @@ public enum Trigger {
     ON_SHOP_START,
     ON_SHOP_REROLL,
     ON_SHOP_END,
-    /** While a purchase is being priced, before it is validated or paid; grant-style effects (a free purchase) act here. */
     ON_PURCHASE_PRICING,
-    /** After a purchase has completed (paid and final); counting/reacting effects act here. Never fires for a failed buy. */
     ON_BOUGHT,
     ON_SOLD,
     ON_SPEND,
