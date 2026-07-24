@@ -127,7 +127,6 @@ final class Menu {
         y += 80;
 
         textField(ui, px + 30, y, pw - 60, 40, Focus.ADDRESS, address, "host address");
-        r.textCenter("Sleeve, stake and deck are chosen in the lobby.", px + pw / 2, py + ph - 18, 11, FAINT);
     }
 
     private void renderLobby(Ui ui) {
@@ -155,7 +154,7 @@ final class Menu {
         boolean canStart = seats.size() >= MIN_PLAYERS;
         if (host)
             ui.button(lx, py + ph - 68, pw - 80, 50,
-                    canStart ? "Start the match" : "Need " + MIN_PLAYERS + " players",
+                    canStart ? "Start the match" : "Need at least " + MIN_PLAYERS + " players",
                     canStart ? GREEN : Color.web("#303237"), canStart ? INK : DIM, run(onBegin), canStart);
         else
             r.textCenter("The host starts the match.", px + pw / 2, py + ph - 44, 13, DIM);
@@ -199,7 +198,7 @@ final class Menu {
         cycler(ui, x, y, w, "Stake", stake.displayName(),
                 () -> changeStake(cycle(Stake.values(), stake, -1)),
                 () -> changeStake(cycle(Stake.values(), stake, 1)));
-        r.textCenter(stake.description(), x + w / 2, y + 62, 11, FAINT);
+        r.textCenter(stake.description(), x + w / 2, y + 72, 11, FAINT);
         y += 100;
 
         // The deck is the table's: the host picks it, everyone plays it, and everyone sees the current pick.

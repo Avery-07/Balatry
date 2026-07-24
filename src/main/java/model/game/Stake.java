@@ -11,14 +11,14 @@ package model.game;
  */
 public enum Stake {
 
-    WHITE ("White Stake",  "Base difficulty. Standard score scaling and rewards."),
-    RED   ("Red Stake",    "Shop jokers may be Floating or Sticky."),
-    GREEN ("Green Stake",  "Required score scales faster each ante."),
-    BLACK ("Black Stake",  "The Small Blind pays no reward money."),
-    BLUE  ("Blue Stake",   "Shop jokers may also be Fragile or Eternal."),
-    PURPLE("Purple Stake", "Required score scales significantly faster."),
-    ORANGE("Orange Stake", "Shop rerolls get $1 more expensive each time."),
-    GOLD  ("Gold Stake",   "Shop jokers may also be Rental or Perishable.");
+    WHITE ("White Stake",  "Base difficulty.\nStandard score scaling and rewards."),
+    RED   ("Red Stake",    "Shop jokers may be Floating or Sticky.\nApplies all previous stakes."),
+    GREEN ("Green Stake",  "Required score scales faster each ante.\nApplies all previous stakes."),
+    BLACK ("Black Stake",  "The Small Blind pays no reward money.\nApplies all previous stakes."),
+    BLUE  ("Blue Stake",   "Shop jokers may also be Fragile or Eternal.\nApplies all previous stakes."),
+    PURPLE("Purple Stake", "Required score scales significantly faster.\nApplies all previous stakes."),
+    ORANGE("Orange Stake", "Shop rerolls get $1 more expensive each time.\nApplies all previous stakes."),
+    GOLD  ("Gold Stake",   "Shop jokers may also be Rental or Perishable.\nApplies all previous stakes.");
 
     /**
      * Per-ante target growth contributed by this stake alone, as a numerator over {@link #SCALE_DEN}. The effective

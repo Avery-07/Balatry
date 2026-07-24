@@ -50,8 +50,8 @@ public final class PlayerStats {
     private int cardsDestroyed;     // cards destroyed this run (Canio)
     private int glassDestroyed;     // Glass cards destroyed this run (Glass Joker)
     private int blindsSkipped;      // blinds skipped this run (Throwback / Speed Tag)
-    private int unusedDiscards;   // discards unspent at settlement, run-cumulative (Garbage Tag)
-    private int tagsGained;       // skip tags gained this run
+    private int unusedDiscards;     // discards unspent at settlement, run-cumulative (Garbage Tag)
+    private int tagsGained;         // skip tags gained this run
     private int timesTargeted;      // opponent effects aimed at this player this run (Anger; multiplayer)
 
     // --- round-scoped gameplay history (reset in beginRound) ---

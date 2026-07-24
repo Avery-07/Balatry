@@ -15,5 +15,7 @@ public enum Trigger {
     ON_SOLD,
     ON_SPEND,
     ON_EARN,
-    ON_BOSS_DEFEATED
+    ON_BOSS_DEFEATED,
+
+    ON_HOVERED // not implemented
 }
