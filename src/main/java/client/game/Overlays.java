@@ -240,10 +240,16 @@ final class Overlays {
         if (text.isEmpty()) return;
 
         double t = ui.reel.beatProgress();
+        // A card/joker beat anchors over its tile; an ownerless beat (base hand-type, sin transform, Plasma
+        // balance) has no tile, so it lands on the chips×mult readout it reshapes. Only a wholly unplaceable
+        // beat (no anchor registered this frame) falls back to centre-screen.
         Layout.Rect src = ui.liveSourceRect();
+        boolean ownerless = src == null;
+        if (ownerless) src = ui.scoreAnchor;
         double cx = src != null ? src.centerX() : Ui.W / 2.0;
-        // Anchor below the source, except near the screen's bottom (the hand fan), where below is off-screen.
-        boolean above = src != null && src.y() + src.h() > Ui.H - 200;
+        // Anchor below the source, except near the screen's bottom (the hand fan) or on the sidebar readout,
+        // where below would collide with what sits under it — there the square rises above instead.
+        boolean above = ownerless || (src != null && src.y() + src.h() > Ui.H - 200);
         double baseY = src == null ? Ui.H / 2.0 + 90
                 : (above ? src.y() - 26 : src.y() + src.h() + 22);
         double cy = baseY - 18 * t;   // drifts as it fades

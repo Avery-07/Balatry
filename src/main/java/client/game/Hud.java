@@ -88,6 +88,9 @@ final class Hud {
         r.textCenterBold("X", ix + half + 15, cy + 23, 18, RED);
         r.panel(ix + half + 30, cy, half, 46, RED, null, 8, 0);
         r.textCenterBold(whole(mult.displayed()), ix + half + 30 + half / 2, cy + 23, 24 * mult.popScale(), INK);
+        // The home for ownerless scoring beats (base hand-type, sin transform, Plasma balance): they land on the
+        // chips×mult they reshape rather than dead-centre. Overlays.scoreEffect reads this when a beat has no card.
+        ui.scoreAnchor = new Layout.Rect(ix, cy, iw, 46);
         cy += 58;
 
         ui.button(ix, cy, 88, 60, "Run Info", RED, INK, () -> ui.showRunInfo = true, true);

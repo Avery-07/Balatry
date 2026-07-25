@@ -15,7 +15,8 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   separate server is needed. A lobby seats **2-4**. To play locally, run
   `mvn javafx:run` twice: host in the first window, join `localhost` in the second, then Start in the first.
   `mvn exec:java@server` still runs a headless dedicated server that auto-starts when its seats fill.
-- **31 harnesses currently pass.**
+- **31 harnesses.** All pass except `JokerTests`, which trips two *pre-existing content* checks (not regressions —
+  see Known issues). Everything else is green.
 
 ## Critical working conventions (read these)
 
@@ -23,11 +24,12 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   *drawing* is verified by **compile + eyeball on the user's machine**, not by me. Everything else (model,
   snapshot, engine logic) is unit-tested. When touching the client, compile and rely on the user to confirm
   visuals. This is why the engine is designed so **logic is tested and only `Renderer` drawing is unverified.**
-- **Worktree → main sync.** Work happens in a git worktree (`.claude/worktrees/...`); the user runs from the main
-  folder `C:\Users\Mayeul\IdeaProjects\Balatry`. **After each change, sync to the main folder** and confirm
-  `mvn test` passes there too. Use a full mirror, not a per-file copy:
-  `robocopy <worktree>\src <main>\src /MIR` — `git status` collapses untracked directories, so file-by-file
-  syncing silently misses new packages (this bit once, after a package rename).
+- **The main folder is authoritative — do NOT mirror the worktree over it.** Earlier sessions worked in a git
+  worktree and mirrored to the main folder with `robocopy /MIR`. That is now **dangerous**: the user edits the
+  main folder `C:\Users\Mayeul\IdeaProjects\Balatry` directly, and a `/MIR` mirror has **silently reverted their
+  work** — the joker implementations were lost this way (the git reflog shows "brought back joker changes that
+  were accidentally removed"). **Work directly in the main folder.** If you must use the worktree, copy back only
+  the specific files you touched — never `/MIR`. Assume the worktree is stale relative to main.
 - **Determinism is sacred.** Same seed + same actions → bit-identical replays, mirrored across seats
   (`DeterminismTests`). Any RNG use must be keyed/salted deterministically.
   **Never salt an RNG with `Card.id()` / `DeckCard.id()`** — those come from a JVM-global counter that the
@@ -108,11 +110,17 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 
 ## Current content state
 
-- **Jokers: 164** (137 base + 27 new). **38 are inert described stubs** (`b -> b` in `Jokers.java`) — ~24
-  base-game (Astronomer, Shortcut, Splash, Four Fingers, Pareidolia, …), Merchant and The Void (need a passive
-  slot-bonus hook), and 9 multiplayer ones needing new engine events (The Mimic, Espionnage, Vulture, Telescope,
-  Transparent Joker, …). Every joker has a description (`Jokers.Descriptions`) and, where it carries a live
-  variable, a `JokerSpec.state(...)` renderer for the tooltip.
+- **Jokers: 165** (137 base + new; Blueprint et al. added). **26 are inert stubs** (`b -> b` in `Jokers.java`) —
+  the backlog (HIKER, SPLASH, FOUR_FINGERS, Astronomer, Shortcut, the cross-player ones …). The rest are
+  implemented. Every joker has a description (`Jokers.Descriptions`), and ~36 carry a `.state` tooltip descriptor.
+- **Joker current-effect tooltips** use `JokerSpec.state`, a pure descriptor `(JokerCard, JokerInfo) -> String`
+  (with a 1-arg `(JokerCard) -> String` overload for counter-only jokers). `model.game.player.JokerInfo` is a
+  **read-only** view of the run (deck size, money, jokers, cards sold, discards remaining, …): no setters, so a
+  descriptor *cannot* mutate the model. This deliberately replaces an `ON_HOVERED` **trigger** — hover is a
+  local, unlogged, FX-thread event, and a firing trigger there runs a full mutating `JokerEffect`, which would
+  desync the seats. **Do not re-add ON_HOVERED as a trigger.** To describe a new joker, extend `JokerInfo` (add
+  a reader, never a setter) and add a `.state(...)`. Evaluated in `MatchSnapshot.jokerViews` (FX thread, settled
+  model), so it must stay pure — `JokerTests.currentEffectDescriptors` asserts describing mutates nothing.
 - **Consumables / vouchers / relics: fully implemented and described.** Targeted consumables declare
   `ConsumableSpec.minTargets`, enforced in `Run.useConsumable` (refused, card kept) and mirrored in the UI.
 - **Relics**: Pyre destroys a consumable from every seat above; Limos & Harpax hit a random seat above
@@ -129,6 +137,12 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 - **Bosses**: the ante boss locks at ante start and shows its `effect()` during selection. The four face-down
   bosses (House / Wheel / Fish / Mark) are implemented; the snapshot **masks** hidden cards (rank/suit −1, blank
   label) so nothing can leak them.
+- **Shop**: default **3 card slots / 3 packs / 2 vouchers** (verified empirically). Packs are capped at **2 buys
+  per shop visit** ("choose 2 of 3", `ShopSetup.packBuyLimit`, resets each blind); vouchers are **1 redemption
+  per ante** and **stable across an ante's blinds** — the voucher roll is salted by ante, not shop index, so they
+  no longer reroll every blind. The shop UI shows both remaining allowances beside the row headers. The **Lust
+  sin** adds 2 extra card/pack items on its ante *by design* (`LustModifier.EXTRA_ITEMS`), so a Lust shop is not
+  "3 items" — that is the sin, not a bug.
 - **Networking**: lobby phase (`JOIN`/`LOBBY`/`LOADOUT`/`DECK`/`BEGIN`/`START`/`CLOSED`), in-client hosting, and
   disconnect handling (a dropped socket becomes `Action.PlayerLeft` in the log, so every seat learns of it at the
   same point in the same replay). **Missing: reconnect and kicking.**
@@ -144,30 +158,72 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 - **Determinism & transport**: `DeterminismTests`, `HostTests`, `NetTests`, `LobbyTests`, `DisconnectTests`
 - **Client-facing**: `SnapshotTests` (the information boundary), `EngineTests` (every `client.engine` class)
 
-## What's next (recommended order)
+## What's next
 
-1. **Finish the scoring animation.** The model half is done and tested; the client half is a first pass and
-   **needs eyeballing before tuning** — staged-row layout, beat cadence, pop intensity.
-   Known gaps: held-card (Steel) and sin/boss beats have no on-screen anchor (they fall back to a centred
-   square); no sound.
-2. **Implement the 38 stub jokers.** Three tiers: easy (existing hooks suffice), medium (`HandEvaluator`
-   flexibility for Four Fingers / Shortcut / Dyscalculie; trait checks for Pareidolia / Smeared), hard (the
-   cross-player ones need new engine events like "an opponent failed a blind").
-3. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`
-   (4 suit rows H/C/D/S, 13 rank cols 2→A) and a pixel font at `src/main/resources/font/game.ttf`. The client
-   loads both with fallbacks. See `src/main/resources/README-assets.md`.
-   **Textures are designed but unbuilt** — the agreed plan is one file per item keyed by enum name
-   (`/sprites/joker/MAIL_IN_REBATE.png`), an `Assets` cache returning null for missing files, and the existing
-   vector look as the fallback. Editions are deliberately **not** textures: they are canvas-drawn effects
-   (Foil/Holo/Polychrome as gradients + blend modes, Negative as a precomputed inverted variant).
-4. **Reconnect** — the log-replay architecture makes it feasible (send the log, replay, resume) but it is a real
-   protocol design task. Kicking is the smaller sibling.
-5. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would
-   allow Balatro-style skipping.
+**The user's current wishlist** (their priority), each with a pointer to where the work lives:
+
+1. **Fix the scoring-animation timing.** Two concrete bugs, both with known root cause:
+   - *The final score appears before the chips×mult reel finishes.* `Hud` drives the round-score `Counter` from
+     the snapshot's already-banked score while chips/mult follow the reel, so the total shows the answer early.
+     Fix: while `ui.reel.playing()`, drive the score readout from the reel's running total (prior round score +
+     the current beat's `chipsAfter × multAfter`), not the snapshot's final value.
+   - *The last played card's trigger animation fires twice.* `ScoreReel` keeps `currentIndex()` on the last beat
+     during its settle tail (`draining`), so `Ui.liveEvent()` still returns that beat and `scorePop` pops the card
+     again. Fix: return no live event while `reel.draining()` (or drop the index when the last beat completes).
+   - Still-open animation gaps from the first pass: held-card (Steel) and sin/boss beats have no on-screen anchor
+     (they fall back to a centred square); no sound.
+2. **Background reacts to phase + a vortex effect.** `PaintField` already does the swirl; add (a) per-phase
+   palettes/params (selection / blind / result / shop) that `Background` lerps toward when `ui.s.phase()` changes,
+   and (b) a stronger central **vortex** (raise `spinAmount`/`spinSpeed`, or make them grow toward the centre).
+   `Background` may read the phase (not hidden info) but must otherwise stay model-blind. Colours are three hex
+   ints on `PaintField`.
+3. **Finish the joker current-effect tooltips.** Mechanism is `JokerSpec.state` + `JokerInfo` (see Current content
+   state — **not** a trigger). Done: the 5 former ON_HOVERED jokers converted off the mutating pattern, plus Wee
+   Joker / Obelisk / Campfire / Loyalty Card / Erosion / Stone Joker / Fortune Teller / Bull / Abstract. **To do:**
+   (a) audit the ~90 "plain" jokers for ones that compute a value from run state and would benefit (Bootstraps,
+   Baseball Card, Blackboard, …) — extend `JokerInfo` as needed; (b) review the existing `.state` strings for
+   correct numbers/wording (the user flagged some may need correcting).
+4. **Run Info overlay: add tags, hand-type levels + play counts, and redeemed vouchers.** `Overlays.runInfo` shows
+   only standings today. `handLevels` is already in the snapshot; pending tags, per-hand-type play counts
+   (`PlayerStats`), and redeemed vouchers need new snapshot fields.
+5. **Hovering the skip button shows the tag it would grant.** In `SelectionScreen`, register a `ui.tip` on the
+   skip button with the skip tag's description. `skipTag` is in the snapshot as a *name* — add its description text.
+6. **Verify rarity weighting** — confirm `Jokers.weightedRandom` makes rarer jokers genuinely harder to roll; a
+   test asserting the weight ordering (Common > Uncommon > Rare > Legendary appearance rate) would pin it.
+7. **GPU / faster background** (perf, optional). Canvas is CPU; the cheap first step is moving `field.render` to a
+   daemon thread with a double buffer (noted in `Background`'s javadoc — the effect is cosmetic, needn't be
+   frame-synced). True GPU needs a different surface (an FX node fed by a shader lib) — a larger rewrite.
+
+**Standing backlog:**
+
+8. **Implement the 26 stub jokers.** Tiers: easy (existing hooks suffice), medium (`HandEvaluator` flexibility for
+   Four Fingers / Shortcut / Dyscalculie; trait checks for Pareidolia / Smeared), hard (cross-player ones need new
+   engine events like "an opponent failed a blind").
+9. **Assets (free visual win, no code):** card sprite sheet at `src/main/resources/cards/deck.png` (4 suit rows
+   H/C/D/S, 13 rank cols 2→A) and a pixel font at `src/main/resources/font/game.ttf`; the client loads both with
+   fallbacks (`README-assets.md`). Textures are designed but unbuilt — one file per item keyed by enum name
+   (`/sprites/joker/MAIL_IN_REBATE.png`), an `Assets` cache returning null for misses, vector look as fallback.
+   Editions are deliberately **not** textures: canvas-drawn effects (Foil/Holo/Polychrome as gradients + blend
+   modes, Negative as a precomputed inverted variant).
+10. **Reconnect / kicking** — the log-replay architecture makes reconnect feasible (send the log, replay, resume)
+    but it is a real protocol design task; kicking is the smaller sibling.
+11. **Skip-pack** (optional) — the model forces spending the whole pick budget; a `clearOpening` action would
+    allow Balatro-style skipping.
 
 **Deliberately out of scope so far** (decide consciously before starting): endless mode past ante 8 (placeholder
 scaling exists), run persistence/saves, spectating, and anti-cheat (lockstep means every client holds all hidden
 information — fine for friends, unfixable for strangers without a server-authoritative rewrite).
+
+## Known issues (open)
+
+- **`JokerTests` — two pre-existing content failures, both one-liners.** The catalog assertion says 164 jokers
+  but there are **165** (bump it), and **`Scalper`** is a bare stub with an empty description (give it text, or a
+  placeholder like the other stubs) which trips "every joker has a description". Neither is a regression.
+- **Scoring-animation timing** — see What's next #1 (score shows early; last card pops twice).
+- **Pack-buy limit is per shop visit** (resets each blind). If it should be per *ante*, move the counter off
+  `Shop` onto the ante like the voucher redemption.
+- **A voucher redeemed earlier in an ante reappears greyed** in that ante's later blinds (shown non-redeemable
+  rather than removed). Acceptable, but noted.
 
 ## Gotchas
 

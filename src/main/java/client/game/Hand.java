@@ -161,8 +161,15 @@ final class Hand {
             if (e == dragged) continue;   // the held card draws last, above everything
             double sway = Idle.swayDeg(time, e.id(), 1.4);
             double bob = Idle.bobPx(time, e.id(), 2.0);
-            r.card(e.rank(), e.suit(), e.x(), e.y() + bob, CARD_W, CARD_H,
-                    fan.get(k).rotationDeg() + sway, e.selected(), e.flipT());
+            // The trigger animation: a held card whose scoring beat is live (Steel's X1.5) swells and lifts,
+            // and its screen rect is captured so the effect square can anchor over the card rather than centre-screen.
+            double pop = ui.scorePop(e.id());
+            double size = 1 + 0.18 * pop;
+            double drawY = e.y() + bob - 18 * pop;
+            r.card(e.rank(), e.suit(), e.x(), drawY, CARD_W * size, CARD_H * size,
+                    fan.get(k).rotationDeg() + sway, e.selected() || pop > 0.05, e.flipT());
+            ui.noteSourceRect(e.id(), new Layout.Rect(
+                    e.x() - CARD_W * size / 2, drawY - CARD_H * size / 2, CARD_W * size, CARD_H * size));
             if (!e.showsBack())
                 ui.tip(new Layout.Rect(e.x() - CARD_W / 2, e.y() - CARD_H / 2, CARD_W, CARD_H),
                         Fmt.cardTip(e.label(), e.rank(), e.suit()));

@@ -56,6 +56,14 @@ final class Ui {
     List<MatchSnapshot.ScoreEventView> reelEvents = List.of();   // the timeline being played
     private final java.util.Map<Integer, Layout.Rect> sourceRects = new java.util.HashMap<>();
 
+    /**
+     * Where an <em>ownerless</em> scoring beat's effect square lands — the base hand-type beat, the ante sin's
+     * transform, the Plasma balance: contributions no card owns, which reshape the running chips×mult rather than
+     * belonging to a tile. The Hud points this at its chips×mult readout each frame so those beats sit on the
+     * numbers they change instead of floating dead-centre.
+     */
+    Layout.Rect scoreAnchor;
+
     /** How hard the card with {@code cardId} should pop right now: 1 at the start of its beat, fading to 0. */
     double scorePop(int cardId) {
         MatchSnapshot.ScoreEventView e = liveEvent();
@@ -95,6 +103,7 @@ final class Ui {
     void newFrame() {
         buttons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); tips.clear();
         deckRect = null;
+        scoreAnchor = null;
         // Rects are recorded as tiles draw and read by the effect square later in the same frame, so they are
         // per-frame state: clearing keeps them honest (a sold joker stops being an anchor) and bounded.
         sourceRects.clear();
