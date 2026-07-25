@@ -75,6 +75,34 @@ public enum SkipTag {
     public String getDisplayName() { return displayName; }
     public Timing getTiming()      { return timing; }
 
+    /** What granting this tag does, for the skip button's hover tooltip; matches each constant's effect above. */
+    public String getDescription() {
+        return switch (this) {
+            case BUFFOON_TAG   -> "Gives a free Mega Buffoon Pack";
+            case ARCANA_TAG    -> "Gives a free Mega Arcana Pack";
+            case SPECTRAL_TAG  -> "Gives a free Spectral Pack";
+            case METEOR_TAG    -> "Gives a free Mega Celestial Pack";
+            case STANDARD_TAG  -> "Gives a free Mega Standard Pack";
+            case MYTH_TAG      -> "Gives a free Mega Myth Pack";
+            case ECONOMY_TAG   -> "Doubles your money (max of $40)";
+            case GARBAGE_TAG   -> "Gives $2 per unused discard this run";
+            case HANDY_TAG     -> "Gives $2 per hand played this run";
+            case SPEED_TAG     -> "Gives $10 per blind skipped this run";
+            case JUGGLE_TAG    -> "Permanently gain +1 hand size";
+            case INVENTORY_TAG -> "Permanently gain +1 consumable slot";
+            case ORBITAL_TAG   -> "Upgrade your most-played poker hand by 3 levels";
+            case TOP_UP_TAG    -> "Create up to 3 Common Jokers (if there is room)";
+            case INVESTMENT_TAG-> "Gain $25 after defeating the next Boss Blind";
+            case COUPON_TAG    -> "Initial cards and booster packs in the next shop are free";
+            case D6_TAG        -> "Rerolls in the next shop start at $0";
+            case UNCOMMON_TAG  -> "The next shop has 2 free Uncommon Jokers";
+            case RARE_TAG      -> "The next shop has a free Rare Joker";
+            case NEGATIVE_TAG  -> "The next base-edition shop Joker is free and becomes Negative";
+            case VOUCHER_TAG   -> "Adds a Voucher to the next shop";
+            case DOUBLE_TAG    -> "Gives a copy of the next selected Tag (Double Tag excluded)";
+        };
+    }
+
     /** Resolves an IMMEDIATE tag's effect on {@code run}; no-op for pending timings. */
     public void resolve(Run run) { effect.accept(run); }
 

@@ -86,6 +86,13 @@ public final class PlayerStats {
     /** Whether {@code spec} has been redeemed on this run (used for upgrade prerequisites). */
     public boolean hasRedeemed(VoucherSpec spec) { return redeemedVouchers.contains(spec); }
 
+    /** Every voucher redeemed (or granted) this run, sorted by name — a stable order for the Run Info display. */
+    public List<VoucherSpec> getRedeemedVouchers() {
+        List<VoucherSpec> out = new ArrayList<>(redeemedVouchers);
+        out.sort(java.util.Comparator.comparing(VoucherSpec::getName));
+        return out;
+    }
+
     /** Whether {@code voucher} may be redeemed now: not already redeemed, base satisfied, and none used yet this ante. */
     public boolean canRedeem(Voucher voucher) {
         VoucherSpec spec = voucher.getSpec();

@@ -37,6 +37,8 @@ final class SelectionScreen implements Screen {
                 my += 50;
                 String sk = "Skip" + (b.skipTag() != null ? "  (" + b.skipTag() + ")" : "");
                 ui.button(tx + 16, my, tw - 32, 40, sk, RED, INK, () -> ui.vm.skipBlind(), !ui.s.hasChosen());
+                if (b.skipTagDesc() != null && !b.skipTagDesc().isEmpty())   // hovering Skip explains the tag it grants
+                    ui.tip(new client.engine.Layout.Rect(tx + 16, my, tw - 32, 40), b.skipTag() + "\n" + b.skipTagDesc());
                 if (ui.s.hasChosen()) r.textCenter("chosen — waiting…", mc, my + 60, 12, FAINT);
             }
         }

@@ -54,6 +54,7 @@ final class Ui {
 
     final client.engine.ScoreReel reel = new client.engine.ScoreReel();
     List<MatchSnapshot.ScoreEventView> reelEvents = List.of();   // the timeline being played
+    double reelBaseScore;   // the round total before this play; the score readout holds here until the reel resolves
     private final java.util.Map<Integer, Layout.Rect> sourceRects = new java.util.HashMap<>();
 
     /**
@@ -71,8 +72,14 @@ final class Ui {
         return 1 - reel.beatProgress();
     }
 
-    /** The event being shown this instant, or null when the reel is idle or past the end. */
+    /**
+     * The event being shown this instant, or null when the reel is idle or past its last beat. The draining
+     * tail is a settle pause, not a replay: without this guard the final beat's effect square and pop fade in a
+     * second time as {@code beatProgress} restarts over the tail (the visible "it happened twice" on the last
+     * beat, most obvious as the Plasma balance).
+     */
     MatchSnapshot.ScoreEventView liveEvent() {
+        if (reel.draining()) return null;
         int i = reel.currentIndex();
         return i >= 0 && i < reelEvents.size() ? reelEvents.get(i) : null;
     }

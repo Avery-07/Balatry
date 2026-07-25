@@ -327,8 +327,17 @@ public final class GameClient extends Application {
                 && (previous == null || !snap.lastPlay().equals(previous.lastPlay()));
         if (newTimeline) {
             ui.reelEvents = snap.lastPlay();
+            // The round total as it stood before this play; the score readout stays here while the reel climbs and
+            // only tallies up to the new total once the boxes have finished (see Hud).
+            ui.reelBaseScore = roundScore(previous);
             ui.reel.play(snap.lastPlay().size());
         }
+    }
+
+    /** The round score a snapshot carried, as a number; 0 outside a round or when unparseable. */
+    private static double roundScore(MatchSnapshot snap) {
+        if (snap == null || snap.round() == null) return 0;
+        try { return Double.parseDouble(snap.round().score()); } catch (NumberFormatException e) { return 0; }
     }
 
     private void render() {

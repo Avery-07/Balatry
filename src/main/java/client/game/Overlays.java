@@ -285,27 +285,61 @@ final class Overlays {
 
     private static Renderer r(Ui ui) { return ui.r; }
 
-    /** The Run Info overlay: the ranked standings table, honoring the information boundary. */
+    /**
+     * The Run Info overlay: standings and this seat's redeemed vouchers on the left, its poker-hand levels and
+     * usage on the right. Standings honor the information boundary (opponents show only points and rank); the
+     * hand levels and vouchers are the local seat's own.
+     */
     void runInfo(Ui ui) {
         Renderer r = ui.r;
+        MatchSnapshot s = ui.s;
         r.gc().setFill(Color.web("#040a08", 0.66)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
-        double pw = 560, ph = 420, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        double pw = 960, ph = 660, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
         r.panel(px, py, pw, ph, Color.web("#1a1b20"), ORANGE, 14, 3);
-        r.textLeftBold("RUN INFO — Standings", px + 20, py + 16, 22, ORANGE);
+        r.textLeftBold("RUN INFO", px + 20, py + 16, 22, ORANGE);
+        // The loadout: the deck is the table's, the sleeve and stake are this seat's own.
+        r.textLeft(s.deckType() + "  ·  " + s.sleeve() + "  ·  " + s.stake(), px + 150, py + 22, 12, DIM);
         ui.button(px + pw - 90, py + 12, 70, 34, "Close", RED, INK, () -> ui.showRunInfo = false, true);
 
-        // The loadout: the deck is the table's, the sleeve and stake are this seat's own.
-        r.textLeft(ui.s.deckType() + "  ·  " + ui.s.sleeve() + "  ·  " + ui.s.stake(), px + 20, py + 44, 12, DIM);
+        double colGap = 28, leftX = px + 20, colW = (pw - 40 - colGap) / 2, rightX = leftX + colW + colGap;
+        double top = py + 62;
 
-        double ry = py + 76;
-        for (MatchSnapshot.StandingView v : ui.s.standings()) {
-            r.panel(px + 20, ry, pw - 40, 46, v.isMe() ? Color.web("#221d10") : Color.web("#1a1b1f"), v.isMe() ? ORANGE : EDGE, 10, 2);
-            r.textCenterBold(String.valueOf(v.rank() + 1), px + 44, ry + 23, 20, v.rank() == 0 ? PODIUM_GOLD : DIM);
+        // --- Left column: standings, then redeemed vouchers ---
+        r.textLeftBold("Standings", leftX, top, 16, INK);
+        double ry = top + 26;
+        for (MatchSnapshot.StandingView v : s.standings()) {
+            r.panel(leftX, ry, colW, 44, v.isMe() ? Color.web("#221d10") : Color.web("#1a1b1f"), v.isMe() ? ORANGE : EDGE, 10, 2);
+            r.textCenterBold(String.valueOf(v.rank() + 1), leftX + 24, ry + 22, 20, v.rank() == 0 ? PODIUM_GOLD : DIM);
             String tag = v.isMe() ? "  ◄ you" : (v.departed() ? "  (left)" : "");
-            r.textLeftBold(v.name() + tag, px + 74, ry + 15, 16, v.departed() ? FAINT : INK);
-            r.textCenterBold(v.points() + " pts", px + pw - 70, ry + 23, 16, v.departed() ? FAINT : GREEN);
-            ry += 54;
+            r.textLeftBold(v.name() + tag, leftX + 52, ry + 14, 16, v.departed() ? FAINT : INK);
+            r.textCenterBold(v.points() + " pts", leftX + colW - 54, ry + 22, 16, v.departed() ? FAINT : GREEN);
+            ry += 50;
         }
-        r.textCenter("Opponents show only points & rank across the information boundary.", px + pw / 2, py + ph - 20, 12, FAINT);
+
+        ry += 14;
+        r.textLeftBold("Redeemed Vouchers", leftX, ry, 16, INK);
+        ry += 26;
+        if (s.vouchers().isEmpty()) {
+            r.textLeft("None redeemed yet.", leftX + 4, ry, 12, FAINT);
+        } else for (MatchSnapshot.VoucherView v : s.vouchers()) {
+            r.textLeftBold(v.name(), leftX + 4, ry, 13, GOLD);
+            if (!v.description().isEmpty()) r.textLeft(v.description(), leftX + 4, ry + 16, 11, DIM);
+            ry += 38;
+        }
+
+        // --- Right column: poker-hand levels and how often each has been played this run ---
+        r.textLeftBold("Poker Hands", rightX, top, 16, INK);
+        r.textLeft("level · played", rightX + colW - 150, top + 2, 11, DIM);
+        double hy = top + 26;
+        for (MatchSnapshot.HandLevelView h : s.handLevels()) {
+            r.panel(rightX, hy, colW, 30, PANEL, EDGE, 8, 1);
+            r.textLeftBold(Fmt.handName(h.type()), rightX + 10, hy + 8, 13, INK);
+            r.textLeft(h.chips() + " × " + h.mult(), rightX + 150, hy + 9, 11, DIM);
+            r.textCenterBold("lv." + h.level(), rightX + colW - 108, hy + 15, 13, BLUE);
+            r.textCenterBold("×" + h.plays(), rightX + colW - 38, hy + 15, 13, h.plays() > 0 ? GOLD : FAINT);
+            hy += 34;
+        }
+
+        r.textCenter("Opponents show only points & rank across the information boundary.", px + pw / 2, py + ph - 18, 12, FAINT);
     }
 }

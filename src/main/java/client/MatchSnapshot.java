@@ -74,6 +74,7 @@ public record MatchSnapshot(
         List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
         List<DeckCardView> deckCards,   // the whole deck, spent cards flagged — the deck-pile hover view
         List<HandLevelView> handLevels, // every hand type at this seat's current level, for the play preview
+        List<VoucherView> vouchers,     // vouchers this seat has redeemed this run, for the Run Info overlay
         List<ScoreEventView> lastPlay,  // the last play's scoring timeline, for the scoring animation
         List<JokerView> jokers,
         List<ItemView> inventory,  // consumables and relics as one indexed area; relics carry their casting demands
@@ -109,8 +110,14 @@ public record MatchSnapshot(
      */
     public record DeckCardView(int rank, int suit, boolean live) { }
 
-    /** One poker hand at this seat's current level — what a play of that type is worth right now. */
-    public record HandLevelView(String type, int level, long chips, long mult) { }
+    /**
+     * One poker hand at this seat's current level — what a play of that type is worth right now, plus {@code plays}:
+     * how many times this seat has played it this run (the Run Info "×N" usage column).
+     */
+    public record HandLevelView(String type, int level, long chips, long mult, int plays) { }
+
+    /** One voucher this seat has redeemed this run, as the Run Info list shows it: name and effect text. */
+    public record VoucherView(String name, String description) { }
 
     /**
      * One beat of the last play's scoring, in the order the engine performed it — the client replays these as
@@ -136,12 +143,13 @@ public record MatchSnapshot(
     /**
      * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
      * and — for the boss — its name and effect (locked at ante start, so it is known even on the small blind).
-     * {@code current} marks the blind actually being selected; {@code skipTag} is the tag skipping it would grant
-     * (only the current blind can be skipped, so it is null on the others).
+     * {@code current} marks the blind actually being selected; {@code skipTag} is the display name of the tag
+     * skipping it would grant (null on the others, since only the current blind can be skipped) and {@code
+     * skipTagDesc} is that tag's effect text, for the Skip button's hover tooltip.
      */
     public record BlindOption(String type, long target, int reward,
                               String bossName, String bossEffect,
-                              boolean current, String skipTag) { }
+                              boolean current, String skipTag, String skipTagDesc) { }
 
     /**
      * One held inventory item — a consumable or a relic — as the client sees it. Relics and consumables share a
@@ -278,6 +286,7 @@ public record MatchSnapshot(
                 hand(run),
                 deckCards(run),
                 handLevels(run),
+                vouchers(run),
                 scoreEvents(run),
                 jokerViews(run),
                 inventory(run),
@@ -343,12 +352,21 @@ public record MatchSnapshot(
         return out;
     }
 
-    /** Every poker hand at this seat's current level — what the client's play preview prices a selection at. */
+    /** Every poker hand at this seat's current level — the play preview's pricing and Run Info's level/usage list. */
     private static List<HandLevelView> handLevels(Run run) {
         List<HandLevelView> out = new ArrayList<>();
         for (HandType t : HandType.values())
             out.add(new HandLevelView(t.name(), run.getHandLevels().levelOf(t),
-                    run.getHandLevels().chipsFor(t), run.getHandLevels().multFor(t)));
+                    run.getHandLevels().chipsFor(t), run.getHandLevels().multFor(t),
+                    run.getStats().getHandPlays(t)));
+        return out;
+    }
+
+    /** The vouchers this seat has redeemed this run, for the Run Info overlay. */
+    private static List<VoucherView> vouchers(Run run) {
+        List<VoucherView> out = new ArrayList<>();
+        for (model.items.vouchers.VoucherSpec v : run.getStats().getRedeemedVouchers())
+            out.add(new VoucherView(v.getName(), v.getDescription()));
         return out;
     }
 
@@ -369,8 +387,10 @@ public record MatchSnapshot(
                 bossEffect = anteBoss.effect();
             }
             boolean current = b == match.getBlind();
-            String tag = current ? String.valueOf(match.getCurrentTag()) : null;
-            out.add(new BlindOption(blindType(b), tgt, b.getReward(), bossName, bossEffect, current, tag));
+            model.game.tags.SkipTag skip = current ? match.getCurrentTag() : null;
+            String tag = skip == null ? null : skip.getDisplayName();
+            String tagDesc = skip == null ? null : skip.getDescription();
+            out.add(new BlindOption(blindType(b), tgt, b.getReward(), bossName, bossEffect, current, tag, tagDesc));
         }
         return out;
     }

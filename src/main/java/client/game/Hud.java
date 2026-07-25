@@ -65,7 +65,9 @@ final class Hud {
         // chips and mult follow the timeline's running totals instead of the snapshot's finished ones — that is
         // what makes the numbers climb beat by beat rather than jumping straight to the answer.
         MatchSnapshot.ScoreEventView beat = ui.liveEvent();
-        score.retarget(numeric(s.round() != null ? s.round().score() : "0"));
+        // The round total waits for the boxes: while a beat is live the readout holds at the pre-play total, then
+        // tallies up to the banked score once the reel settles — so chips×mult resolve first, then the score adds.
+        score.retarget(beat != null ? ui.reelBaseScore : numeric(s.round() != null ? s.round().score() : "0"));
         if (beat != null) {
             chips.retarget(numeric(beat.chipsAfter()));
             mult.retarget(numeric(beat.multAfter()));
