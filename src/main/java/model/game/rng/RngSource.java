@@ -38,6 +38,7 @@ public enum RngSource {
     PRIDE_LEGENDARY    (28),       // structural: which legendary joker Pride auctions each shop phase (table-level)
     DECK_BUILD         (29),       // structural: the starting deck's composition (Erratic's ranks/suits, Fracture's cuts)
     STICKER_FLOAT      (30),       // where a Floating joker drifts to at the start of each hand
+    PACK_HAND          (31),       // the temporary hand dealt for targeting a consumable opened from a pack outside a round
 
     MISC               (99);       // anything not yet promoted to its own source
 

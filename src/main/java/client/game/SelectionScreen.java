@@ -1,12 +1,18 @@
 package client.game;
 
 import client.MatchSnapshot;
+import model.game.MatchPhase;
 
 import java.util.List;
 
 import static client.game.Palette.*;
 
-/** Blind selection: the ante's three blind tiles; the current one carries live Select / Skip buttons. */
+/**
+ * Blind selection: the ante's three blind tiles; the current one carries live Select / Skip buttons. It also
+ * doubles as the read-only backdrop behind the "waiting" popup for a seat that skipped — during the BLIND phase
+ * the buttons are gone and the current tile shows the skip, so the seat sees the blind it skipped rather than the
+ * playing board it is not part of.
+ */
 final class SelectionScreen implements Screen {
 
     @Override
@@ -32,7 +38,7 @@ final class SelectionScreen implements Screen {
             r.textCenter("Score at least", mc, my, 12, DIM);
             r.textCenterBold(String.valueOf(b.target()), mc, my + 24, 24, RED); my += 46;
             if (!cur) { r.textCenterBold("Reward: " + Fmt.dollars(b.reward()), mc, my, 13, GOLD); my += 26; }
-            if (cur) {
+            if (cur && ui.s.phase() == MatchPhase.SELECTION) {
                 ui.button(tx + 16, my, tw - 32, 40, "Select", ORANGE, DARK, () -> ui.vm.playBlind(), !ui.s.hasChosen());
                 my += 50;
                 String sk = "Skip" + (b.skipTag() != null ? "  (" + b.skipTag() + ")" : "");
@@ -40,6 +46,9 @@ final class SelectionScreen implements Screen {
                 if (b.skipTagDesc() != null && !b.skipTagDesc().isEmpty())   // hovering Skip explains the tag it grants
                     ui.tip(new client.engine.Layout.Rect(tx + 16, my, tw - 32, 40), b.skipTag() + "\n" + b.skipTagDesc());
                 if (ui.s.hasChosen()) r.textCenter("chosen — waiting…", mc, my + 60, 12, FAINT);
+            } else if (cur && ui.blindSkipped()) {
+                r.textCenterBold("Skipped", mc, my + 10, 16, RED);   // read-only backdrop behind the waiting popup
+                if (b.skipTag() != null) r.textCenter("Tag: " + b.skipTag(), mc, my + 36, 12, GOLD);
             }
         }
     }

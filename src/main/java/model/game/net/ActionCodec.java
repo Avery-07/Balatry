@@ -44,7 +44,8 @@ public final class ActionCodec {
             case Action.MoveConsumable x -> join("MOVECONS", x.actor(), x.from(), x.to());
             case Action.MoveRelic x      -> join("MOVERELIC", x.actor(), x.from(), x.to());
             case Action.OpenPack x       -> join("OPENPACK", x.actor(), x.pendingIndex());
-            case Action.PickFromPack x   -> join("PICK", x.actor(), x.optionIndex(), target(x.relicTarget()));
+            case Action.PickFromPack x   -> join("PICK", x.actor(), x.optionIndex(), target(x.relicTarget()), ints(x.targetHandIndices()));
+            case Action.SkipPack x       -> join("SKIPPACK", x.actor());
             case Action.BuyCard x        -> join("BUY", x.actor(), x.slotIndex());
             case Action.BuyPack x        -> join("BUYPACK", x.actor(), x.packIndex());
             case Action.RedeemVoucher x  -> join("VOUCHER", x.actor(), x.voucherIndex());
@@ -81,7 +82,8 @@ public final class ActionCodec {
             case "MOVECONS"  -> new Action.MoveConsumable(actor, i(f[2]), i(f[3]));
             case "MOVERELIC" -> new Action.MoveRelic(actor, i(f[2]), i(f[3]));
             case "OPENPACK"  -> new Action.OpenPack(actor, i(f[2]));
-            case "PICK"      -> new Action.PickFromPack(actor, i(f[2]), target(f, 3));
+            case "PICK"      -> new Action.PickFromPack(actor, i(f[2]), target(f, 3), indexList(f[8]));
+            case "SKIPPACK"  -> new Action.SkipPack(actor);
             case "BUY"       -> new Action.BuyCard(actor, i(f[2]));
             case "BUYPACK"   -> new Action.BuyPack(actor, i(f[2]));
             case "VOUCHER"   -> new Action.RedeemVoucher(actor, i(f[2]));

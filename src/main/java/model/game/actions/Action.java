@@ -34,8 +34,19 @@ public sealed interface Action {
     record MoveConsumable(PlayerId actor, int from, int to) implements Action { }
     record MoveRelic(PlayerId actor, int from, int to) implements Action { }
     record OpenPack(PlayerId actor, int pendingIndex) implements Action { }
-    /** {@code relicTarget} is read only when the picked option is a relic (cast immediately); null means untargeted. */
-    record PickFromPack(PlayerId actor, int optionIndex, RelicTarget relicTarget) implements Action { }
+    /**
+     * Takes an option from the open pack, using it immediately. {@code relicTarget} is read only when the option is
+     * a relic (cast at once); {@code targetHandIndices} only when it is a targeted consumable (Strength, The Hanged
+     * Man), indexing the seat's selection hand. The three-arg form defaults to no consumable targets.
+     */
+    record PickFromPack(PlayerId actor, int optionIndex, RelicTarget relicTarget,
+                        List<Integer> targetHandIndices) implements Action {
+        public PickFromPack(PlayerId actor, int optionIndex, RelicTarget relicTarget) {
+            this(actor, optionIndex, relicTarget, List.of());
+        }
+    }
+    /** Abandons the current pack opening without spending its remaining picks (Balatro-style skip). */
+    record SkipPack(PlayerId actor) implements Action { }
 
     // --- shop ---
     record BuyCard(PlayerId actor, int slotIndex) implements Action { }

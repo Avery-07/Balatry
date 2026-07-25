@@ -24,6 +24,8 @@ public final class ActionTests {
         roundActions();
         validation();
         shopAndPackActions();
+        packUsesConsumablesImmediately();
+        packSkip();
         boardAndChoiceActions();
         replayDeterminism();
 
@@ -82,16 +84,56 @@ public final class ActionTests {
 
         Object opening = m.apply(new Action.BuyPack(a, 0));
         check("BuyPack opens immediately", opening == run.getCurrentOpening() && run.getCurrentOpening() != null);
+
+        // Pick from a controlled Standard pack: its playing-card option is used immediately (it joins the deck),
+        // which is the observable, non-targeted case now that consumable picks are consumed rather than stored.
+        run.grantPack(new BoosterPack(PackKind.STANDARD, PackSize.NORMAL));
+        m.apply(new Action.OpenPack(a, run.getPendingPacks().size() - 1));
         int picksLeft = run.getCurrentOpening().getPicksLeft();
         int deck = run.getDeck().size();
-        int jokers = run.board().size();
-        int consumables = run.getConsumables().size();
         Object picked = m.apply(new Action.PickFromPack(a, firstOption(run), null));
-        check("PickFromPack routes the pick somewhere", picked != null
-                && (run.getDeck().size() > deck || run.board().size() > jokers
-                    || run.getConsumables().size() > consumables || run.getRelics().size() > 0));
+        check("PickFromPack routes the pick somewhere", picked != null && run.getDeck().size() > deck);
         check("the pick budget advanced or the opening closed",
                 run.getCurrentOpening() == null || run.getCurrentOpening().getPicksLeft() == picksLeft - 1);
+    }
+
+    /** A consumable picked from a pack is used at once, not kept: a Celestial pick levels a hand and never lands in inventory. */
+    private static void packUsesConsumablesImmediately() {
+        Match m = newMatch(204L);
+        m.start();
+        PlayerId a = m.getSeats().get(0);
+        Run run = m.getRun(a);
+
+        int levelsBefore = totalHandLevels(run);
+        run.grantPack(new BoosterPack(PackKind.CELESTIAL, PackSize.NORMAL));
+        m.apply(new Action.OpenPack(a, run.getPendingPacks().size() - 1));
+        int consumablesBefore = run.getConsumables().size();
+        int picks = run.getCurrentOpening().getPicksLeft();
+        for (int k = 0; k < picks; k++) m.apply(new Action.PickFromPack(a, firstOption(run), null));
+
+        check("a planet pick is used, not stored", run.getConsumables().size() == consumablesBefore);
+        check("a planet pick leveled a hand immediately", totalHandLevels(run) > levelsBefore);
+        check("the opening closed once its budget was spent", run.getCurrentOpening() == null);
+    }
+
+    /** Skipping a pack abandons its remaining picks and closes the opening; skipping with none open is rejected. */
+    private static void packSkip() {
+        Match m = newMatch(205L);
+        m.start();
+        PlayerId a = m.getSeats().get(0);
+        Run run = m.getRun(a);
+        run.grantPack(new BoosterPack(PackKind.CELESTIAL, PackSize.MEGA));   // MEGA keeps 2, so a skip really abandons picks
+        m.apply(new Action.OpenPack(a, run.getPendingPacks().size() - 1));
+        check("a pack is open before skipping", run.getCurrentOpening() != null);
+        m.apply(new Action.SkipPack(a));
+        check("SkipPack closes the opening", run.getCurrentOpening() == null);
+        checkThrows("skipping with no pack open is rejected", () -> m.apply(new Action.SkipPack(a)));
+    }
+
+    private static int totalHandLevels(Run run) {
+        int sum = 0;
+        for (model.game.scoring.HandType t : model.game.scoring.HandType.values()) sum += run.getHandLevels().levelOf(t);
+        return sum;
     }
 
     /** MoveJoker reorders the board; SubmitSinChoice feeds the recorded provider, one-shot. */

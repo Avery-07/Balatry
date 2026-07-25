@@ -140,9 +140,19 @@ public final class MatchViewModel {
         submit(new Action.BuyPack(client.getSeat(), packIndex));
     }
 
-    /** Picks the option at {@code optionIndex} from the pack currently being opened. */
-    public void pickFromPack(int optionIndex) {
-        submit(new Action.PickFromPack(client.getSeat(), optionIndex, RelicTarget.none()));
+    /**
+     * Picks the option at {@code optionIndex} from the pack being opened, using it immediately. A targeted
+     * consumable passes the hand cards it applies to in {@code targetHandIndices}; a relic passes its derived
+     * {@code relicTarget} (both default to nothing for the plain case).
+     */
+    public void pickFromPack(int optionIndex, RelicTarget relicTarget, List<Integer> targetHandIndices) {
+        submit(new Action.PickFromPack(client.getSeat(), optionIndex,
+                relicTarget == null ? RelicTarget.none() : relicTarget, List.copyOf(targetHandIndices)));
+    }
+
+    /** Abandons the current pack opening without spending the rest of its picks. */
+    public void skipPack() {
+        submit(new Action.SkipPack(client.getSeat()));
     }
 
     public void redeemVoucher(int voucherIndex) {

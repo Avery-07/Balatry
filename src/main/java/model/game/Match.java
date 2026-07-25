@@ -623,6 +623,11 @@ public final class Match {
             case Action.MoveRelic a     -> { run.moveRelic(a.from(), a.to()); yield null; }
             case Action.OpenPack a      -> { run.beginOpening(run.openPendingPack(a.pendingIndex())); yield run.getCurrentOpening(); }
             case Action.PickFromPack a  -> applyPick(run, a);
+            case Action.SkipPack a      -> {
+                if (run.getCurrentOpening() == null) throw new IllegalStateException("no pack is open to skip");
+                run.clearOpening();   // abandons the remaining picks; the pack is gone either way
+                yield null;
+            }
 
             case Action.BuyCard a       -> requireShop(run).buy(a.slotIndex());
             case Action.BuyPack a       -> {
@@ -683,25 +688,47 @@ public final class Match {
     }
 
     /**
-     * Picks from the actor's current opening, routing by kind: playing cards join the deck, jokers and
-     * consumables are stored (room-checked before the pick is spent), relics cast immediately with the
-     * action's target. Storing pack consumables instead of use-immediately is a deliberate interim until
-     * targeted use-from-pack has a design. The opening clears itself when its last pick is spent.
+     * Picks from the actor's current opening, routing by kind: playing cards join the deck and jokers are stored
+     * (room-checked first), while consumables and relics are <em>used immediately</em> — Arcana/Spectral/Celestial
+     * and Relic packs never let you keep the card. A targeted consumable aims at the seat's selection hand (the live
+     * hand, or the temporary one dealt for a shop opening); too few targets rejects the pick, leaving the pack open.
+     * Everything is validated before the pick is spent. The opening clears itself when its last pick is spent.
      */
     private Object applyPick(Run run, Action.PickFromPack a) {
         PackOpening opening = run.getCurrentOpening();
         if (opening == null) throw new IllegalStateException("no pack is open");
         Card option = opening.getOptions().get(a.optionIndex());
         if (option == null) throw new IllegalStateException("option " + a.optionIndex() + " was already picked");
-        if ((option instanceof JokerCard || option instanceof ConsumableCard) && !run.canAcquire(option))
-            throw new IllegalStateException("no inventory room for " + option);
+
+        // Validate before spending the pick, so a rejected pick leaves the opening intact.
+        if (option instanceof JokerCard && !run.canAcquire(option))
+            throw new IllegalStateException("no joker room for " + option);
+        List<DeckCard> targets = List.of();
+        if (option instanceof ConsumableCard consumable) {
+            targets = resolvePackTargets(run, a.targetHandIndices());
+            int need = consumable.getSpec().getMinTargets();
+            if (targets.size() < need)
+                throw new IllegalStateException(consumable.getSpec().getName() + " needs " + need
+                        + " selected card" + (need > 1 ? "s" : ""));
+        }
+
         Card picked = opening.pick(a.optionIndex());
-        if (opening.getPicksLeft() == 0) run.clearOpening();
         if (picked instanceof RelicCard relic)
             useRelicCard(run.getPlayerId(), relic, a.relicTarget() != null ? a.relicTarget() : RelicTarget.none());
+        else if (picked instanceof ConsumableCard consumable) run.useLooseConsumable(consumable, targets);
         else if (picked instanceof DeckCard card) run.addCardToDeck(card);
-        else run.acquire(picked);
+        else run.acquire(picked);   // jokers are kept
+        if (opening.getPicksLeft() == 0) run.clearOpening();   // after use, so the selection hand survives the pick
         return picked;
+    }
+
+    /** Maps hand-card indices from a {@link Action.PickFromPack} into the actor's selection hand (skipping stale indices). */
+    private List<DeckCard> resolvePackTargets(Run run, List<Integer> indices) {
+        if (indices == null || indices.isEmpty()) return List.of();
+        List<DeckCard> hand = run.getSelectionHand();
+        List<DeckCard> out = new ArrayList<>();
+        for (int i : indices) if (i >= 0 && i < hand.size()) out.add(hand.get(i));
+        return out;
     }
 
     /** Pride: sets or raises {@code id}'s standing bid on this shop phase's legendary; resolved at phase end. */

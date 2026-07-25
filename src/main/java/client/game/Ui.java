@@ -93,6 +93,19 @@ final class Ui {
         return e == null ? null : sourceRects.get(e.sourceId());
     }
 
+    /**
+     * True when this seat has finished its blind (won, lost or skipped) but the table is still in the BLIND phase —
+     * it is waiting on the other players at the blind barrier, and gets the irremovable "waiting" popup.
+     */
+    boolean atBlindBarrier() {
+        return s != null && s.phase() == model.game.MatchPhase.BLIND && s.round() != null && s.round().done();
+    }
+
+    /** True when the seat reached the blind barrier by skipping, rather than by playing the blind out. */
+    boolean blindSkipped() {
+        return s != null && s.round() != null && s.round().skipped();
+    }
+
     Ui(Renderer r, Hand hand) { this.r = r; this.hand = hand; }
 
     record Btn(Layout.Rect rect, Runnable action) { }

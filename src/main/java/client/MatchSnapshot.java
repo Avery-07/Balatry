@@ -86,13 +86,24 @@ public record MatchSnapshot(
         boolean isReady,           // this seat has signalled ready to leave RESULT/SHOP — waiting on the others
         int readyCount,            // how many still-playing seats have signalled ready
         int activeSeats,           // how many seats are still playing (the barrier's denominator)
+        int blindDoneCount,        // still-playing seats whose round has resolved (the blind barrier's progress tally)
         ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
         List<StandingView> standings,   // every seat, ranked; for the end-of-match summary
         List<OpponentView> opponents
 ) {
 
-    /** Round-scoped counters, present only while a round is in progress. */
-    public record RoundView(int handsRemaining, int discardsRemaining, String score, long roundTarget, boolean canSkip) { }
+    /**
+     * Round-scoped state, present whenever a round exists (including one already resolved while the table waits at
+     * the blind barrier). {@code outcome} is a {@code RoundOutcome} name — IN_PROGRESS, WON, LOST or SKIPPED — so
+     * the client can tell "still playing" from "done, waiting on others" and a skip from a played-out blind.
+     */
+    public record RoundView(int handsRemaining, int discardsRemaining, String score, long roundTarget,
+                            boolean canSkip, String outcome) {
+        /** Whether this round is finished (the seat is waiting at the blind barrier rather than still playing). */
+        public boolean done()    { return !"IN_PROGRESS".equals(outcome); }
+        /** Whether this round was skipped for its tag (as opposed to played to a win or loss). */
+        public boolean skipped() { return "SKIPPED".equals(outcome); }
+    }
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
@@ -185,7 +196,15 @@ public record MatchSnapshot(
     public record VoucherItem(int id, String label, int price, String tooltip, boolean redeemable) { }
 
     /** A booster pack being opened: its name, the remaining pick budget, and each option's label (null = taken). */
-    public record PackOpeningView(String packName, int picksLeft, List<String> options) { }
+    public record PackOpeningView(String packName, int picksLeft, List<PackOption> options) { }
+
+    /**
+     * One offered option in an open pack, everything the client needs to pick it (every pick is used at once):
+     * its display {@code label} (null once taken); {@code minTargets}, how many hand cards a targeted consumable
+     * needs; and for a relic, {@code isRelic} plus its casting demands ({@code selector} — what it aims at, like a
+     * held relic's, and {@code needsSeat}) so the pick can derive the same target from the selection.
+     */
+    public record PackOption(String label, int minTargets, boolean isRelic, String selector, boolean needsSeat) { }
 
     /** Shop contents for the local seat, present only during the shop phase. */
     public record ShopView(
@@ -207,7 +226,17 @@ public record MatchSnapshot(
         RoundView roundView = (r == null) ? null
                 : new RoundView(r.getHandsRemaining(), r.getDiscardsRemaining(),
                                 String.valueOf(r.getScore()), r.getTarget(),
-                                r.getOutcome() == RoundOutcome.IN_PROGRESS && !r.isActed());
+                                r.getOutcome() == RoundOutcome.IN_PROGRESS && !r.isActed(),
+                                String.valueOf(r.getOutcome()));
+
+        // The blind barrier's tally: how many still-playing seats have finished their round (won, lost or skipped),
+        // so a seat waiting at the barrier can see progress — the analog of readyCount for the RESULT/SHOP barriers.
+        int blindDoneCount = 0;
+        if (match.getPhase() == MatchPhase.BLIND)
+            for (PlayerId id : match.getActiveSeats()) {
+                Round rr = match.getRun(id).getRound();
+                if (rr != null && rr.getOutcome() != RoundOutcome.IN_PROGRESS) blindDoneCount++;
+            }
 
         // HUD hands/discards are shown in every phase: the round's live counts during a blind, the base otherwise.
         int hands    = (r != null) ? r.getHandsRemaining()    : run.getBaseHands();
@@ -298,16 +327,21 @@ public record MatchSnapshot(
                 match.isReady(me),
                 match.readyCount(),
                 match.getActiveSeats().size(),
+                blindDoneCount,
                 lastResult,
                 table,
                 opponents);
     }
 
-    /** The seat's hand as structured cards, in model order (index i here is index i in the round's hand). */
+    /**
+     * The seat's hand as structured cards, in model order. During a blind this is the live hand; while a pack is
+     * open outside a round it is the temporary hand dealt for aiming a targeted pick — so the client renders and
+     * selects from it the same way (index i here is index i in {@link Run#getSelectionHand()}).
+     */
     private static List<HandCardView> hand(Run run) {
         Round round = run.getRound();
         List<HandCardView> out = new ArrayList<>();
-        for (DeckCard c : run.getHeld()) {
+        for (DeckCard c : run.getSelectionHand()) {
             if (round != null && round.isFaceDown(c))
                 out.add(new HandCardView(c.id(), "", -1, -1, true));
             else
@@ -375,7 +409,9 @@ public record MatchSnapshot(
      * at {@code stake} — the viewing seat's own — since stakes are per-seat and scale what it must score.
      */
     private static List<BlindOption> blindOptions(Match match, Stake stake) {
-        if (match.getPhase() != MatchPhase.SELECTION) return List.of();
+        // Shown while selecting, and kept through the blind so a seat that skipped can still see the tiles behind
+        // its "waiting for others" popup. The current-blind marking and tag are unchanged across the transition.
+        if (match.getPhase() != MatchPhase.SELECTION && match.getPhase() != MatchPhase.BLIND) return List.of();
         List<BlindOption> out = new ArrayList<>();
         BossBlind anteBoss = match.getAnteBoss();
         for (Blind b : Blind.values()) {
@@ -407,9 +443,22 @@ public record MatchSnapshot(
     private static PackOpeningView packOpening(Run run) {
         PackOpening o = run.getCurrentOpening();
         if (o == null) return null;
-        List<String> options = new ArrayList<>();
-        for (Card c : o.getOptions())
-            options.add(c == null ? null : (c instanceof DeckCard d ? describe(d) : nameOf(c)));
+        List<PackOption> options = new ArrayList<>();
+        for (Card c : o.getOptions()) {
+            if (c == null) { options.add(new PackOption(null, 0, false, "NONE", false)); continue; }
+            String label = c instanceof DeckCard d ? describe(d) : nameOf(c);
+            if (c instanceof model.items.relics.RelicCard rc) {
+                var spec = rc.getSpec();
+                boolean needsSeat = switch (spec.getKind()) {
+                    case OPPONENT -> true;
+                    case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false;
+                };
+                options.add(new PackOption(label, 0, true, spec.getSelector().name(), needsSeat));
+            } else {
+                int minTargets = c instanceof model.items.consumables.ConsumableCard cc ? cc.getSpec().getMinTargets() : 0;
+                options.add(new PackOption(label, minTargets, false, "NONE", false));
+            }
+        }
         return new PackOpeningView(String.valueOf(o.getPack()), o.getPicksLeft(), options);
     }
 

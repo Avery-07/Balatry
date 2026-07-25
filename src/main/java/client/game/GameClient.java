@@ -148,7 +148,7 @@ public final class GameClient extends Application {
     private void handlePress(double x, double y) {
         pressX = x; pressY = y;
         pressOnHand = false; pressTarget = null;
-        if (!inMatch() || ui.s == null || ui.s.opening() != null || ui.showRunInfo) return;
+        if (!inMatch() || ui.s == null || ui.s.opening() != null || ui.showRunInfo || ui.atBlindBarrier()) return;
 
         if (ui.s.phase() == MatchPhase.BLIND && hand.cardAt(x, y) != null) { pressOnHand = true; return; }
         for (DragTarget t : dragTargets)
@@ -352,13 +352,19 @@ public final class GameClient extends Application {
         double cH = Ui.H - Ui.PAD - cTop;
 
         hud.render(ui);
+        boolean blindWait = ui.atBlindBarrier();   // this seat is done with the blind, waiting on the others
         if (ui.s.opening() != null) {
-            overlays.pack(ui);   // a pack takes over the center until its picks are spent
+            overlays.pack(ui);   // the pack panel sits up top until its picks are spent
+            if (!ui.s.hand().isEmpty())   // a targeted pick needs the hand shown below the panel to aim at
+                ui.hand.render(ui, cx, cTop, cW, cH);
+        } else if (blindWait && ui.blindSkipped()) {
+            // Skipped: the seat stays on the blind-selection tiles (read-only) behind the popup, not the board.
+            screens.get(MatchPhase.SELECTION).render(ui, cx, cTop, cW, cH);
         } else {
             Screen screen = screens.get(ui.s.phase());
-            if (screen != null) screen.render(ui, cx, cTop, cW, cH);
+            if (screen != null) screen.render(ui, cx, cTop, cW, cH);   // a finished blind keeps the round board behind the popup
             else r.textCenter(String.valueOf(ui.s.phase()), cx + cW / 2, cTop + cH / 2, 20, Palette.DIM);
-            overlays.contextActions(ui);
+            if (!blindWait) overlays.contextActions(ui);   // no contextual buy/use/sell while waiting at the barrier
         }
         if (!ui.status.isEmpty()) r.textLeft(ui.status, Ui.PAD + 8, Ui.H - 20, 12, Palette.DIM);
         if (ui.showRunInfo) overlays.runInfo(ui);
@@ -367,9 +373,13 @@ public final class GameClient extends Application {
         if (hand.hasStaged()) hand.renderStaged(ui, cx, cTop + cH * 0.34, cW);
         if (ui.reel.playing()) overlays.scoreEffect(ui);
 
-        // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
-        if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
-        else overlays.tooltip(ui);
+        if (blindWait) {
+            overlays.blindWait(ui);   // the irremovable modal, above the backdrop but under the fade
+        } else {
+            // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
+            if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
+            else overlays.tooltip(ui);
+        }
 
         drawFade();
     }
@@ -400,8 +410,19 @@ public final class GameClient extends Application {
             return;
         }
         if (ui.s == null) return;
-        if (ui.s.opening() != null) {   // modal pack: only its option picks are live
+        if (ui.atBlindBarrier()) return;   // irremovable modal: no input crosses the blind barrier
+        if (ui.s.opening() != null) {   // pack modal: pick an option, or select hand cards / a joker to aim a targeted pick
+            CardEntity e = hand.cardAt(x, y);
+            if (e != null) {
+                if (!e.selected() && hand.selectedCount() >= Ui.MAX_SELECTION) ui.status = "At most " + Ui.MAX_SELECTION + " cards.";
+                else e.toggleSelected();
+                return;
+            }
             for (Ui.Btn b : ui.packButtons) if (b.rect().contains(x, y)) { b.action().run(); return; }
+            for (Ui.Sel se : ui.jokerSel) if (se.rect().contains(x, y)) {   // a JOKER_SLOT relic (Katadesmos) aims at a joker
+                ui.jokerTarget = (ui.jokerTarget == se.index()) ? -1 : se.index();
+                return;
+            }
             return;
         }
         if (ui.showRunInfo) {

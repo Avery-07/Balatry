@@ -57,6 +57,8 @@ public final class NetTests {
                 new Action.OpenPack(a, 0),
                 new Action.PickFromPack(a, 1, RelicTarget.none()),
                 new Action.PickFromPack(a, 1, RelicTarget.on(b)),
+                new Action.PickFromPack(a, 0, RelicTarget.rank(null, Rank.KING), List.of(1, 3)),
+                new Action.SkipPack(a),
                 new Action.BuyCard(a, 2),
                 new Action.BuyPack(a, 0),
                 new Action.RedeemVoucher(a, 1),
@@ -79,7 +81,7 @@ public final class NetTests {
             if (!action.equals(back)) { allOk = false; System.out.println("  mismatch: " + action + " -> " + back); }
         }
         check("every action round-trips through the codec", allOk);
-        checkInt("all action types are covered", samples.size(), 33);
+        checkInt("all action types are covered", samples.size(), 35);
     }
 
     private static void codecRejectsGarbage() {

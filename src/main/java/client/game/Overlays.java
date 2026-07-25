@@ -58,7 +58,7 @@ final class Overlays {
                 if (it.isRelic()) {
                     if (!it.needsSeat())
                         out.add(new Ui.Act("Use", ORANGE, DARK, () -> {
-                            RelicTarget t = relicTargetFromSelection(ui, it);
+                            RelicTarget t = relicTargetFromSelection(ui, it.selector(), it.needsSeat(), it.label());
                             if (t != null) ui.vm.useRelic(it.modelIndex(), t);
                         }));
                     else
@@ -94,21 +94,25 @@ final class Overlays {
                 () -> { ui.vm.sellJoker(ui.jokerTarget); ui.jokerTarget = -1; }, true);
     }
 
-    /** Builds a relic's target from the current selection — a card's rank/suit, the hand it forms, or a joker. */
-    private RelicTarget relicTargetFromSelection(Ui ui, MatchSnapshot.ItemView relic) {
+    /**
+     * Builds a relic's target from the current selection — a card's rank/suit, the hand it forms, or a joker.
+     * Shared by the held-relic Use flow and the use-immediately pack pick, so both derive a target the same way;
+     * returns null (and sets a hint) when the selection cannot satisfy the relic's {@code selector} yet.
+     */
+    private RelicTarget relicTargetFromSelection(Ui ui, String selector, boolean needsSeat, String label) {
         MatchSnapshot s = ui.s;
         List<Integer> sel = ui.hand.selectedModelIndices(s.hand());
-        switch (relic.selector()) {
+        switch (selector) {
             case "RANK" -> {
-                if (sel.isEmpty()) { ui.status = "Select a card, then Use " + relic.label() + "."; return null; }
+                if (sel.isEmpty()) { ui.status = "Select a card, then use " + label + "."; return null; }
                 return RelicTarget.rank(null, DeckCard.Rank.values()[s.hand().get(sel.get(0)).rank()]);
             }
             case "SUIT" -> {
-                if (sel.isEmpty()) { ui.status = "Select a card, then Use " + relic.label() + "."; return null; }
+                if (sel.isEmpty()) { ui.status = "Select a card, then use " + label + "."; return null; }
                 return RelicTarget.suit(null, DeckCard.Suit.values()[s.hand().get(sel.get(0)).suit()]);
             }
             case "HAND_TYPE" -> {
-                if (sel.isEmpty()) { ui.status = "Select the cards forming a hand, then Use " + relic.label() + "."; return null; }
+                if (sel.isEmpty()) { ui.status = "Select the cards forming a hand, then use " + label + "."; return null; }
                 List<DeckCard> cards = new ArrayList<>();
                 for (int i : sel) {
                     MatchSnapshot.HandCardView c = s.hand().get(i);
@@ -117,44 +121,107 @@ final class Overlays {
                 return RelicTarget.hand(null, new HandEvaluator().evaluate(cards).type());
             }
             case "JOKER_SLOT" -> {
-                if (ui.jokerTarget < 0) { ui.status = "Select one of your jokers, then Use " + relic.label() + "."; return null; }
+                if (ui.jokerTarget < 0) { ui.status = "Select one of your jokers, then use " + label + "."; return null; }
                 return RelicTarget.joker(null, ui.jokerTarget);
             }
             default -> {
-                if (relic.needsSeat()) { ui.status = relic.label() + " must be aimed at a seat — targeting UI is coming."; return null; }
+                if (needsSeat) { ui.status = label + " must be aimed at a seat — targeting UI is coming."; return null; }
                 return RelicTarget.none();   // SELF / GLOBAL relics (Aegis, Metabole, Mimesis)
             }
         }
     }
 
-    /** The modal booster-pack overlay: the offered options as tiles; click one to pick it (spends a pick). */
+    /**
+     * The booster-pack overlay: the offered options as tiles, picked at once. It sits in the upper screen so the
+     * hand (drawn beneath it by {@code GameClient}) stays visible for aiming a targeted pick — every pick is used
+     * immediately, so a card needing selected cards is gated until enough are chosen.
+     */
     void pack(Ui ui) {
         MatchSnapshot.PackOpeningView p = ui.s.opening();
         if (p == null) return;
         Renderer r = ui.r;
-        r.gc().setFill(Color.web("#040a08", 0.74)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
-        double pw = 760, ph = 380, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        r.gc().setFill(Color.web("#040a08", 0.62)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+        // Sits below the top joker/consumable row and above the hand, so both stay visible and selectable for a
+        // targeted pick (hand cards for tarots/relic rank-suit-hand, a joker for Katadesmos).
+        double pw = 760, ph = 300, px = (Ui.W - pw) / 2, py = Ui.PAD + Ui.SLOT_H + 14;
         r.panel(px, py, pw, ph, Color.web("#241a3a"), PURPLE, 14, 3);
         r.textCenterBold(p.packName(), px + pw / 2, py + 28, 22, ORANGE);
-        r.textCenter("Pick " + p.picksLeft() + (p.picksLeft() == 1 ? " card" : " cards"), px + pw / 2, py + 54, 14, DIM);
+        r.textCenter("Choose " + p.picksLeft() + " — used immediately", px + pw / 2, py + 54, 14, DIM);
 
+        // Skip abandons the rest of the picks (Balatro-style) — registered as a pack button so the modal routes it.
+        double skW = 92, skH = 34, skX = px + pw - skW - 16, skY = py + 12;
+        r.panel(skX, skY, skW, skH, Color.web("#3a2c2c"), RED, 8, 2);
+        r.textCenterBold("Skip", skX + skW / 2, skY + skH / 2, 14, INK);
+        ui.packButtons.add(new Ui.Btn(new Layout.Rect(skX, skY, skW, skH), () -> ui.vm.skipPack()));
+
+        int selected = ui.hand.selectedModelIndices(ui.s.hand()).size();
         int n = p.options().size();
         double ow = 110, gap = 16, total = n * ow + Math.max(0, n - 1) * gap;
-        double ox = px + (pw - total) / 2, oy = py + 90, oh = 168;
+        double ox = px + (pw - total) / 2, oy = py + 88, oh = 168;
         for (int i = 0; i < n; i++) {
-            String label = p.options().get(i);
+            MatchSnapshot.PackOption opt = p.options().get(i);
             double x = ox + i * (ow + gap);
-            if (label == null) {
+            if (opt.label() == null) {
                 r.panel(x, oy, ow, oh, Color.web("#00000040"), EDGE, 8, 2);
                 r.textCenter("(taken)", x + ow / 2, oy + oh / 2, 11, FAINT);
-            } else {
-                r.panel(x, oy, ow, oh, Color.web("#2b2c30"), EDGE, 8, 2);
-                r.textCenter(label, x + ow / 2, oy + oh / 2, 11, INK);
-                int idx = i;
-                ui.packButtons.add(new Ui.Btn(new Layout.Rect(x, oy, ow, oh), () -> ui.vm.pickFromPack(idx)));
+                continue;
             }
+            boolean ready = optionReady(ui, opt, selected);
+            String need = optionNeed(opt);
+            r.panel(x, oy, ow, oh, Color.web("#2b2c30"), ready ? EDGE : Color.web("#5a4a2a"), 8, 2);
+            r.textCenter(opt.label(), x + ow / 2, oy + oh / 2, 11, INK);
+            if (!need.isEmpty())   // a targeted pick tells you what it wants and whether it is satisfied
+                r.textCenter(need, x + ow / 2, oy + oh - 14, 10, ready ? GREEN : ORANGE);
+            int idx = i;
+            ui.packButtons.add(new Ui.Btn(new Layout.Rect(x, oy, ow, oh), () -> pickOption(ui, idx, opt)));
         }
-        r.textCenter("Choose your pick(s) — the pack closes once the budget is spent.", px + pw / 2, py + ph - 18, 11, FAINT);
+        String hint = anyTargeted(p) ? "Select cards (or a joker), then choose — or Skip the rest."
+                                     : "Choose your pick(s) — used at once — or Skip the rest.";
+        r.textCenter(hint, px + pw / 2, py + ph - 18, 11, FAINT);
+    }
+
+    /** Routes a pack pick: a relic derives its target from the selection (like a held relic), a targeted consumable passes its selected cards. */
+    private void pickOption(Ui ui, int idx, MatchSnapshot.PackOption opt) {
+        if (opt.isRelic()) {
+            RelicTarget t = relicTargetFromSelection(ui, opt.selector(), opt.needsSeat(), opt.label());
+            if (t == null) return;   // relicTargetFromSelection set the hint
+            ui.vm.pickFromPack(idx, t, List.of());
+            return;
+        }
+        if (ui.hand.selectedModelIndices(ui.s.hand()).size() < opt.minTargets()) {
+            ui.status = opt.label() + " needs " + opt.minTargets() + " selected card"
+                    + (opt.minTargets() > 1 ? "s" : "") + " — select in your hand first.";
+            return;
+        }
+        ui.vm.pickFromPack(idx, null, ui.hand.selectedModelIndices(ui.s.hand()));
+    }
+
+    /** The short "what this pick still needs" label under an option tile, or empty when it is ready to take as-is. */
+    private static String optionNeed(MatchSnapshot.PackOption o) {
+        if (!o.isRelic()) return o.minTargets() > 0 ? "needs " + o.minTargets() + " card" + (o.minTargets() > 1 ? "s" : "") : "";
+        return switch (o.selector()) {
+            case "RANK", "SUIT" -> "select a card";
+            case "HAND_TYPE"    -> "select a hand";
+            case "JOKER_SLOT"   -> "select a joker";
+            default             -> "";
+        };
+    }
+
+    /** Whether the current selection already satisfies what {@code o} needs (drives the ready colouring). */
+    private static boolean optionReady(Ui ui, MatchSnapshot.PackOption o, int selected) {
+        if (!o.isRelic()) return selected >= o.minTargets();
+        return switch (o.selector()) {
+            case "RANK", "SUIT", "HAND_TYPE" -> selected >= 1;
+            case "JOKER_SLOT"                -> ui.jokerTarget >= 0;
+            default                          -> !o.needsSeat();
+        };
+    }
+
+    /** Whether any still-available option needs a selection before it can be taken (drives the pack's hint line). */
+    private static boolean anyTargeted(MatchSnapshot.PackOpeningView p) {
+        for (MatchSnapshot.PackOption o : p.options())
+            if (o.label() != null && !optionNeed(o).isEmpty()) return true;
+        return false;
     }
 
     /**
@@ -284,6 +351,25 @@ final class Overlays {
     }
 
     private static Renderer r(Ui ui) { return ui.r; }
+
+    /**
+     * The irremovable "your blind is over — waiting on the others" modal, shown while this seat sits at the blind
+     * barrier. It has no close control by design: the only way past is for the other players to finish, at which
+     * point the table advances on its own. What sits behind it is chosen by the caller — the blind-selection tiles
+     * for a seat that skipped, the played-out round board for one that finished.
+     */
+    void blindWait(Ui ui) {
+        Renderer r = ui.r;
+        r.gc().setFill(Color.web("#03060a", 0.5)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+        double pw = 540, ph = 168, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        r.panel(px, py, pw, ph, Color.web("#1a1b20"), ORANGE, 14, 3);
+        boolean skipped = ui.blindSkipped();
+        r.textCenterBold(skipped ? "Blind Skipped" : "Blind Complete", Ui.W / 2.0, py + 36, 22, ORANGE);
+        r.textCenter("Waiting for the other players to finish the blind…", Ui.W / 2.0, py + 80, 14, INK);
+        r.textCenter("The next phase opens once everyone is done.", Ui.W / 2.0, py + 106, 12, DIM);
+        int total = ui.s.activeSeats();
+        if (total > 1) r.textCenter(ui.s.blindDoneCount() + " of " + total + " finished", Ui.W / 2.0, py + 138, 12, FAINT);
+    }
 
     /**
      * The Run Info overlay: standings and this seat's redeemed vouchers on the left, its poker-hand levels and

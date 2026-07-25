@@ -58,6 +58,7 @@ public final class Run {
     private final BossState bossState = new BossState();     // boss-imposed state (Quartz, Pillar, Crimson Heart, flags)
     private final List<BoosterPack> pendingPacks = new ArrayList<>();   // granted, unopened packs (Wrath, pack tags); cleared at round end
     private PackOpening currentOpening;                                 // the opening being picked from (action layer)
+    private List<DeckCard> packHand = List.of();                        // temporary hand dealt for targeting a pack-opened consumable outside a round
     private final List<SkipTag> pendingTags = new ArrayList<>();        // NEXT_SHOP / NEXT_BOSS / META tags awaiting their moment
     private final Afflictions afflictions = new Afflictions();   // relic-imposed debuffs/shields on this seat
     private final SinState sinState = new SinState();            // per-player, round-scoped state owned by the active sin
@@ -196,8 +197,53 @@ public final class Run {
 
     /** The pack currently being picked from, if any (one at a time; starting a new one abandons leftover picks). */
     public PackOpening getCurrentOpening() { return currentOpening; }
-    public void beginOpening(PackOpening opening) { currentOpening = opening; }
-    public void clearOpening() { currentOpening = null; }
+
+    /**
+     * Begins a pack opening. Outside a round there is no hand to aim a targeted pick (Strength, The Hanged Man) at,
+     * so a temporary hand is dealt from the deck for the duration of the opening — full Balatro parity, where a
+     * pack opened in the shop still lets you select cards. During a round the live hand is used instead.
+     */
+    public void beginOpening(PackOpening opening) {
+        currentOpening = opening;
+        packHand = (round == null && needsSelectionHand(opening)) ? dealPackHand() : List.of();
+    }
+
+    /** Whether {@code opening} offers a card that must be aimed at the hand — a targeted consumable or a card-selecting relic (Anathema, Miasma, Katabasis). The only reason to deal a temporary hand. */
+    private static boolean needsSelectionHand(PackOpening opening) {
+        for (Card c : opening.getOptions()) {
+            if (c instanceof ConsumableCard cc && cc.getSpec().getMinTargets() > 0) return true;
+            if (c instanceof RelicCard rc) switch (rc.getSpec().getSelector()) {
+                case RANK, SUIT, HAND_TYPE -> { return true; }
+                default -> { }   // JOKER_SLOT aims at a joker, NONE at nothing — no hand needed
+            }
+        }
+        return false;
+    }
+
+    public void clearOpening() { currentOpening = null; packHand = List.of(); }
+
+    /**
+     * The hand a targeted consumable selects from right now: the live round hand during a blind, else the temporary
+     * hand dealt for the current pack opening (empty when neither applies).
+     */
+    public List<DeckCard> getSelectionHand() {
+        return round != null ? round.getHand() : packHand;
+    }
+
+    /** Deals up to {@code handSize} distinct cards (by reference, so effects persist) from the deck, deterministically. */
+    private List<DeckCard> dealPackHand() {
+        if (deck.isEmpty()) return List.of();
+        List<DeckCard> pool = new ArrayList<>(deck);
+        RandomGenerator stream = rng.streamFor(RngSource.PACK_HAND, stats.nextSalt(RngSource.PACK_HAND));
+        int n = Math.min(handSize, pool.size());
+        List<DeckCard> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {   // partial Fisher-Yates: pick n distinct cards without disturbing the deck
+            int j = i + stream.nextInt(pool.size() - i);
+            Collections.swap(pool, i, j);
+            out.add(pool.get(i));
+        }
+        return out;
+    }
 
     /** Unmodifiable view of granted, unopened packs. */
     public List<BoosterPack> getPendingPacks() { return Collections.unmodifiableList(pendingPacks); }
@@ -367,6 +413,23 @@ public final class Run {
     /** Uses the consumable at {@code index}, applying its effect to {@code targets}, then removes it from inventory. */
     public void useConsumable(int index, List<? extends Card> targets) {
         ConsumableCard consumable = consumables.get(index);
+        requireUsable(consumable, targets);
+        consumables.remove(consumable);   // free its slot before the effect runs, so creation effects (Emperor, High Priestess) can fill it
+        applyConsumable(consumable, targets);
+    }
+
+    /**
+     * Uses a consumable that is <em>not</em> held in inventory — a fresh pick used immediately when a pack is opened
+     * (Arcana/Spectral/Celestial packs never let you keep the card). There is no slot to free; everything else,
+     * including the targeting rule and the used-consumable bookkeeping, matches {@link #useConsumable}.
+     */
+    public void useLooseConsumable(ConsumableCard consumable, List<? extends Card> targets) {
+        requireUsable(consumable, targets);
+        applyConsumable(consumable, targets);
+    }
+
+    /** Guards a consumable use: rejects a debuffed card, or one fired with fewer than its required targets. */
+    private void requireUsable(ConsumableCard consumable, List<? extends Card> targets) {
         if (consumable.isDebuffed())   // Greed's claim: a debuffed consumable is dead until the sticker is removed
             throw new IllegalStateException("a debuffed consumable cannot be used: " + consumable.getSpec().getName());
         ConsumableSpec spec = consumable.getSpec();
@@ -374,7 +437,11 @@ public final class Run {
         if (targets.size() < spec.getMinTargets())
             throw new IllegalStateException(spec.getName() + " needs " + spec.getMinTargets()
                     + " selected card" + (spec.getMinTargets() > 1 ? "s" : ""));
-        consumables.remove(consumable);   // free its slot before the effect runs, so creation effects (Emperor, High Priestess) can fill it
+    }
+
+    /** Applies a consumable's effect to {@code targets} and records its use; the caller owns any inventory removal. */
+    private void applyConsumable(ConsumableCard consumable, List<? extends Card> targets) {
+        ConsumableSpec spec = consumable.getSpec();
         consumableTargets = List.copyOf(targets);
         consumable.consume(this);
         consumableTargets = List.of();
