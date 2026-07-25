@@ -505,9 +505,12 @@ public record MatchSnapshot(
 
     /** The board as the top bar shows it: each joker's name, effect text, live state, badge, and liveness. */
     private static List<JokerView> jokerViews(Run run) {
+        // The read-only view a joker's state descriptor reads its current effect from. Built once: the snapshot
+        // runs on the FX thread over a settled model, so this is the safe moment to evaluate the descriptors.
+        model.game.player.JokerInfo info = model.game.player.JokerInfo.of(run);
         List<JokerView> out = new ArrayList<>();
         for (JokerCard j : run.getJokers()) {
-            String state = j.getSpec().stateOf(j);
+            String state = j.getSpec().stateOf(j, info);
             out.add(new JokerView(j.id(), j.getSpec().getName(), j.getSpec().getDescription(),
                     state == null ? "" : state, badgeOf(j), j.isDebuffed()));
         }

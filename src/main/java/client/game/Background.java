@@ -91,7 +91,6 @@ public final class Background {
         time += dt;
         sinceUpdate += dt;
 
-        System.out.println(time);
         // Process active smooth transitions
         if (transitionTimeLeft > 0) {
             transitionTimeLeft -= dt;

@@ -14,7 +14,7 @@ public record BackgroundTheme(
 ) {
     // The values from your original hardcoded setup
     public static final BackgroundTheme DEFAULT = new BackgroundTheme(
-            26.0, 4, 0.025, 1.0, 0.22, 2.1, 1.0,
+            26.0, 5, 0.025, 1.0, 0.22, 2.1, 1.0,
             0x750000, 0x003375, 0x220826
     );
 

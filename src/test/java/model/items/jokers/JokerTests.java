@@ -3,6 +3,7 @@ package model.items.jokers;
 import model.items.DeckCard;
 import model.items.DeckCard.Rank;
 import model.items.DeckCard.Suit;
+import model.game.player.JokerInfo;
 import model.game.player.Run;
 import model.game.scoring.HandEvaluation;
 import model.game.scoring.HandEvaluator;
@@ -30,6 +31,7 @@ public final class JokerTests {
         slotAndRoundStartHooks();
         retriggerAndEconomy();
         specialTraits();
+        currentEffectDescriptors();
 
         boardInvariants();
 
@@ -150,6 +152,52 @@ public final class JokerTests {
         checkScore("Credit Card +5 Mult", score(debt, kings(), List.of()), 210);   // 30 x (2+5)
         debt.addMoney(5);                        // back to $0
         checkInt("counter resets out of debt", cc.getCounter(), 0);
+    }
+
+    /**
+     * A joker's current-effect tooltip: computed purely from a read-only view of the run, and — the property
+     * that lets it be safe on a hover — it must never mutate the run. Replaces the ON_HOVERED trigger, which
+     * did mutate (it wrote the counter), and so could have desynced the seats.
+     */
+    private static void currentEffectDescriptors() {
+        Run run = new Run(0L);
+        run.board().add(Jokers.BULL.make());       // +2 Chips per dollar
+        run.board().add(Jokers.ABSTRACT_JOKER.make());  // +3 Mult per joker
+        run.addMoney(10 - run.getMoney());
+        JokerInfo info = JokerInfo.of(run);
+
+        JokerCard bull = run.getJokers().get(0), abstractJoker = run.getJokers().get(1);
+        check("Bull describes its current chips from money", bull.getSpec().stateOf(bull, info).contains("+20 Chips"));
+        check("Abstract describes its current mult from joker count",
+                abstractJoker.getSpec().stateOf(abstractJoker, info).contains("+6 Mult"));   // 3 x 2 jokers
+
+        // The whole point: describing a joker changes nothing. Snapshot the run's mutable numbers, describe
+        // every joker on the board, and confirm they are untouched — including the counters ON_HOVERED wrote.
+        int money = run.getMoney(), deck = run.getDeck().size();
+        int c0 = bull.getCounter(), c1 = abstractJoker.getCounter();
+        for (JokerCard j : run.getJokers()) j.getSpec().stateOf(j, info);
+        check("describing does not touch money", run.getMoney() == money);
+        check("describing does not touch the deck", run.getDeck().size() == deck);
+        check("describing does not touch counters", bull.getCounter() == c0 && abstractJoker.getCounter() == c1);
+
+        // The read-only view has no seam to the run: EMPTY yields a safe, run-free description.
+        Run erosionRun = new Run(0L);
+        erosionRun.board().add(Jokers.EROSION.make());
+        JokerCard erosion = erosionRun.getJokers().get(0);
+        check("Erosion describes from deck size", erosion.getSpec().stateOf(erosion, JokerInfo.of(erosionRun)).contains("Mult"));
+        check("a run-free description is safe (no NPE)", erosion.getSpec().stateOf(erosion, JokerInfo.EMPTY) != null);
+
+        // The four counter-jokers that were missing a tooltip now describe their accumulated value.
+        Run acc = new Run(0L);
+        acc.board().add(Jokers.WEE_JOKER.make());
+        JokerCard wee = acc.getJokers().get(0);
+        wee.addCounter(24);
+        check("Wee Joker shows its banked chips", wee.getSpec().stateOf(wee, JokerInfo.of(acc)).contains("+24 Chips"));
+
+        Run camp = new Run(0L);
+        camp.board().add(Jokers.CAMPFIRE.make());
+        JokerCard campfire = camp.getJokers().get(0);
+        check("Campfire shows its current Xmult", campfire.getSpec().stateOf(campfire, JokerInfo.of(camp)).contains("X1"));
     }
 
     private static long score(Run run, List<DeckCard> played) {

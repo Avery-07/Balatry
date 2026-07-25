@@ -15,7 +15,8 @@ public enum Trigger {
     ON_SOLD,
     ON_SPEND,
     ON_EARN,
-    ON_BOSS_DEFEATED,
-
-    ON_HOVERED // not implemented
+    ON_BOSS_DEFEATED
+    // No ON_HOVERED: hover is a local, per-seat, unlogged FX-thread event, so a firing trigger there could
+    // mutate one seat's model and desync the lockstep replay. A joker describes its current effect purely
+    // instead — see JokerSpec.state and model.game.player.JokerInfo.
 }

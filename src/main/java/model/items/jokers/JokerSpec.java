@@ -1,11 +1,13 @@
 package model.items.jokers;
 
+import model.game.player.JokerInfo;
 import model.game.scoring.Trigger;
 
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public final class JokerSpec {
@@ -18,7 +20,7 @@ public final class JokerSpec {
     private final CardRetrigger heldRetrigger;     // extra passes this joker grants a held card
     private final int debtAllowance;               // how far below $0 this joker lets the balance go
     private final int cost;                        // base shop price
-    private final Function<JokerCard, String> state;   // live-variable text for the tooltip, or null
+    private final BiFunction<JokerCard, JokerInfo, String> state;   // current-effect text for the tooltip, or null
 
     private JokerSpec(Builder b) {
         this.name = b.name;
@@ -34,16 +36,23 @@ public final class JokerSpec {
     }
 
     /**
-     * The live value this joker instance is playing with, as tooltip text — the counter given meaning. This
-     * exists because some jokers make a hidden pick (Mail-In Rebate's rank, The Idol's card) or accumulate a
-     * bonus (Ride the Bus) that the player cannot act on without seeing it. Specs that declared a state renderer
-     * get their own words; any other joker with a non-zero counter falls back to a bare "Value: n"; jokers with
-     * no live state return null and the tooltip shows nothing.
+     * This joker's current effect, as tooltip text — the counter or the board state given meaning. Some jokers
+     * make a hidden pick (Mail-In Rebate's rank) or accumulate a bonus (Ride the Bus) held in their counter;
+     * others recompute their effect from the run each hand (Erosion from deck size, Stone Joker from Stone cards)
+     * and need the read-only {@code info} to describe it. Specs that declared a descriptor get their own words;
+     * any other joker with a non-zero counter falls back to a bare "Value: n"; jokers with no live state return
+     * null and the tooltip shows nothing.
+     *
+     * <p>{@code info} is read-only by construction (see {@link JokerInfo}), so this can never mutate the model —
+     * which is what makes it safe to evaluate from a hover, where a mutating trigger would desync the seats.
      */
-    public String stateOf(JokerCard card) {
-        if (state != null) return state.apply(card);
+    public String stateOf(JokerCard card, JokerInfo info) {
+        if (state != null) return state.apply(card, info == null ? JokerInfo.EMPTY : info);
         return card.getCounter() != 0 ? "Value: " + card.getCounter() : null;
     }
+
+    /** Counter-only convenience: describes a joker whose state needs no run context (tests, previews). */
+    public String stateOf(JokerCard card) { return stateOf(card, JokerInfo.EMPTY); }
 
     public JokerEffect effectFor(Trigger t) {
         return effects.getOrDefault(t, JokerEffect.NO_OP);
@@ -71,12 +80,14 @@ public final class JokerSpec {
         private CardRetrigger heldRetrigger = CardRetrigger.NONE;
         private int debtAllowance = 0;
         private int cost = 0;
-        private Function<JokerCard, String> state;
+        private BiFunction<JokerCard, JokerInfo, String> state;
         private Builder(String name, Rarity rarity) { this.name = name; this.rarity = rarity; }
         /** Sets the human-readable effect text shown on hover (optional; defaults to none). */
         public Builder description(String d) { this.description = d; return this; }
-        /** Renders this joker's live variable for the tooltip (optional; see {@link JokerSpec#stateOf}). */
-        public Builder state(Function<JokerCard, String> s) { this.state = s; return this; }
+        /** Describes this joker's current effect from its counter alone (see {@link JokerSpec#stateOf}). */
+        public Builder state(Function<JokerCard, String> s) { this.state = (card, info) -> s.apply(card); return this; }
+        /** Describes this joker's current effect from its counter and a read-only view of the run. */
+        public Builder state(BiFunction<JokerCard, JokerInfo, String> s) { this.state = s; return this; }
         public Builder on(Trigger t, JokerEffect e) { effects.put(t, e); return this; }
         public Builder trait(JokerTrait... ts)          { for (JokerTrait t : ts) traits.add(t); return this; }
         public Builder retriggerPlayed(CardRetrigger r) { this.playedRetrigger = r; return this; }
