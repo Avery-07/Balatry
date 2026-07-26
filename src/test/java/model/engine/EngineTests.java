@@ -101,6 +101,24 @@ public final class EngineTests {
         List<Layout.Placement> one = Layout.fan(1, centerX, baseY, cardW, 24, 14, 18);
         near("a single card centers exactly", one.get(0).x() + cardW / 2, centerX);
         near("a single card is upright", one.get(0).rotationDeg(), 0);
+
+        slotLayout();
+    }
+
+    /** Layout.slots: the shared centered, count-scaled slot line used by every slot row. */
+    private static void slotLayout() {
+        double cx = 600, tileW = 54, gap = 8, maxW = 400;
+        check("no slots for an empty row", Layout.slots(0, cx, tileW, gap, maxW).length == 0);
+        near("a lone slot sits on the center", Layout.slots(1, cx, tileW, gap, maxW)[0], cx);
+
+        double[] few = Layout.slots(3, cx, tileW, gap, maxW);   // 3 tiles fit comfortably
+        near("a small row keeps the full gap step", few[1] - few[0], tileW + gap);
+        near("a small row is centered", (few[0] + few[2]) / 2, cx);
+
+        double[] many = Layout.slots(9, cx, tileW, gap, maxW);  // 9 tiles cannot fit at full gap → compress
+        check("a crowded row compresses below the full step", (many[1] - many[0]) < tileW + gap);
+        near("a crowded row stays within maxWidth", many[8] - many[0] + tileW, maxW);
+        near("a crowded row is still centered", (many[0] + many[8]) / 2, cx);
     }
 
     private static void hitTest() {

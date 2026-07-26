@@ -202,9 +202,11 @@ public record MatchSnapshot(
      * One offered option in an open pack, everything the client needs to pick it (every pick is used at once):
      * its display {@code label} (null once taken); {@code minTargets}, how many hand cards a targeted consumable
      * needs; and for a relic, {@code isRelic} plus its casting demands ({@code selector} — what it aims at, like a
-     * held relic's, and {@code needsSeat}) so the pick can derive the same target from the selection.
+     * held relic's, and {@code needsSeat}) so the pick can derive the same target from the selection. {@code
+     * description} is the card's authored effect text, for the hover tooltip; {@code id} is the card's stable id,
+     * so the client can ride each option on the same retained, draggable row the shop tiles use ({@code -1} once taken).
      */
-    public record PackOption(String label, int minTargets, boolean isRelic, String selector, boolean needsSeat) { }
+    public record PackOption(int id, String label, String description, int minTargets, boolean isRelic, String selector, boolean needsSeat) { }
 
     /** Shop contents for the local seat, present only during the shop phase. */
     public record ShopView(
@@ -445,18 +447,19 @@ public record MatchSnapshot(
         if (o == null) return null;
         List<PackOption> options = new ArrayList<>();
         for (Card c : o.getOptions()) {
-            if (c == null) { options.add(new PackOption(null, 0, false, "NONE", false)); continue; }
+            if (c == null) { options.add(new PackOption(-1, null, "", 0, false, "NONE", false)); continue; }
             String label = c instanceof DeckCard d ? describe(d) : nameOf(c);
+            String desc = descriptionOf(c);
             if (c instanceof model.items.relics.RelicCard rc) {
                 var spec = rc.getSpec();
                 boolean needsSeat = switch (spec.getKind()) {
                     case OPPONENT -> true;
                     case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false;
                 };
-                options.add(new PackOption(label, 0, true, spec.getSelector().name(), needsSeat));
+                options.add(new PackOption(c.id(), label, desc, 0, true, spec.getSelector().name(), needsSeat));
             } else {
                 int minTargets = c instanceof model.items.consumables.ConsumableCard cc ? cc.getSpec().getMinTargets() : 0;
-                options.add(new PackOption(label, minTargets, false, "NONE", false));
+                options.add(new PackOption(c.id(), label, desc, minTargets, false, "NONE", false));
             }
         }
         return new PackOpeningView(String.valueOf(o.getPack()), o.getPicksLeft(), options);
@@ -502,9 +505,16 @@ public record MatchSnapshot(
     private static String badgeOf(Card c) {
         List<String> parts = new ArrayList<>();
         if (c.getEdition() != null) parts.add(title(c.getEdition().name()));
+        String stickers = stickerText(c);
+        if (!stickers.isEmpty()) parts.add(stickers);
+        return String.join(" · ", parts);
+    }
+
+    /** A card's applied stickers as display text ("Eternal · Sticky $5"), empty when it has none. Any card may carry them. */
+    private static String stickerText(Card c) {
+        List<String> parts = new ArrayList<>();
         for (var sticker : c.getStickers().keySet()) {
-            if (sticker == model.modifiers.Sticker.STICKY)
-                parts.add("Sticky $" + c.getStickySellCost());
+            if (sticker == model.modifiers.Sticker.STICKY) parts.add("Sticky $" + c.getStickySellCost());
             else parts.add(title(sticker.name()));
         }
         return String.join(" · ", parts);
@@ -598,6 +608,8 @@ public record MatchSnapshot(
             if (c.getEnhancement() != null) sb.append('[').append(c.getEnhancement()).append(']');
             if (c.getSeal() != null) sb.append('{').append(c.getSeal()).append('}');
             if (c.getEdition() != null) sb.append('<').append(c.getEdition()).append('>');
+            String stickers = stickerText(c);   // already display-formatted; Fmt.cardTip shows it verbatim
+            if (!stickers.isEmpty()) sb.append('(').append(stickers).append(')');
             return sb.toString();
         }
         return String.valueOf(o);

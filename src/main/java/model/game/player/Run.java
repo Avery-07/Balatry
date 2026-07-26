@@ -46,6 +46,7 @@ public final class Run {
     private int money;
     private int lastInDebtSpend;   // dollars of the last spend made while below $0 (read by ON_SPEND)
     private boolean purchaseFree;  // transient: set true during a buy to waive its cost
+    private Card purchaseItem;     // transient: the card being bought, readable by ON_PURCHASE_PRICING jokers (Astronomer, Curator)
     private final Rng rng;
     private final PlayerStats stats = new PlayerStats();
     private final HandLevels handLevels = new HandLevels();
@@ -82,6 +83,7 @@ public final class Run {
     private int shuffleIndex;         // per-round shuffle salt (Nth shuffle on this run)
     private List<Card> consumableTargets = List.of();       // transient: the active consumable's selected cards
     private List<DeckCard> lastDiscarded = List.of();       // transient: cards of the discard currently being broadcast
+    private DeckCard destroyedCard;                          // transient: the card currently being broadcast to ON_CARD_DESTROYED
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
@@ -145,9 +147,11 @@ public final class Run {
     public int getLastInDebtSpend() { return lastInDebtSpend; }
 
     /** Transient per-purchase flags, driven by {@link Shop#buy} around the ON_PURCHASE_PRICING dispatch. */
-    public void beginPurchase()     { purchaseFree = false; }
+    public void beginPurchase(Card item) { purchaseFree = false; purchaseItem = item; }
     public void makePurchaseFree()  { purchaseFree = true; }
     public boolean isPurchaseFree() { return purchaseFree; }
+    /** The card being purchased right now (valid during the ON_PURCHASE_PRICING dispatch), or null outside a buy. */
+    public Card getPurchaseItem()   { return purchaseItem; }
     /** The joker board — all joker mutation goes through it; this view is unmodifiable. */
     public Board board() { return board; }
     /** Unmodifiable view of the joker board, in order (see {@link Board#view()}). */
@@ -206,17 +210,32 @@ public final class Run {
     public void beginOpening(PackOpening opening) {
         currentOpening = opening;
         packHand = (round == null && needsSelectionHand(opening)) ? dealPackHand() : List.of();
+        fire(Trigger.ON_PACK_OPENED);   // Hallucination: a chance at a free Tarot on any opened pack
     }
 
-    /** Whether {@code opening} offers a card that must be aimed at the hand — a targeted consumable or a card-selecting relic (Anathema, Miasma, Katabasis). The only reason to deal a temporary hand. */
+    /** Abandons the current opening via an explicit Skip (not the quiet end-of-phase cleanup), firing ON_PACK_SKIPPED (Red Joker). */
+    public void skipPack() {
+        if (currentOpening == null) return;
+        fire(Trigger.ON_PACK_SKIPPED);
+        clearOpening();
+    }
+
+    /**
+     * Whether opening {@code opening} outside a round should deal a temporary hand to aim cards at. Arcana and
+     * Spectral cards seal/enhance/convert cards you select — many without forcing a minimum in their spec (Medium,
+     * Talisman, Sigil…) — so those packs always get a hand; a Myth pack gets one only when it offers a card-selecting
+     * relic (Anathema, Miasma, Katabasis), since its other relics aim at a joker or nothing.
+     */
     private static boolean needsSelectionHand(PackOpening opening) {
-        for (Card c : opening.getOptions()) {
-            if (c instanceof ConsumableCard cc && cc.getSpec().getMinTargets() > 0) return true;
+        switch (opening.getPack().kind()) {
+            case ARCANA, SPECTRAL -> { return true; }
+            default -> { }
+        }
+        for (Card c : opening.getOptions())
             if (c instanceof RelicCard rc) switch (rc.getSpec().getSelector()) {
                 case RANK, SUIT, HAND_TYPE -> { return true; }
-                default -> { }   // JOKER_SLOT aims at a joker, NONE at nothing — no hand needed
+                default -> { }
             }
-        }
         return false;
     }
 
@@ -328,9 +347,15 @@ public final class Run {
         for (DeckCard c : cards) {
             deck.removeIf(d -> d == c);
             if (round != null) round.removeFromHand(c);
+            destroyedCard = c;
+            fire(Trigger.ON_CARD_DESTROYED);   // Canio grows on each card that breaks; the card is on getDestroyedCard
+            destroyedCard = null;
         }
         stats.recordCardsDestroyed(cards.size());
     }
+
+    /** The card currently being broadcast to {@link Trigger#ON_CARD_DESTROYED}, or null outside that fire. */
+    public DeckCard getDestroyedCard() { return destroyedCard; }
 
     // --- inventory: acquisition routing and slot accounting (NEGATIVE cards don't consume a slot) ---
 

@@ -140,8 +140,10 @@ public final class ScoringEngine {
             }
             case STONE -> s.addChips(50);
             case LUCKY -> {
-                if (run.roll(RngSource.LUCKY_MULT, 1, 5))   s.addMult(20);
-                if (run.roll(RngSource.LUCKY_MONEY, 1, 10)) run.addMoney(10);
+                boolean triggered = false;
+                if (run.roll(RngSource.LUCKY_MULT, 1, 5))   { s.addMult(20);  triggered = true; }
+                if (run.roll(RngSource.LUCKY_MONEY, 1, 10)) { run.addMoney(10); triggered = true; }
+                if (triggered) run.fire(Trigger.ON_LUCKY_TRIGGERED);   // Lucky Cat banks X0.25 per successful Lucky card
             }
             default -> { }   // WILD/STEEL/GOLD: nothing at scored time
         }

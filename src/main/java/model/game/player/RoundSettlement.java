@@ -71,7 +71,9 @@ public final class RoundSettlement {
             run.createConsumable(Tarots.THE_FOOL.spec());
         }
 
-        for (JokerCard joker : run.getJokers())
+        // Snapshot: an ON_ROUND_END effect may remove a joker (Gros Michel/Diet Cola self-destruct), so iterating
+        // the live board would concurrent-modify — mirror ScoringEngine.fireJokers and walk a copy.
+        for (JokerCard joker : java.util.List.copyOf(run.getJokers()))
             if (!joker.isDebuffed()) joker.trigger(Trigger.ON_ROUND_END, run);
 
         // Blue Seal -> Planet of round.getLastPlayedType(): pending the Planet catalog and Run.createConsumable.

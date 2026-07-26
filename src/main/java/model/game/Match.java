@@ -625,7 +625,7 @@ public final class Match {
             case Action.PickFromPack a  -> applyPick(run, a);
             case Action.SkipPack a      -> {
                 if (run.getCurrentOpening() == null) throw new IllegalStateException("no pack is open to skip");
-                run.clearOpening();   // abandons the remaining picks; the pack is gone either way
+                run.skipPack();   // fires ON_PACK_SKIPPED (Red Joker), then abandons the remaining picks
                 yield null;
             }
 

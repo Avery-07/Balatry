@@ -38,6 +38,17 @@ public final class Renderer {
         if (border != null) { g.setStroke(border); g.setLineWidth(bw); g.strokeRoundRect(x, y, w, h, arc, arc); }
     }
 
+    /** Runs {@code draw} rotated {@code deg} about {@code (cx,cy)} — lets a rectangular tile carry the same idle sway a card does. */
+    public void rotated(double cx, double cy, double deg, Runnable draw) {
+        if (deg == 0) { draw.run(); return; }
+        g.save();
+        g.translate(cx, cy);
+        g.rotate(deg);
+        g.translate(-cx, -cy);
+        draw.run();
+        g.restore();
+    }
+
     /** Centered text (both axes) at (x,y). */
     public void textCenter(String s, double x, double y, double size, Color c) { text(s, x, y, size, c, TextAlignment.CENTER, VPos.CENTER, false); }
     /** Top-left anchored text at (x,y). */

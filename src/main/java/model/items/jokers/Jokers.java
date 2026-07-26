@@ -115,7 +115,10 @@ public enum Jokers {
                 }
             })
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(self.getCounter()))),
-    RED_JOKER("Red Joker", Rarity.COMMON, 5, b -> b),
+    RED_JOKER("Red Joker", Rarity.COMMON, 5, b -> b
+            .state(self -> "Currently : +" + self.getCounter() + " Mult")
+            .on(Trigger.ON_PACK_SKIPPED, (run, self) -> self.addCounter(3))
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (self.getCounter() > 0) run.getScoring().addMult(self.getCounter()); })),
     FLASH_CARD("Flash Card", Rarity.UNCOMMON, 5, b -> b
             .state(self -> "Currently : +" + self.getCounter() + " mult")
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
@@ -415,7 +418,10 @@ public enum Jokers {
             (run, self) -> run.getScoring().multiplyMult(onePlus("0.2", deckCount(run, Enhancement.STEEL))))),
     GLASS_JOKER("Glass Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().multiplyMult(onePlus("0.75", run.getStats().getGlassDestroyed())))),
-    LUCKY_CAT("Lucky Cat", Rarity.UNCOMMON, 6, b -> b),
+    LUCKY_CAT("Lucky Cat", Rarity.UNCOMMON, 6, b -> b
+            .state(self -> "Currently : X" + onePlus("0.25", self.getCounter()) + " Mult")
+            .on(Trigger.ON_LUCKY_TRIGGERED, (run, self) -> self.addCounter(1))   // X0.25 (a quarter-unit) per success
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.25", self.getCounter())); })),
     MARBLE_JOKER("Marble Joker", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
             (run, self) -> {
                 DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);
@@ -458,7 +464,12 @@ public enum Jokers {
     // region Jokers 086-090 (missing : Smeared Joker, Four Fingers, Superposition, Shortcut, Oops! All 6s)
     SMEARED_JOKER("Smeared Joker", Rarity.UNCOMMON, 7, b -> b),
     FOUR_FINGERS("Four Fingers", Rarity.UNCOMMON, 7, b -> b),
-    SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b),
+    SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                HandType type = run.getScoring().getHand().type();
+                boolean straight = type == HandType.STRAIGHT || type == HandType.STRAIGHT_FLUSH;
+                boolean ace = run.getScoring().getScoringCards().stream().anyMatch(c -> c.getRank() == Rank.ACE);
+                if (straight && ace) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
+            })),
     SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b),
     OOPS_ALL_6S("Oops! All 6s", Rarity.UNCOMMON, 4, b -> b),
     // endregion
@@ -556,7 +567,10 @@ public enum Jokers {
                     (run, self) -> { if ((self.getCounter() + 1) % 4 == 0) run.makePurchaseFree(); })
             .on(Trigger.ON_BOUGHT,
                     (run, self) -> self.setCounter(self.getCounter() + 1))),
-    CURATOR("Curator", Rarity.UNCOMMON, 7, b -> b),
+    CURATOR("Curator", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_PURCHASE_PRICING, (run, self) -> {
+                if (run.getPurchaseItem() instanceof model.items.packs.BoosterPack p
+                        && p.kind() == model.items.packs.PackKind.STANDARD) run.makePurchaseFree();
+            })),
     // endregion
     // region Jokers 116-120 (missing : Copyright)
     COPYRIGHT("Copyright", Rarity.COMMON, 4, b -> b),
@@ -567,7 +581,12 @@ public enum Jokers {
                 for (Player p : m.getPlayers()) if (p.run() != run && p.run().getMoney() < run.getMoney()) return;
                 run.addMoney(6);   // no one is strictly poorer: this seat is (tied) poorest
             })),
-    ASTRONOMER("Astronomer", Rarity.UNCOMMON, 8, b -> b),
+    ASTRONOMER("Astronomer", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_PURCHASE_PRICING, (run, self) -> {
+                var item = run.getPurchaseItem();
+                boolean planet = item instanceof ConsumableCard c && c.getSpec().getType() == ConsumableType.PLANET;
+                boolean celestial = item instanceof model.items.packs.BoosterPack p && p.kind() == model.items.packs.PackKind.CELESTIAL;
+                if (planet || celestial) run.makePurchaseFree();
+            })),
     SPACE_JOKER("Space Joker", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> { if (run.roll(RngSource.MISC, 1, 4)) run.levelUpHand(run.getScoring().getHand().type()); })),
     CONSTELLATION("Constellation", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
@@ -579,7 +598,9 @@ public enum Jokers {
                 if (run.getStats().getDiscardsUsedThisRound() == 1 && !run.getLastDiscarded().isEmpty())
                     run.levelUpHand(new HandEvaluator().evaluate(run.getLastDiscarded()).type());
             })),
-    HALLUCINATION("Hallucination", Rarity.COMMON, 4, b -> b),
+    HALLUCINATION("Hallucination", Rarity.COMMON, 4, b -> b.on(Trigger.ON_PACK_OPENED, (run, self) -> {
+                if (run.roll(RngSource.MISC, 1, 2)) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
+            })),
     CARTOMANCER("Cartomancer", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
             (run, self) -> run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()))),
     FORTUNE_TELLER("Fortune Teller", Rarity.COMMON, 6, b -> b
@@ -648,7 +669,10 @@ public enum Jokers {
                 if(self.getCounter() == 0) run.destroyJoker(self);
             })
             .retriggerPlayed((run, self, card) -> 1)),
-    DIET_COLA("Diet Cola", Rarity.UNCOMMON, 6, b -> b),
+    DIET_COLA("Diet Cola", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_END, (run, self) -> {
+                run.grantTag(model.game.tags.SkipTag.DOUBLE_TAG);   // a Double Tag copies the next tag the seat takes
+                run.destroyJoker(self);
+            })),
     // endregion
     // region Jokers 136-140 (missing : Chef Joker)
     CHEF_JOKER("Chef Joker", Rarity.RARE, 8, b -> b), // TODO: Create an ON_JOKER_DESTROYED trigger, what counts as a food joker can be hardcoded :
@@ -786,7 +810,15 @@ public enum Jokers {
             })),
     // endregion
     // region Jokers 161-165 (missing : CANIO)
-    CANIO("Canio", Rarity.LEGENDARY, 20, b -> b),
+    CANIO("Canio", Rarity.LEGENDARY, 20, b -> b
+            .state(self -> "Currently : X" + onePlus("0.25", self.getCounter()) + " Mult")
+            .on(Trigger.ON_CARD_DESTROYED, (run, self) -> {
+                DeckCard c = run.getDestroyedCard();
+                if (c != null) self.addCounter(c.isFace() ? 4 : 1);   // +X1 per face card, +X0.25 per other (quarter-units)
+            })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.25", self.getCounter()));
+            })),
     YORICK("Yorick", Rarity.LEGENDARY, 20, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("1", run.getStats().getCardsDiscarded() / 23)))),
     TRIBOULET("Triboulet", Rarity.LEGENDARY, 20, b -> b

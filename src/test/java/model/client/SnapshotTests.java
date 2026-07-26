@@ -35,6 +35,7 @@ public final class SnapshotTests {
         readinessSnapshot();
         jokerStateSnapshot();
         editionLabelSnapshot();
+        stickerLabelSnapshot();
         deckAndLevelsSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
@@ -295,6 +296,19 @@ public final class SnapshotTests {
         MatchSnapshot s = MatchSnapshot.of(m, a);
         check("the edition reaches the hand label", s.hand().get(0).label().contains("<FOIL>"));
         check("plain cards stay plain", !s.hand().get(1).label().contains("<"));
+    }
+
+    /** A sticker on a playing card reaches its hand label too (so the hover tooltip can show it, like jokers/items). */
+    private static void stickerLabelSnapshot() {
+        Match m = Match.create(67L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        m.start();
+        Run run = m.getRun(a);
+        run.getRound().getHand().get(0).apply(model.modifiers.Sticker.ETERNAL);
+
+        MatchSnapshot s = MatchSnapshot.of(m, a);
+        check("the sticker reaches the hand label", s.hand().get(0).label().contains("(Eternal)"));
+        check("cards without stickers carry none", !s.hand().get(1).label().contains("("));
     }
 
     /** The deck-hover view and the play-preview table: spent cards grey out, hand levels price a play. */

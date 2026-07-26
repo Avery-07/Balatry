@@ -26,6 +26,7 @@ public final class ActionTests {
         shopAndPackActions();
         packUsesConsumablesImmediately();
         packSkip();
+        spectralPackDealsSelectionHand();
         boardAndChoiceActions();
         replayDeterminism();
 
@@ -128,6 +129,22 @@ public final class ActionTests {
         m.apply(new Action.SkipPack(a));
         check("SkipPack closes the opening", run.getCurrentOpening() == null);
         checkThrows("skipping with no pack open is rejected", () -> m.apply(new Action.SkipPack(a)));
+    }
+
+    /** A Spectral pack opened in the shop deals a temporary hand so its card-selecting picks (Medium, Talisman…) can be aimed. */
+    private static void spectralPackDealsSelectionHand() {
+        Match m = newMatch(206L);
+        m.start();
+        PlayerId a = m.getSeats().get(0);
+        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
+        m.toShop();
+        Run run = m.getRun(a);
+        check("no selection hand in the shop before opening", run.getSelectionHand().isEmpty());
+        run.grantPack(new BoosterPack(PackKind.SPECTRAL, PackSize.NORMAL));
+        m.apply(new Action.OpenPack(a, run.getPendingPacks().size() - 1));
+        check("a Spectral pack deals a selection hand", !run.getSelectionHand().isEmpty());
+        m.apply(new Action.SkipPack(a));
+        check("the selection hand clears when the pack closes", run.getSelectionHand().isEmpty());
     }
 
     private static int totalHandLevels(Run run) {

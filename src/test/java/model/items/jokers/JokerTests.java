@@ -32,6 +32,8 @@ public final class JokerTests {
         retriggerAndEconomy();
         specialTraits();
         currentEffectDescriptors();
+        newBalatryJokers();
+        newBalatryEventJokers();
 
         boardInvariants();
 
@@ -198,6 +200,88 @@ public final class JokerTests {
         camp.board().add(Jokers.CAMPFIRE.make());
         JokerCard campfire = camp.getJokers().get(0);
         check("Campfire shows its current Xmult", campfire.getSpec().stateOf(campfire, JokerInfo.of(camp)).contains("X1"));
+    }
+
+    /** Newly-wired stub jokers: Superposition creates a Tarot on an Ace-straight; Diet Cola self-destructs into a Double Tag. */
+    private static void newBalatryJokers() {
+        Run sup = new Run(0L);
+        sup.board().add(Jokers.SUPERPOSITION.make());
+        score(sup, List.of(
+                new DeckCard(Rank.TEN, Suit.SPADES), new DeckCard(Rank.JACK, Suit.HEARTS),
+                new DeckCard(Rank.QUEEN, Suit.CLUBS), new DeckCard(Rank.KING, Suit.DIAMONDS),
+                new DeckCard(Rank.ACE, Suit.SPADES)));
+        check("Superposition creates a Tarot on an Ace-straight", sup.getConsumables().size() == 1);
+
+        Run supNoAce = new Run(0L);
+        supNoAce.board().add(Jokers.SUPERPOSITION.make());
+        score(supNoAce, List.of(
+                new DeckCard(Rank.FIVE, Suit.SPADES), new DeckCard(Rank.SIX, Suit.HEARTS),
+                new DeckCard(Rank.SEVEN, Suit.CLUBS), new DeckCard(Rank.EIGHT, Suit.DIAMONDS),
+                new DeckCard(Rank.NINE, Suit.SPADES)));
+        check("Superposition ignores an Ace-less straight", supNoAce.getConsumables().isEmpty());
+
+        Run cola = new Run(0L);
+        cola.board().add(Jokers.DIET_COLA.make());
+        cola.getJokers().get(0).trigger(Trigger.ON_ROUND_END, cola);
+        check("Diet Cola self-destructs after a round", cola.getJokers().isEmpty());
+        check("Diet Cola leaves a Double Tag", cola.getPendingTags().contains(model.game.tags.SkipTag.DOUBLE_TAG));
+
+        // Astronomer: Planet cards (and Celestial packs) buy free; other items stay priced.
+        Run astro = new Run(0L);
+        astro.board().add(Jokers.ASTRONOMER.make());
+        astro.beginPurchase(new model.items.consumables.ConsumableCard(
+                model.items.consumables.Planets.random(new java.util.Random(1)).spec()));
+        astro.fire(Trigger.ON_PURCHASE_PRICING);
+        check("Astronomer makes a Planet free", astro.isPurchaseFree());
+
+        Run astroJoker = new Run(0L);
+        astroJoker.board().add(Jokers.ASTRONOMER.make());
+        astroJoker.beginPurchase(Jokers.JOKER.make());
+        astroJoker.fire(Trigger.ON_PURCHASE_PRICING);
+        check("Astronomer leaves a Joker priced", !astroJoker.isPurchaseFree());
+
+        // Curator: Standard packs buy free.
+        Run cur = new Run(0L);
+        cur.board().add(Jokers.CURATOR.make());
+        cur.beginPurchase(new model.items.packs.BoosterPack(
+                model.items.packs.PackKind.STANDARD, model.items.packs.PackSize.NORMAL));
+        cur.fire(Trigger.ON_PURCHASE_PRICING);
+        check("Curator makes a Standard Pack free", cur.isPurchaseFree());
+    }
+
+    /** Stub jokers wired to new engine events: Canio (card destroyed), Red Joker (pack skipped), Lucky Cat (lucky triggered), Hallucination (pack opened). */
+    private static void newBalatryEventJokers() {
+        // Canio: +X1 per destroyed face card, +X0.25 per other (quarter-units), applied on the next hand.
+        Run canioRun = new Run(0L);
+        canioRun.board().add(Jokers.CANIO.make());
+        JokerCard canio = canioRun.getJokers().get(0);
+        canioRun.destroyDeckCards(List.of(new DeckCard(Rank.KING, Suit.SPADES), new DeckCard(Rank.FIVE, Suit.HEARTS)));
+        check("Canio banks X1 (face) + X0.25 (other) as quarter-units", canio.getCounter() == 5);
+        checkScore("Canio applies its banked Xmult", score(canioRun, kings()), 135);   // (10+20) x (2 x 2.25)
+
+        // Red Joker: +3 Mult per skipped pack.
+        Run red = new Run(0L);
+        JokerCard redJoker = Jokers.RED_JOKER.make();
+        red.board().add(redJoker);
+        redJoker.trigger(Trigger.ON_PACK_SKIPPED, red);
+        checkScore("Red Joker banks +3 Mult per skipped pack", score(red, ace()), 64);   // (5+11) x (1+3)
+
+        // Lucky Cat: X0.25 per successful Lucky trigger.
+        Run lucky = new Run(0L);
+        JokerCard cat = Jokers.LUCKY_CAT.make();
+        lucky.board().add(cat);
+        cat.trigger(Trigger.ON_LUCKY_TRIGGERED, lucky);
+        checkScore("Lucky Cat banks X0.25 per Lucky trigger", score(lucky, kings()), 75);   // (10+20) x (2 x 1.25)
+
+        // Hallucination: a 1-in-2 chance at a Tarot each pack open — over many opens, some land, all Tarots.
+        Run halluc = new Run(0L);
+        halluc.setConsumableSlots(20);
+        JokerCard h = Jokers.HALLUCINATION.make();
+        halluc.board().add(h);
+        for (int i = 0; i < 20; i++) h.trigger(Trigger.ON_PACK_OPENED, halluc);
+        boolean allTarots = halluc.getConsumables().stream()
+                .allMatch(c -> c.getSpec().getType() == model.items.consumables.ConsumableType.TAROT);
+        check("Hallucination creates Tarots on pack open", !halluc.getConsumables().isEmpty() && allTarots);
     }
 
     private static long score(Run run, List<DeckCard> played) {

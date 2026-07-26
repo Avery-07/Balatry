@@ -176,7 +176,7 @@ public final class Shop {
     /** Charges {@code price} in three steps: price (ON_PURCHASE_PRICING may grant a free purchase), validate affordability, then pay and fire ON_BOUGHT. */
     private void charge(int price, Card item) {
         requirePurchaseAllowance();
-        run.beginPurchase();
+        run.beginPurchase(item);
         run.fire(Trigger.ON_PURCHASE_PRICING);
         // Wrath: a banked grant makes the next joker free — peeked here, consumed only on completion.
         boolean wrathGrant = !run.isPurchaseFree() && item instanceof JokerCard

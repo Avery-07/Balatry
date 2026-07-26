@@ -24,6 +24,24 @@ public final class Layout {
     public record Placement(double x, double y, double rotationDeg) { }
 
     /**
+     * Slot centers for a centered, count-scaled row — the one "a tile's position depends on how many there are"
+     * rule shared by every slot line (jokers, consumables, the shop shelves, a pack's cards, the deck-hover view).
+     * The {@code n} tiles are centered on {@code centerX}; they sit a full {@code gap} apart until the row would
+     * exceed {@code maxWidth}, past which the step shrinks so they overlap evenly and always fit. Returns the
+     * center x of each slot (a single tile sits exactly on {@code centerX}); pure, so the spacing is unit-tested.
+     */
+    public static double[] slots(int n, double centerX, double tileW, double gap, double maxWidth) {
+        double[] xs = new double[Math.max(0, n)];
+        if (n <= 0) return xs;
+        if (n == 1) { xs[0] = centerX; return xs; }
+        double step = Math.min(tileW + gap, (maxWidth - tileW) / (n - 1));
+        double rowW = tileW + step * (n - 1);
+        double firstCenter = centerX - rowW / 2 + tileW / 2;
+        for (int i = 0; i < n; i++) xs[i] = firstCenter + i * step;
+        return xs;
+    }
+
+    /**
      * A hand of {@code n} cards centered on {@code centerX}, resting with their bottoms near {@code baseY},
      * each {@code cardW} wide and overlapping its neighbour by {@code overlap}px. Cards tilt from
      * {@code -maxSpreadDeg/2} to {@code +maxSpreadDeg/2}, and the middle of the hand lifts up to {@code arcLift}px

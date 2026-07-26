@@ -98,6 +98,8 @@ public final class GameClient extends Application {
                 ui.shopSlotRow.advance(dt);
                 ui.shopVoucherRow.advance(dt);
                 ui.shopPackRow.advance(dt);
+                ui.packRow.advance(dt);
+                ui.now += dt;   // shared idle clock for the tile sway/bob
                 boolean wasPlaying = ui.reel.playing();
                 ui.reel.advance(dt);
                 if (wasPlaying && !ui.reel.playing()) hand.releaseStaged();   // reel drained: let the cards fly
@@ -125,6 +127,7 @@ public final class GameClient extends Application {
     private record DragTarget(TileRow row, java.util.function.BooleanSupplier active, Drop onDrop) { }
 
     private List<DragTarget> dragTargets;   // built in start(), once ui exists
+    private DragTarget packDrag;            // the open pack's card row — draggable only while the modal is up, lands nowhere
 
     private double pressX, pressY;
     private boolean pressOnHand;
@@ -142,14 +145,19 @@ public final class GameClient extends Application {
                 new DragTarget(ui.shopSlotRow, () -> ui.s.inShop(), NOWHERE),
                 new DragTarget(ui.shopVoucherRow, () -> ui.s.inShop(), NOWHERE),
                 new DragTarget(ui.shopPackRow, () -> ui.s.inShop(), NOWHERE));
+        packDrag = new DragTarget(ui.packRow, () -> true, NOWHERE);   // handled specially: only during a pack opening
     }
 
     /** Records what the press landed on; nothing moves until the cursor travels past the threshold. */
     private void handlePress(double x, double y) {
         pressX = x; pressY = y;
         pressOnHand = false; pressTarget = null;
-        if (!inMatch() || ui.s == null || ui.s.opening() != null || ui.showRunInfo || ui.atBlindBarrier()) return;
+        if (!inMatch() || ui.s == null || ui.showRunInfo || ui.atBlindBarrier()) return;
 
+        if (ui.s.opening() != null) {   // during a pack, only its cards lift & glide; options and the hand are click-only
+            if (ui.packRow.tileAt(x, y) != -1) pressTarget = packDrag;
+            return;
+        }
         if (ui.s.phase() == MatchPhase.BLIND && hand.cardAt(x, y) != null) { pressOnHand = true; return; }
         for (DragTarget t : dragTargets)
             if (t.active().getAsBoolean() && t.row().tileAt(x, y) != -1) { pressTarget = t; return; }
@@ -353,10 +361,11 @@ public final class GameClient extends Application {
 
         hud.render(ui);
         boolean blindWait = ui.atBlindBarrier();   // this seat is done with the blind, waiting on the others
+        if (ui.s.opening() == null) ui.packSel = -1;   // no pack open: drop any stale preview selection
         if (ui.s.opening() != null) {
             overlays.pack(ui);   // the pack panel sits up top until its picks are spent
             if (!ui.s.hand().isEmpty())   // a targeted pick needs the hand shown below the panel to aim at
-                ui.hand.render(ui, cx, cTop, cW, cH);
+                ui.hand.render(ui, 0, cTop, Ui.W, cH);   // centered on the screen, under the pack panel — not the play-area center
         } else if (blindWait && ui.blindSkipped()) {
             // Skipped: the seat stays on the blind-selection tiles (read-only) behind the popup, not the board.
             screens.get(MatchPhase.SELECTION).render(ui, cx, cTop, cW, cH);

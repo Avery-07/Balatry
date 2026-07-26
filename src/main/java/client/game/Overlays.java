@@ -143,10 +143,10 @@ final class Overlays {
         r.gc().setFill(Color.web("#040a08", 0.62)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
         // Sits below the top joker/consumable row and above the hand, so both stay visible and selectable for a
         // targeted pick (hand cards for tarots/relic rank-suit-hand, a joker for Katadesmos).
-        double pw = 760, ph = 300, px = (Ui.W - pw) / 2, py = Ui.PAD + Ui.SLOT_H + 14;
+        double pw = 760, ph = 340, px = (Ui.W - pw) / 2, py = Ui.PAD + Ui.SLOT_H + 14;
         r.panel(px, py, pw, ph, Color.web("#241a3a"), PURPLE, 14, 3);
-        r.textCenterBold(p.packName(), px + pw / 2, py + 28, 22, ORANGE);
-        r.textCenter("Choose " + p.picksLeft() + " — used immediately", px + pw / 2, py + 54, 14, DIM);
+        r.textCenterBold(p.packName(), px + pw / 2, py + 26, 22, ORANGE);
+        r.textCenter("Choose " + p.picksLeft() + " — click a card to preview, then Use", px + pw / 2, py + 50, 13, DIM);
 
         // Skip abandons the rest of the picks (Balatro-style) — registered as a pack button so the modal routes it.
         double skW = 92, skH = 34, skX = px + pw - skW - 16, skY = py + 12;
@@ -154,38 +154,86 @@ final class Overlays {
         r.textCenterBold("Skip", skX + skW / 2, skY + skH / 2, 14, INK);
         ui.packButtons.add(new Ui.Btn(new Layout.Rect(skX, skY, skW, skH), () -> ui.vm.skipPack()));
 
-        int selected = ui.hand.selectedModelIndices(ui.s.hand()).size();
         int n = p.options().size();
-        double ow = 110, gap = 16, total = n * ow + Math.max(0, n - 1) * gap;
-        double ox = px + (pw - total) / 2, oy = py + 88, oh = 168;
+        if (ui.packSel >= n || (ui.packSel >= 0 && p.options().get(ui.packSel).label() == null)) ui.packSel = -1;
+        int selected = ui.hand.selectedModelIndices(ui.s.hand()).size();
+
+        // The offered cards ride the same retained, count-scaled, draggable row the shop shelves use: a taken option
+        // is a static "(taken)" hole, live ones lift and glide. Click previews (packSel); the Use button commits.
+        double tw = 108, th = 130, oy = py + 72, tileCY = oy + th / 2;
+        double[] all = Layout.slots(n, px + pw / 2, tw, 12, pw - 48);
+        List<Integer> liveIds = new ArrayList<>();
+        List<Double> liveX = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             MatchSnapshot.PackOption opt = p.options().get(i);
-            double x = ox + i * (ow + gap);
             if (opt.label() == null) {
-                r.panel(x, oy, ow, oh, Color.web("#00000040"), EDGE, 8, 2);
-                r.textCenter("(taken)", x + ow / 2, oy + oh / 2, 11, FAINT);
+                r.panel(all[i] - tw / 2, oy, tw, th, Color.web("#00000040"), EDGE, 8, 2);
+                r.textCenter("(taken)", all[i], tileCY, 11, FAINT);
                 continue;
             }
-            boolean ready = optionReady(ui, opt, selected);
-            String need = optionNeed(opt);
-            r.panel(x, oy, ow, oh, Color.web("#2b2c30"), ready ? EDGE : Color.web("#5a4a2a"), 8, 2);
-            r.textCenter(opt.label(), x + ow / 2, oy + oh / 2, 11, INK);
-            if (!need.isEmpty())   // a targeted pick tells you what it wants and whether it is satisfied
-                r.textCenter(need, x + ow / 2, oy + oh - 14, 10, ready ? GREEN : ORANGE);
-            int idx = i;
-            ui.packButtons.add(new Ui.Btn(new Layout.Rect(x, oy, ow, oh), () -> pickOption(ui, idx, opt)));
+            liveIds.add(opt.id()); liveX.add(all[i]);
         }
-        String hint = anyTargeted(p) ? "Select cards (or a joker), then choose — or Skip the rest."
-                                     : "Choose your pick(s) — used at once — or Skip the rest.";
-        r.textCenter(hint, px + pw / 2, py + ph - 18, 11, FAINT);
+        ui.packRow.reconcile(liveIds);
+        double[] xs = new double[liveX.size()];
+        for (int i = 0; i < xs.length; i++) xs[i] = liveX.get(i);
+        ui.packRow.layout(xs, tileCY);
+
+        for (int pass = 0; pass < 2; pass++)   // pass 0 the settled tiles, pass 1 the dragged one on top
+            for (int i = 0; i < n; i++) {
+                MatchSnapshot.PackOption opt = p.options().get(i);
+                boolean held = ui.packRow.isDragged(opt.id());
+                if (opt.label() == null || held != (pass == 1)) continue;
+                double bob = held ? 0 : client.engine.Idle.bobPx(ui.now, opt.id(), 1.6);
+                double sway = held ? 0 : client.engine.Idle.swayDeg(ui.now, opt.id(), 1.4);
+                double tx = ui.packRow.x(opt.id()) - tw / 2, ty = ui.packRow.y(opt.id()) - th / 2 + bob;
+                boolean chosen = ui.packSel == i;
+                Layout.Rect rr = new Layout.Rect(tx, ty, tw, th);
+                r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // the same idle sway/bob a card carries
+                    r.panel(tx, ty, tw, th, Color.web("#2b2c30"), chosen ? ORANGE : EDGE, 8, chosen ? 3 : 2);
+                    r.textCenterBold(opt.label(), tx + tw / 2, ty + th / 2, 12, INK);
+                });
+                ui.tip(rr, packTip(opt));   // hover explains the card
+                int idx = i;
+                ui.packButtons.add(new Ui.Btn(rr, () -> ui.packSel = idx));   // click previews; never commits
+            }
+
+        // The selected option's Use button, so a pick is a deliberate two-step (no accidental close). The effect
+        // text is not repeated here — the hover tooltip already shows it.
+        if (ui.packSel >= 0) {
+            MatchSnapshot.PackOption opt = p.options().get(ui.packSel);
+            double dy = oy + th + 16;
+            r.textCenterBold(opt.label(), px + pw / 2, dy, 14, ORANGE);
+            String need = optionNeed(opt);
+            boolean ready = optionReady(ui, opt, selected);
+            if (!need.isEmpty()) r.textCenter(need, px + pw / 2, dy + 22, 11, ready ? GREEN : ORANGE);
+            // Drawn and registered as a pack button (not ui.button) because only packButtons are live during the modal.
+            String verb = opt.isRelic() || opt.minTargets() > 0 ? "Use" : "Take";
+            double bw = 120, bh = 36, bx = px + pw / 2 - bw / 2, by = py + ph - 52;
+            r.panel(bx, by, bw, bh, ready ? ORANGE : Color.web("#3a3a3a"), ready ? ORANGE.darker() : EDGE, 8, 2);
+            r.textCenterBold(verb, bx + bw / 2, by + bh / 2, 14, ready ? DARK : DIM);
+            int sel = ui.packSel;
+            ui.packButtons.add(new Ui.Btn(new Layout.Rect(bx, by, bw, bh), () -> pickOption(ui, sel, opt)));
+        } else {
+            r.textCenter("Click a card to see what it does.", px + pw / 2, py + ph - 30, 12, FAINT);
+        }
     }
 
-    /** Routes a pack pick: a relic derives its target from the selection (like a held relic), a targeted consumable passes its selected cards. */
+    /** A pack option's hover text: name, effect, and what a targeted pick still needs. */
+    private static String packTip(MatchSnapshot.PackOption o) {
+        StringBuilder t = new StringBuilder(o.label());
+        if (!o.description().isEmpty()) t.append('\n').append(o.description());
+        String need = optionNeed(o);
+        if (!need.isEmpty()) t.append('\n').append(need);
+        return t.toString();
+    }
+
+    /** Commits the previewed pick: a relic derives its target from the selection (like a held relic), a targeted consumable passes its selected cards. */
     private void pickOption(Ui ui, int idx, MatchSnapshot.PackOption opt) {
         if (opt.isRelic()) {
             RelicTarget t = relicTargetFromSelection(ui, opt.selector(), opt.needsSeat(), opt.label());
             if (t == null) return;   // relicTargetFromSelection set the hint
             ui.vm.pickFromPack(idx, t, List.of());
+            ui.packSel = -1;
             return;
         }
         if (ui.hand.selectedModelIndices(ui.s.hand()).size() < opt.minTargets()) {
@@ -194,6 +242,7 @@ final class Overlays {
             return;
         }
         ui.vm.pickFromPack(idx, null, ui.hand.selectedModelIndices(ui.s.hand()));
+        ui.packSel = -1;
     }
 
     /** The short "what this pick still needs" label under an option tile, or empty when it is ready to take as-is. */
@@ -215,13 +264,6 @@ final class Overlays {
             case "JOKER_SLOT"                -> ui.jokerTarget >= 0;
             default                          -> !o.needsSeat();
         };
-    }
-
-    /** Whether any still-available option needs a selection before it can be taken (drives the pack's hint line). */
-    private static boolean anyTargeted(MatchSnapshot.PackOpeningView p) {
-        for (MatchSnapshot.PackOption o : p.options())
-            if (o.label() != null && !optionNeed(o).isEmpty()) return true;
-        return false;
     }
 
     /**

@@ -48,8 +48,9 @@ public final class Fmt {
     }
 
     /**
-     * A hand card's hover text from its snapshot label ({@code KING-HEARTS[GOLD]{RED}<FOIL>}): the readable
-     * title, then one line per extra — enhancement in brackets, seal in braces, edition in angle brackets.
+     * A hand card's hover text from its snapshot label ({@code KING-HEARTS[GOLD]{RED}<FOIL>(Eternal · Sticky $5)}):
+     * the readable title, then one line per extra — enhancement in brackets, seal in braces, edition in angle
+     * brackets, and any stickers (already display-formatted) in parentheses.
      */
     static String cardTip(String label, int rankOrd, int suitOrd) {
         StringBuilder tip = new StringBuilder(cardTitle(rankOrd, suitOrd));
@@ -59,6 +60,8 @@ public final class Fmt {
         if (c >= 0 && ce > c) tip.append('\n').append(title(label.substring(c + 1, ce))).append(" seal");
         int d = label.indexOf('<'), de = label.indexOf('>');
         if (d >= 0 && de > d) tip.append('\n').append(title(label.substring(d + 1, de))).append(" edition");
+        int e = label.indexOf('('), ee = label.indexOf(')');
+        if (e >= 0 && ee > e) tip.append('\n').append(label.substring(e + 1, ee));   // stickers, already formatted
         return tip.toString();
     }
 

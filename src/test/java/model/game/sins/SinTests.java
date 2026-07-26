@@ -596,6 +596,8 @@ public final class SinTests {
 
         checkInt("two extra items land in the card/pack rows",
                 shopA.getSlotCount() + shopA.getPackCount(), 3 + 3 + LustModifier.EXTRA_ITEMS);
+        checkInt("the card row gains exactly one (capped)", shopA.getSlotCount(), 3 + 1);
+        checkInt("the pack row gains exactly one (capped)", shopA.getPackCount(), 3 + 1);
         checkInt("the voucher row never grows", shopA.getVoucherCount(), 2);
         check("seats grow the same shape",
                 shopA.getSlotCount() == shopB.getSlotCount() && shopA.getPackCount() == shopB.getPackCount());

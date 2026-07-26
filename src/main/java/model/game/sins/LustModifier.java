@@ -1,22 +1,19 @@
 package model.game.sins;
 
-import model.game.Match;
 import model.game.player.Run;
-import model.game.rng.Rng;
-import model.game.rng.RngSource;
 import model.game.scoring.HandType;
 import model.game.shop.ShopSetup;
 
 import java.math.BigDecimal;
 
 /** Lust: each unique hand type played this round grants +0.5x to the final score of later hands (the
- * unlocking hand excluded; resets every round), and shops gain {@value #EXTRA_ITEMS} extra card/pack-row
- * items (table-seeded, mirrored) with a one-purchase-per-roll cap. */
+ * unlocking hand excluded; resets every round), and shops gain {@value #EXTRA_ITEMS} extra items — one in the
+ * card row and one in the pack row, capped so Lust never floods a single shelf — with a one-purchase-per-roll cap. */
 public final class LustModifier implements SinModifier {
 
     /** The per-unlocked-type score bonus. */
     static final BigDecimal STEP = new BigDecimal("0.5");
-    /** How many extra items each Lust shop carries. */
+    /** How many extra items each Lust shop carries (one card, one pack). */
     public static final int EXTRA_ITEMS = 2;
 
     @Override
@@ -29,16 +26,12 @@ public final class LustModifier implements SinModifier {
 
     @Override
     public void configureShop(Run run, ShopSetup setup) {
-        Match match = run.getMatch();
-        if (match != null) {
-            // Table-level rolls salted by (ante, blind): every seat derives the same row split, keeping shops
-            // mirrored. Each extra item lands in the card or pack row - never the voucher row.
-            long salt = Rng.combine(match.getAnte(), match.getBlind().ordinal());
-            for (int i = 0; i < EXTRA_ITEMS; i++) {
-                boolean pack = match.getRng().nextInt(RngSource.LUST_SHOP_EXTRAS, Rng.combine(salt, i), 2) == 1;
-                if (pack) setup.addPacks(1);
-                else setup.addSlots(1);
-            }
+        // One extra card and one extra pack — each row capped at a single Lust extra, so it enriches both shelves
+        // without flooding either (the voucher row never grows). The split is fixed, so it is mirrored across seats
+        // by construction and needs no roll.
+        if (run.getMatch() != null) {
+            setup.addSlots(1);
+            setup.addPacks(1);
         }
         setup.setMaxPurchasesPerReroll(1);
     }

@@ -34,6 +34,8 @@ final class Ui {
     String selKind;                                    // currently-selected item's kind, or null
     int selIndex;
     int jokerTarget = -1;                              // targeted joker index (Sell / Katadesmos), -1 = none
+    int packSel = -1;                                  // selected pack option (previewed, not yet taken), -1 = none
+    double now;                                        // frame clock (seconds), advanced by GameClient; drives the shared idle sway/bob
     Runnable onLeaveMatch = () -> { };                 // set by GameClient: quit the match and return to the menu
 
     double mouseX = -1, mouseY = -1;                   // last mouse position, canvas coordinates
@@ -46,6 +48,7 @@ final class Ui {
     final TileRow shopSlotRow   = new TileRow(108, 130);   // shop drags have nowhere to land; they lift and glide home
     final TileRow shopVoucherRow = new TileRow(108, 130);
     final TileRow shopPackRow   = new TileRow(108, 130);
+    final TileRow packRow       = new TileRow(108, 130);   // a pack's offered cards: shop-style tiles that lift and glide too
 
     // --- scoring animation ---------------------------------------------------
     // The reel walks the snapshot's lastPlay() timeline one beat at a time; scorePop tells whichever card owns

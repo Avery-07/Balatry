@@ -185,14 +185,14 @@ final class Hud {
         MatchSnapshot s = ui.s;
         double tileW = 54, tileH = Ui.SLOT_H - 30, tileCY = y + 22 + tileH / 2;
 
-        // Jokers: a retained, draggable row — reconcile by card id, lay slots out, draw at animated positions.
+        // Jokers: a retained, draggable row — reconcile by card id, lay slots out, draw at animated positions. The
+        // slots are centered and count-scaled (Layout.slots) within a left zone, so the row spreads and compresses
+        // with its size instead of marching from a fixed origin — the deck-hover rule, shared by every slot line.
         r.textLeftBold(s.jokerSlotsUsed() + "/" + s.jokerSlotsMax(), x, y, 18, INK);
         List<Integer> jokerIds = new ArrayList<>();
         for (MatchSnapshot.JokerView jv : s.jokers()) jokerIds.add(jv.id());
         ui.jokerRow.reconcile(jokerIds);
-        double[] jokerSlots = new double[jokerIds.size()];
-        for (int j = 0; j < jokerSlots.length; j++) jokerSlots[j] = x + tileW / 2 + j * 62;
-        ui.jokerRow.layout(jokerSlots, tileCY);
+        ui.jokerRow.layout(Layout.slots(jokerIds.size(), x + w * 0.32, tileW, 8, w * 0.60), tileCY);
 
         // Pass 0 draws the settled tiles (with their idle bob), pass 1 the held one on top of everything.
         for (int pass = 0; pass < 2; pass++)
@@ -202,15 +202,12 @@ final class Hud {
                 drawJokerTile(ui, jv, j, tileW, tileH, pass == 0 ? client.engine.Idle.bobPx(time, j, 1.6) : 0);
             }
 
-        // Consumables/relics: same treatment, right-aligned (slot i's center ascends left→right in model order).
+        // Consumables/relics: same treatment, centered and count-scaled within a right zone (model order left→right).
         r.textLeftBold(s.consumableSlotsUsed() + "/" + s.consumableSlotsMax(), x + w - 40, y, 18, INK);
         List<Integer> itemIds = new ArrayList<>();
         for (MatchSnapshot.ItemView it : s.inventory()) itemIds.add(it.id());
         ui.itemRow.reconcile(itemIds);
-        double[] itemSlots = new double[itemIds.size()];
-        for (int i = 0; i < itemSlots.length; i++)
-            itemSlots[i] = x + w - 54 + tileW / 2 - (itemSlots.length - 1 - i) * 62;
-        ui.itemRow.layout(itemSlots, tileCY);
+        ui.itemRow.layout(Layout.slots(itemIds.size(), x + w * 0.84, tileW, 8, w * 0.30), tileCY);
 
         for (int pass = 0; pass < 2; pass++)
             for (int i = 0; i < s.inventory().size(); i++) {
@@ -229,13 +226,17 @@ final class Hud {
                 ui.jokerRow.y(jv.id()) - h / 2 + bob - 10 * pop, w, h);
         ui.noteSourceRect(jv.id(), rr);
         tileW = w; tileH = h;
-        // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
-        mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
-        if (!jv.badge().isEmpty()) {
-            r.panel(rr.x(), rr.y() + rr.h() - 16, rr.w(), 16, Color.web("#000a"), null, 6, 0);
-            r.textCenter(jv.badge(), rr.centerX(), rr.y() + rr.h() - 8, 8, GOLD);
-        }
-        if (index == ui.jokerTarget) r.panel(rr.x() - 3, rr.y() - 3, rr.w() + 6, rr.h() + 6, null, ORANGE, 10, 3);
+        // The same idle sway a card carries; the held tile follows the cursor instead, so it never sways.
+        double sway = ui.jokerRow.isDragged(jv.id()) ? 0 : client.engine.Idle.swayDeg(ui.now, jv.id(), 1.4);
+        r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
+            // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
+            mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
+            if (!jv.badge().isEmpty()) {
+                r.panel(rr.x(), rr.y() + rr.h() - 16, rr.w(), 16, Color.web("#000a"), null, 6, 0);
+                r.textCenter(jv.badge(), rr.centerX(), rr.y() + rr.h() - 8, 8, GOLD);
+            }
+            if (index == ui.jokerTarget) r.panel(rr.x() - 3, rr.y() - 3, rr.w() + 6, rr.h() + 6, null, ORANGE, 10, 3);
+        });
         ui.jokerSel.add(new Ui.Sel(rr, "joker", index));
         ui.tip(rr, jokerTip(jv));
     }
@@ -243,7 +244,8 @@ final class Hud {
     private void drawItemTile(Ui ui, MatchSnapshot.ItemView it, int index, double tileW, double tileH, double bob) {
         Renderer r = ui.r;
         Layout.Rect rr = new Layout.Rect(ui.itemRow.x(it.id()) - tileW / 2, ui.itemRow.y(it.id()) - tileH / 2 + bob, tileW, tileH);
-        mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
+        double sway = ui.itemRow.isDragged(it.id()) ? 0 : client.engine.Idle.swayDeg(ui.now, it.id(), 1.4);
+        r.rotated(rr.centerX(), rr.centerY(), sway, () -> mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label())));
         ui.selectables.add(new Ui.Sel(rr, "item", index));
         ui.tip(rr, itemTip(it));
     }
