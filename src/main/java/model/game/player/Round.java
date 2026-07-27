@@ -1,6 +1,7 @@
 package model.game.player;
 
 import model.items.DeckCard;
+import model.items.jokers.JokerTrait;
 import model.game.BossBlind;
 import model.game.bosses.SharedDiscardPool;
 import model.game.rng.RngSource;
@@ -22,7 +23,6 @@ public final class Round {
     private static final ScoringEngine ENGINE = new ScoringEngine();
 
     private final Run run;
-    private final HandEvaluator evaluator = new HandEvaluator();   // vanilla; will later be derived from run.getJokers()
     private final long target;
     private final int handSize;
     private final List<DeckCard> drawPile = new ArrayList<>();
@@ -58,6 +58,17 @@ public final class Round {
         Stickers.beginRound(run);   // Delayed jokers sit out the round's first hand
     }
 
+    /** A hand evaluator configured by the run's owned jokers: Four Fingers (4-card flush/straight), Shortcut (gap straights), Smeared (merged suits), Splash (all cards score). */
+    private static HandEvaluator evaluatorFor(Run run) {
+        boolean fourFingers = run.hasActiveTrait(JokerTrait.FOUR_FINGERS);
+        return new HandEvaluator(
+                fourFingers ? 4 : 5,
+                fourFingers ? 4 : 5,
+                run.hasActiveTrait(JokerTrait.SHORTCUT) ? 1 : 0,
+                run.hasActiveTrait(JokerTrait.SMEARED),
+                run.hasActiveTrait(JokerTrait.SPLASH));
+    }
+
     /** Plays 1-5 cards from the hand: evaluates, scores, banks, removes them, redraws, and updates the outcome. */
     public PlayResult play(List<DeckCard> cards) {
         requireInProgress();
@@ -66,7 +77,7 @@ public final class Round {
 
         Stickers.beforeHand(run, handsPlayedThisRound);   // Floating jokers drift before anything reads the board
 
-        HandEvaluation eval = evaluator.evaluate(cards);
+        HandEvaluation eval = evaluatorFor(run).evaluate(cards);
         HandType type = eval.type();
 
         BossBlind boss = run.effectiveBoss();

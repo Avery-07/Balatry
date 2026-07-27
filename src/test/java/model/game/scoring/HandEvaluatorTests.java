@@ -90,6 +90,24 @@ public final class HandEvaluatorTests {
         check("4-card flush is NOT a flush at threshold 5", vanilla, fourSpades, HandType.HIGH_CARD, 1);
         check("4-card flush IS a flush at threshold 4", new HandEvaluator(4, 4), fourSpades, HandType.FLUSH, 5);
 
+        // Shortcut: straights may skip a single rank per step. 2-4-6-8-10 runs only with a gap of 1.
+        List<DeckCard> gapped = hand(card(Rank.TWO, Suit.SPADES), card(Rank.FOUR, Suit.HEARTS),
+                card(Rank.SIX, Suit.DIAMONDS), card(Rank.EIGHT, Suit.CLUBS), card(Rank.TEN, Suit.SPADES));
+        check("gapped run is not a vanilla straight", vanilla, gapped, HandType.HIGH_CARD, 1);
+        check("Shortcut makes a gapped run a straight", new HandEvaluator(5, 5, 1, false, false), gapped, HandType.STRAIGHT, 5);
+
+        // Smeared: hearts and diamonds count as one suit. A mix of five reds is a flush only when smeared.
+        List<DeckCard> reds = hand(card(Rank.TWO, Suit.HEARTS), card(Rank.FIVE, Suit.DIAMONDS),
+                card(Rank.SEVEN, Suit.HEARTS), card(Rank.NINE, Suit.DIAMONDS), card(Rank.JACK, Suit.HEARTS));
+        check("mixed red is not a vanilla flush", vanilla, reds, HandType.HIGH_CARD, 1);
+        check("Smeared merges red suits into a flush", new HandEvaluator(5, 5, 0, true, false), reds, HandType.FLUSH, 5);
+
+        // Splash: the hand type is unchanged, but every played card scores (a pair normally scores 2).
+        List<DeckCard> pair = hand(card(Rank.KING, Suit.SPADES), card(Rank.KING, Suit.HEARTS),
+                card(Rank.THREE, Suit.DIAMONDS), card(Rank.SEVEN, Suit.CLUBS), card(Rank.NINE, Suit.SPADES));
+        check("a pair normally scores 2 of 5", vanilla, pair, HandType.PAIR, 2);
+        check("Splash scores every played card", new HandEvaluator(5, 5, 0, false, true), pair, HandType.PAIR, 5);
+
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
         if (failures != 0) System.exit(1);
     }

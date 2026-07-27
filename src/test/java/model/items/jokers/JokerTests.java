@@ -34,6 +34,7 @@ public final class JokerTests {
         currentEffectDescriptors();
         newBalatryJokers();
         newBalatryEventJokers();
+        handEvaluatorJokers();
 
         boardInvariants();
 
@@ -282,6 +283,29 @@ public final class JokerTests {
         boolean allTarots = halluc.getConsumables().stream()
                 .allMatch(c -> c.getSpec().getType() == model.items.consumables.ConsumableType.TAROT);
         check("Hallucination creates Tarots on pack open", !halluc.getConsumables().isEmpty() && allTarots);
+    }
+
+    /** HandEvaluator-flexibility jokers carry the traits Round reads; Pareidolia turns every card into a face card. */
+    private static void handEvaluatorJokers() {
+        check("Four Fingers carries its trait", Jokers.FOUR_FINGERS.make().hasActiveTrait(JokerTrait.FOUR_FINGERS));
+        check("Shortcut carries its trait", Jokers.SHORTCUT.make().hasActiveTrait(JokerTrait.SHORTCUT));
+        check("Smeared carries its trait", Jokers.SMEARED_JOKER.make().hasActiveTrait(JokerTrait.SMEARED));
+        check("Splash carries its trait", Jokers.SPLASH.make().hasActiveTrait(JokerTrait.SPLASH));
+
+        DeckCard five = new DeckCard(Rank.FIVE, Suit.SPADES);
+        check("without Pareidolia a 5 is not a face card", !new Run(0L).isFaceCard(five));
+        Run par = new Run(0L);
+        par.board().add(Jokers.PAREIDOLIA.make());
+        check("with Pareidolia a 5 counts as a face card", par.isFaceCard(five));
+
+        // Scary Face (+30 Chips per scored face) shows Pareidolia reaching a face-triggered joker.
+        Run noPar = new Run(0L);
+        noPar.board().add(Jokers.SCARY_FACE.make());
+        checkScore("Scary Face ignores a non-face card", score(noPar, List.of(new DeckCard(Rank.FIVE, Suit.SPADES))), 10);
+        Run scary = new Run(0L);
+        scary.board().add(Jokers.SCARY_FACE.make());
+        scary.board().add(Jokers.PAREIDOLIA.make());
+        checkScore("Pareidolia makes a 5 a face for Scary Face", score(scary, List.of(new DeckCard(Rank.FIVE, Suit.SPADES))), 40);
     }
 
     private static long score(Run run, List<DeckCard> played) {

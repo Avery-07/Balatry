@@ -17,16 +17,26 @@ public final class HandEvaluator {
 
     private final int flushSize;
     private final int straightSize;
+    private final int straightGap;   // extra rank a straight may skip per step: 0 vanilla, 1 for Shortcut
+    private final boolean smeared;   // Smeared Joker: red suits count as one, black suits as one, for a flush
+    private final boolean splash;    // Splash: every played card scores, not just the ones forming the hand
 
-    /** Vanilla evaluator: flush and straight each need five cards. */
+    /** Vanilla evaluator: flush and straight each need five cards, no gaps, distinct suits, only the hand scores. */
     public HandEvaluator() { this(5, 5); }
 
-    /** Thresholds jokers will later vary (e.g. Four Fingers lowers both to 4). */
-    public HandEvaluator(int flushSize, int straightSize) {
+    /** Threshold-only variant (Four Fingers lowers both to 4); no gaps, no smearing, no splash. */
+    public HandEvaluator(int flushSize, int straightSize) { this(flushSize, straightSize, 0, false, false); }
+
+    /** Full options, derived from the run's jokers by the caller — see {@link model.game.player.Run#hasActiveTrait}. */
+    public HandEvaluator(int flushSize, int straightSize, int straightGap, boolean smeared, boolean splash) {
         if (flushSize < 1 || straightSize < 1)
             throw new IllegalArgumentException("thresholds must be >= 1");
+        if (straightGap < 0) throw new IllegalArgumentException("straightGap must be >= 0");
         this.flushSize = flushSize;
         this.straightSize = straightSize;
+        this.straightGap = straightGap;
+        this.smeared = smeared;
+        this.splash = splash;
     }
 
     /** Evaluates the played cards (1-5 in vanilla). Stone cards are ignored for classification but always score. */
@@ -47,7 +57,7 @@ public final class HandEvaluator {
         Set<DeckCard> selected = selectLive(type, live, groups);
 
         List<DeckCard> scoring = new ArrayList<>();
-        for (DeckCard c : played) if (isStone(c) || selected.contains(c)) scoring.add(c);
+        for (DeckCard c : played) if (splash || isStone(c) || selected.contains(c)) scoring.add(c);   // Splash: every card scores
 
         return new HandEvaluation(scoring, context);
     }
@@ -108,8 +118,16 @@ public final class HandEvaluator {
         return set;
     }
 
-    /** True if any one suit reaches {@link #flushSize}; WILD counts toward every suit. */
+    /** True if any one suit reaches {@link #flushSize}; WILD counts toward every suit. Smeared merges the two colours. */
     private boolean hasFlush(List<DeckCard> live) {
+        if (smeared) {   // Smeared Joker: hearts+diamonds are one suit, spades+clubs are one suit
+            int red = 0, black = 0;
+            for (DeckCard card : live) {
+                if (card.isHeart() || card.isDiamond()) red++;
+                if (card.isSpade() || card.isClub())    black++;
+            }
+            return red >= flushSize || black >= flushSize;
+        }
         int spades = 0, hearts = 0, clubs = 0, diamonds = 0;
         for (DeckCard card : live) {
             if (card.isSpade())   spades++;
@@ -120,11 +138,14 @@ public final class HandEvaluator {
         return spades >= flushSize || hearts >= flushSize || clubs >= flushSize || diamonds >= flushSize;
     }
 
-    /** True if {@link #straightSize} cards form a consecutive run; Ace plays high or low. */
+    /**
+     * True if {@link #straightSize} cards form a run; Ace plays high or low. Each step normally advances one rank,
+     * but {@link #straightGap} lets it skip that many extra ranks per step (Shortcut allows a single-rank gap).
+     */
     private boolean hasStraight(List<DeckCard> live) {
         if (live.size() < straightSize) return false;
 
-        Set<Integer> values = new HashSet<>();
+        java.util.TreeSet<Integer> values = new java.util.TreeSet<>();
         boolean hasAce = false;
         for (DeckCard card : live) {
             int v = sequence(card.getRank());
@@ -133,12 +154,14 @@ public final class HandEvaluator {
         }
         if (hasAce) values.add(1);   // Ace-low wheel: A-2-3-4-5
 
-        for (int start : values) {
-            boolean run = true;
-            for (int k = 1; k < straightSize; k++) {
-                if (!values.contains(start + k)) { run = false; break; }
-            }
-            if (run) return true;
+        // Walk the sorted distinct values; a step of 1..(1+gap) extends the run, anything larger restarts it.
+        int maxStep = 1 + straightGap, runLen = 1, prev = Integer.MIN_VALUE;
+        for (int v : values) {
+            int diff = v - prev;
+            if (prev != Integer.MIN_VALUE && diff >= 1 && diff <= maxStep) runLen++;
+            else runLen = 1;
+            if (runLen >= straightSize) return true;
+            prev = v;
         }
         return false;
     }

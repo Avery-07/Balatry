@@ -249,18 +249,18 @@ public enum Jokers {
     SCHOLAR("Scholar", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.ACE) { run.getScoring().addChips(20); run.getScoring().addMult(4); } })),
     SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addChips(30); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c)) run.getScoring().addChips(30); })),
     SMILEY_FACE("Smiley Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) run.getScoring().addMult(5); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c)) run.getScoring().addMult(5); })),
     PHOTOGRAPH("Photograph", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
                 int hand = run.getStats().getTotalHandsPlayed();
-                if (c != null && c.isFace() && self.getCounter() != hand) { run.getScoring().multiplyMult(x("2")); self.setCounter(hand); }
+                if (c != null && run.isFaceCard(c) && self.getCounter() != hand) { run.getScoring().multiplyMult(x("2")); self.setCounter(hand); }
             })),
     RIDE_THE_BUS("Ride the Bus", Rarity.COMMON, 6, b -> b
             .state(self -> "Current streak: +" + (self.getCounter() >> 1) + " Mult")
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) self.setCounter(self.getCounter() | 1); })   // low bit = a scoring face appeared this hand
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c)) self.setCounter(self.getCounter() | 1); })   // low bit = a scoring face appeared this hand
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 int streak = self.getCounter() >> 1;
                 streak = (self.getCounter() & 1) == 1 ? 0 : streak + 1;
@@ -434,7 +434,7 @@ public enum Jokers {
                 run.addCardToDeck(stone);
             })),
     MIDAS_MASK("Midas Mask", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace()) c.apply(Enhancement.GOLD); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c)) c.apply(Enhancement.GOLD); })),
     // endregion
     // region Jokers 081-085 (missing : Dyscalculie, Pareidolie)
     CERTIFICATE("Certificate", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
@@ -459,22 +459,22 @@ public enum Jokers {
                 if (enhanced >= 16) run.getScoring().multiplyMult(x("3"));
             })),
     DYSCALCULIE("Dyscalculie", Rarity.UNCOMMON, 7, b -> b),
-    PAREIDOLIA("Pareidolia", Rarity.UNCOMMON, 5, b -> b),
+    PAREIDOLIA("Pareidolia", Rarity.UNCOMMON, 5, b -> b.trait(JokerTrait.PAREIDOLIA)),
     // endregion
     // region Jokers 086-090 (missing : Smeared Joker, Four Fingers, Superposition, Shortcut, Oops! All 6s)
-    SMEARED_JOKER("Smeared Joker", Rarity.UNCOMMON, 7, b -> b),
-    FOUR_FINGERS("Four Fingers", Rarity.UNCOMMON, 7, b -> b),
+    SMEARED_JOKER("Smeared Joker", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SMEARED)),
+    FOUR_FINGERS("Four Fingers", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.FOUR_FINGERS)),
     SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 HandType type = run.getScoring().getHand().type();
                 boolean straight = type == HandType.STRAIGHT || type == HandType.STRAIGHT_FLUSH;
                 boolean ace = run.getScoring().getScoringCards().stream().anyMatch(c -> c.getRank() == Rank.ACE);
                 if (straight && ace) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
             })),
-    SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b),
+    SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SHORTCUT)),
     OOPS_ALL_6S("Oops! All 6s", Rarity.UNCOMMON, 4, b -> b),
     // endregion
     // region Jokers 091-095 (missing : Splash)
-    SPLASH("Splash", Rarity.COMMON, 7, b -> b),
+    SPLASH("Splash", Rarity.COMMON, 7, b -> b.trait(JokerTrait.SPLASH)),
     HANGING_CHAD("Hanging Chad", Rarity.COMMON, 4, b -> b.retriggerPlayed((run, self, card) -> {
         int hand = run.getStats().getTotalHandsPlayed();
         if (self.getCounter() != hand) { self.setCounter(hand); return 2; }
@@ -485,14 +485,14 @@ public enum Jokers {
     HACK("Hack", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
             (run, self, card) -> switch (card.getRank()) { case TWO, THREE, FOUR, FIVE -> 1; default -> 0; })),
     SOCK_AND_BUSKIN("Sock and Buskin", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
-            (run, self, card) -> card.isFace() ? 1 : 0)),
+            (run, self, card) -> run.isFaceCard(card) ? 1 : 0)),
     // endregion
     // region Jokers 096-100
     MIME("Mime", Rarity.UNCOMMON, 5, b -> b.retriggerHeld((run, self, card) -> 1)),
     BUSINESS_CARD("Business Card", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
     RESERVED_PARKING("Reserved Parking", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HELD_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.isFace() && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
     TO_DO_LIST("To Do List", Rarity.COMMON, 4, b -> b
             .state(self -> "Listed hand this round: " + handTypeName(self.getCounter()))
             .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(HandType.values().length)))
@@ -511,7 +511,7 @@ public enum Jokers {
     FACELESS_JOKER("Faceless Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_DISCARDED,
             (run, self) -> {
                 int faces = 0;
-                for (DeckCard c : run.getLastDiscarded()) if (c.isFace()) faces++;
+                for (DeckCard c : run.getLastDiscarded()) if (run.isFaceCard(c)) faces++;
                 if (faces >= 3) run.addMoney(6);
             })),
     DELAYED_GRATIFICATION("Delayed Gratification", Rarity.COMMON, 4, b -> b.on(Trigger.ON_ROUND_END,
@@ -814,7 +814,7 @@ public enum Jokers {
             .state(self -> "Currently : X" + onePlus("0.25", self.getCounter()) + " Mult")
             .on(Trigger.ON_CARD_DESTROYED, (run, self) -> {
                 DeckCard c = run.getDestroyedCard();
-                if (c != null) self.addCounter(c.isFace() ? 4 : 1);   // +X1 per face card, +X0.25 per other (quarter-units)
+                if (c != null) self.addCounter(run.isFaceCard(c) ? 4 : 1);   // +X1 per face card, +X0.25 per other (quarter-units)
             })
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.25", self.getCounter()));

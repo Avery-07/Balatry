@@ -659,6 +659,17 @@ public final class Run {
         return false;
     }
 
+    /** Whether any owned, non-debuffed joker carries {@code trait} — how Round configures the {@link model.game.scoring.HandEvaluator}. */
+    public boolean hasActiveTrait(JokerTrait trait) {
+        for (JokerCard j : board.view()) if (j.hasActiveTrait(trait)) return true;
+        return false;
+    }
+
+    /** Whether {@code card} counts as a face card — its rank, or any card at all while Pareidolia is owned. */
+    public boolean isFaceCard(DeckCard card) {
+        return card.isFace() || hasActiveTrait(JokerTrait.PAREIDOLIA);
+    }
+
     /** Luchador's sacrifice: disables the active boss for the rest of this round. */
     public void disableBossForRound() { bossState.disableForRound(); }
 
