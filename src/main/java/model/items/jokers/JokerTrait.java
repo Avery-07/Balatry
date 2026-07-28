@@ -32,6 +32,9 @@ public enum JokerTrait {
     /** Dyscalculie: every card also counts as the rank above (Ace as 2) when classifying the hand. */
     DYSCALCULIA,
 
+    /** Oops! All 6s: doubles every "X in Y" probability the run rolls (stacks — each copy doubles again). */
+    PROBABILITY_DOUBLER,
+
     /** Pareidolia: every card counts as a face card (read through {@link model.game.player.Run#isFaceCard}). */
     PAREIDOLIA
 }

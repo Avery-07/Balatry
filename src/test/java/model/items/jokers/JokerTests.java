@@ -36,6 +36,7 @@ public final class JokerTests {
         newBalatryEventJokers();
         handEvaluatorJokers();
         dyscalculiaRankJokers();
+        chefOopsCopyrightJokers();
 
         boardInvariants();
 
@@ -347,6 +348,42 @@ public final class JokerTests {
         int beforeDys = cloudDys.getMoney();
         cloudDys.getJokers().get(0).trigger(Trigger.ON_ROUND_END, cloudDys);
         check("Cloud 9 + Dyscalculie counts the 8 as a 9 (but not the 7)", cloudDys.getMoney() - beforeDys == 3);
+    }
+
+    /** Oops! All 6s (probability doubling), Chef Joker (food destroyed via ON_JOKER_DESTROYED), Copyright (cross-seat shared jokers). */
+    private static void chefOopsCopyrightJokers() {
+        Run oops = new Run(0L);
+        oops.board().add(Jokers.OOPS_ALL_6S.make());
+        boolean allTrue = true;
+        for (int i = 0; i < 12; i++) if (!oops.roll(model.game.rng.RngSource.MISC, 1, 2)) allTrue = false;
+        check("Oops! All 6s turns a 1-in-2 into a certainty", allTrue);
+        Run noOops = new Run(0L);
+        boolean anyFalse = false;
+        for (int i = 0; i < 12; i++) if (!noOops.roll(model.game.rng.RngSource.MISC, 1, 2)) anyFalse = true;
+        check("a 1-in-2 without Oops is not always true", anyFalse);
+
+        Run chef = new Run(0L);
+        chef.board().add(Jokers.CHEF_JOKER.make());
+        JokerCard chefCard = chef.getJokers().get(0);
+        JokerCard food = Jokers.GROS_MICHEL.make();
+        chef.board().add(food);
+        chef.destroyJoker(food);
+        check("Chef feeds on a destroyed food joker", chefCard.getCounter() == 1);
+        checkScore("Chef applies X2 after one food joker", score(chef, kings()), 120);   // (10+20) x (2 x 2)
+        JokerCard plain = Jokers.JOKER.make();
+        chef.board().add(plain);
+        chef.destroyJoker(plain);
+        check("Chef ignores a non-food joker", chefCard.getCounter() == 1);
+
+        var m = model.game.Match.create(70L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        m.start();
+        Run ra = m.getRun(m.getSeats().get(0)), rb = m.getRun(m.getSeats().get(1));
+        ra.board().add(Jokers.COPYRIGHT.make());
+        ra.board().add(Jokers.JOKER.make());   // a plain Joker, which the rival also owns
+        rb.board().add(Jokers.JOKER.make());
+        int before = ra.getMoney();
+        ra.getJokers().get(0).trigger(Trigger.ON_ROUND_END, ra);
+        check("Copyright pays $2 for a joker a rival also owns", ra.getMoney() - before == 2);
     }
 
     private static long score(Run run, List<DeckCard> played) {

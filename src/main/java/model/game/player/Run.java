@@ -84,6 +84,7 @@ public final class Run {
     private List<Card> consumableTargets = List.of();       // transient: the active consumable's selected cards
     private List<DeckCard> lastDiscarded = List.of();       // transient: cards of the discard currently being broadcast
     private DeckCard destroyedCard;                          // transient: the card currently being broadcast to ON_CARD_DESTROYED
+    private JokerCard destroyedJoker;                        // transient: the joker currently being broadcast to ON_JOKER_DESTROYED
     private ConsumableSpec lastTarotOrPlanet;               // last Tarot/Planet used this run (The Fool excluded)
 
     /** Builds a run from the match seed; every player's run uses the same seed. */
@@ -113,9 +114,13 @@ public final class Run {
     /** Per-player hand levels (raised by Planet cards). */
     public HandLevels getHandLevels() { return handLevels; }
 
-    /** Resolves one chance on {@code source}, salted by that source's next per-player occurrence counter. */
+    /** Resolves one chance on {@code source}, salted by that source's next per-player occurrence counter. Oops! All 6s doubles the odds (each copy again). */
     public boolean roll(RngSource source, int numerator, int denominator) {
-        return rng.chance(source, stats.nextSalt(source), numerator, denominator);
+        int doublings = 0;
+        for (JokerCard j : board.view()) if (j.hasActiveTrait(JokerTrait.PROBABILITY_DOUBLER)) doublings++;
+        int num = doublings == 0 ? numerator
+                : Math.min(denominator, numerator << Math.min(doublings, 20));   // each Oops doubles, capped at certainty
+        return rng.chance(source, stats.nextSalt(source), num, denominator);
     }
 
     public ScoringSession getScoring()        { return scoring; }
@@ -174,7 +179,18 @@ public final class Run {
     public void createJoker(JokerCard joker) { board.add(joker); }
 
     /** Destroys {@code joker} (by identity); Eternal jokers survive (Ankh, Hex, Madness, Ceremonial Dagger). */
-    public boolean destroyJoker(JokerCard joker) { return board.destroy(joker); }
+    public boolean destroyJoker(JokerCard joker) {
+        boolean destroyed = board.destroy(joker);   // false for an Eternal joker, which survives
+        if (destroyed) {
+            destroyedJoker = joker;
+            fire(Trigger.ON_JOKER_DESTROYED);   // Chef Joker feeds on food jokers that leave the board
+            destroyedJoker = null;
+        }
+        return destroyed;
+    }
+
+    /** The joker currently being broadcast to {@link Trigger#ON_JOKER_DESTROYED}, or null outside that fire. */
+    public JokerCard getDestroyedJoker() { return destroyedJoker; }
 
     /** Grants a skip tag: IMMEDIATE tags resolve now; pending timings accumulate until their moment. */
     public void grantTag(SkipTag tag) {

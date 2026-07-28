@@ -471,7 +471,7 @@ public enum Jokers {
                 if (straight && ace) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
             })),
     SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SHORTCUT)),
-    OOPS_ALL_6S("Oops! All 6s", Rarity.UNCOMMON, 4, b -> b),
+    OOPS_ALL_6S("Oops! All 6s", Rarity.UNCOMMON, 4, b -> b.trait(JokerTrait.PROBABILITY_DOUBLER)),
     // endregion
     // region Jokers 091-095 (missing : Splash)
     SPLASH("Splash", Rarity.COMMON, 7, b -> b.trait(JokerTrait.SPLASH)),
@@ -573,7 +573,21 @@ public enum Jokers {
             })),
     // endregion
     // region Jokers 116-120 (missing : Copyright)
-    COPYRIGHT("Copyright", Rarity.COMMON, 4, b -> b),
+    COPYRIGHT("Copyright", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END, (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                int shared = 0;
+                for (JokerCard mine : run.getJokers()) {
+                    boolean otherOwns = false;
+                    for (Player p : m.getPlayers()) {
+                        if (p.run() == run) continue;
+                        for (JokerCard theirs : p.run().getJokers()) if (theirs.getSpec() == mine.getSpec()) { otherOwns = true; break; }
+                        if (otherOwns) break;
+                    }
+                    if (otherOwns) shared++;
+                }
+                if (shared > 0) run.addMoney(2 * shared);
+            })),
     ROBIN_HOOD("Robin Hood", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_ROUND_END,
             (run, self) -> {
                 Match m = run.getMatch();
@@ -675,7 +689,10 @@ public enum Jokers {
             })),
     // endregion
     // region Jokers 136-140 (missing : Chef Joker)
-    CHEF_JOKER("Chef Joker", Rarity.RARE, 8, b -> b), // TODO: Create an ON_JOKER_DESTROYED trigger, what counts as a food joker can be hardcoded :
+    CHEF_JOKER("Chef Joker", Rarity.RARE, 8, b -> b
+            .state(self -> "Currently : X" + (1 + self.getCounter()) + " Mult")
+            .on(Trigger.ON_JOKER_DESTROYED, (run, self) -> { JokerCard d = run.getDestroyedJoker(); if (d != null && isFood(d)) self.addCounter(1); })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("1", self.getCounter())); })),
     MERCHANT("Merchant", Rarity.COMMON, 4, b -> b
             .on(Trigger.ON_BOUGHT, (run, self) -> run.setConsumableSlots(run.getConsumableSlots() + 2))
             .on(Trigger.ON_SOLD, (run, self) -> run.setConsumableSlots(run.getConsumableSlots() - 2))),
@@ -1128,6 +1145,16 @@ public enum Jokers {
 
     private static boolean isFibonacci(Rank r) {
         return switch (r) { case ACE, TWO, THREE, FIVE, EIGHT -> true; default -> false; };
+    }
+
+    /** Whether {@code j} is a "food" joker — one Chef Joker feeds on when it leaves the board. */
+    private static boolean isFood(JokerCard j) { return Food.SPECS.contains(j.getSpec()); }
+
+    /** The food-joker spec set, in a lazy holder so it is built after the enum constants exist. */
+    private static final class Food {
+        static final java.util.Set<JokerSpec> SPECS = java.util.Set.of(
+                GROS_MICHEL.spec(), CAVENDISH.spec(), ICE_CREAM.spec(), POPCORN.spec(),
+                RAMEN.spec(), TURTLE_BEAN.spec(), SELTZER.spec(), DIET_COLA.spec(), EGG.spec());
     }
 
     /** Whether {@code c} counts as {@code rank} — its own rank, or (under Dyscalculie) the numbered rank above. */
