@@ -118,7 +118,9 @@ final class Overlays {
                     MatchSnapshot.HandCardView c = s.hand().get(i);
                     cards.add(new DeckCard(DeckCard.Rank.values()[c.rank()], DeckCard.Suit.values()[c.suit()]));
                 }
-                return RelicTarget.hand(null, new HandEvaluator().evaluate(cards).type());
+                MatchSnapshot.EvalFlags f = s.evalFlags();   // derive the hand type with this seat's joker traits
+                return RelicTarget.hand(null,
+                        HandEvaluator.forTraits(f.fourFingers(), f.shortcut(), f.smeared(), f.splash(), f.dyscalculia()).evaluate(cards).type());
             }
             case "JOKER_SLOT" -> {
                 if (ui.jokerTarget < 0) { ui.status = "Select one of your jokers, then use " + label + "."; return null; }

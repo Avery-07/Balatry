@@ -195,7 +195,7 @@ public enum Jokers {
     // endregion
     // region Jokers 031-035
     FIBONACCI("Fibonacci", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && isFibonacci(c.getRank())) run.getScoring().addMult(8); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && anyRank(run, c, Jokers::isFibonacci)) run.getScoring().addMult(8); })),
     SIXTH_SENSE("Sixth Sense", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
@@ -203,7 +203,7 @@ public enum Jokers {
                 if (c != null && self.getCounter() != hand
                         && run.getStats().getHandsPlayedThisRound() == 1
                         && run.getScoring().getHand().playedCount() == 1
-                        && c.getRank() == Rank.SIX) {
+                        && countsAs(run, c, Rank.SIX)) {
                     self.setCounter(hand);
                     run.destroyDeckCards(List.of(c));
                     run.createConsumable(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
@@ -212,19 +212,19 @@ public enum Jokers {
     EIGHT_BALL("8 Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
-                if (c != null && c.getRank() == Rank.EIGHT && run.roll(RngSource.TAROT_GENERATION, 1, 4))
+                if (c != null && countsAs(run, c, Rank.EIGHT) && run.roll(RngSource.TAROT_GENERATION, 1, 4))
                     createEditioned(run, new ConsumableCard(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()));
             })),
     CELESTIAL_7("Celestial 7", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
-                if (c != null && c.getRank() == Rank.SEVEN && run.roll(RngSource.MISC, 1, 4))
+                if (c != null && countsAs(run, c, Rank.SEVEN) && run.roll(RngSource.MISC, 1, 4))
                     createEditioned(run, new ConsumableCard(Planets.random(gen(run, RngSource.PLANET_GENERATION)).spec()));
             })),
     CLOUD_9("Cloud 9", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
                 int nines = 0;
-                for (DeckCard c : run.getDeck()) if (c.getRank() == Rank.NINE) nines++;
+                for (DeckCard c : run.getDeck()) if (countsAs(run, c, Rank.NINE)) nines++;   // an 8 counts as a 9 under Dyscalculie
                 run.addMoney(nines);
             })),
     // endregion
@@ -233,11 +233,11 @@ public enum Jokers {
             (run, self) -> {
                 List<DeckCard> cards = run.getScoring().getScoringCards();
                 int n = cards.size();
-                if (n >= 3 && cards.get(n - 3).getRank() == Rank.SEVEN && cards.get(n - 2).getRank() == Rank.EIGHT)
+                if (n >= 3 && countsAs(run, cards.get(n - 3), Rank.SEVEN) && countsAs(run, cards.get(n - 2), Rank.EIGHT))
                     run.destroyDeckCards(List.of(cards.get(n - 1)));
             })),
     WALKIE_TALKIE("Walkie Talkie", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && (c.getRank() == Rank.TEN || c.getRank() == Rank.FOUR)) { run.getScoring().addChips(10); run.getScoring().addMult(4); } })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && (countsAs(run, c, Rank.TEN) || countsAs(run, c, Rank.FOUR))) { run.getScoring().addChips(10); run.getScoring().addMult(4); } })),
     HIT_THE_ROAD("Hit the Road", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().multiplyMult(onePlus("0.5", run.getStats().getDiscardedThisRound(Rank.JACK))))),
     SHOOT_THE_MOON("Shoot the Moon", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HELD_CARD,
@@ -247,7 +247,7 @@ public enum Jokers {
     // endregion
     // region Jokers 041-045
     SCHOLAR("Scholar", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.ACE) { run.getScoring().addChips(20); run.getScoring().addMult(4); } })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && countsAs(run, c, Rank.ACE)) { run.getScoring().addChips(20); run.getScoring().addMult(4); } })),
     SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c)) run.getScoring().addChips(30); })),
     SMILEY_FACE("Smiley Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
@@ -311,9 +311,9 @@ public enum Jokers {
     // endregion
     // region Jokers 056-060
     ODD_TODD("Odd Todd", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && isOdd(c.getRank())) run.getScoring().addChips(31); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && anyRank(run, c, Jokers::isOdd)) run.getScoring().addChips(31); })),
     EVEN_STEVEN("Even Steven", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && isEven(c.getRank())) run.getScoring().addMult(4); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && anyRank(run, c, Jokers::isEven)) run.getScoring().addMult(4); })),
     THE_IDOL("The Idol", Rarity.UNCOMMON, 6, b -> b
             .state(self -> "Idolized card this round: " + rankName(self.getCounter() / 4) + " of " + suitIndexName(self.getCounter() % 4))
             .on(Trigger.ON_ROUND_START, (run, self) -> {
@@ -322,7 +322,7 @@ public enum Jokers {
             })
             .on(Trigger.ON_SCORED_CARD, (run, self) -> {
                 DeckCard c = scored(run);
-                if (c != null && c.getRank().ordinal() == self.getCounter() / 4 && matchesSuit(c, self.getCounter() % 4))
+                if (c != null && countsAs(run, c, Rank.values()[self.getCounter() / 4]) && matchesSuit(c, self.getCounter() % 4))
                     run.getScoring().multiplyMult(x("2"));
             })),
     ANCIENT_JOKER("Ancient Joker", Rarity.RARE, 8, b -> b
@@ -458,7 +458,7 @@ public enum Jokers {
                 for (DeckCard c : run.getDeck()) if (c.getEnhancement() != null) enhanced++;
                 if (enhanced >= 16) run.getScoring().multiplyMult(x("3"));
             })),
-    DYSCALCULIE("Dyscalculie", Rarity.UNCOMMON, 7, b -> b),
+    DYSCALCULIE("Dyscalculie", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.DYSCALCULIA)),
     PAREIDOLIA("Pareidolia", Rarity.UNCOMMON, 5, b -> b.trait(JokerTrait.PAREIDOLIA)),
     // endregion
     // region Jokers 086-090 (missing : Smeared Joker, Four Fingers, Superposition, Shortcut, Oops! All 6s)
@@ -467,7 +467,7 @@ public enum Jokers {
     SUPERPOSITION("Superposition", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 HandType type = run.getScoring().getHand().type();
                 boolean straight = type == HandType.STRAIGHT || type == HandType.STRAIGHT_FLUSH;
-                boolean ace = run.getScoring().getScoringCards().stream().anyMatch(c -> c.getRank() == Rank.ACE);
+                boolean ace = run.getScoring().getScoringCards().stream().anyMatch(c -> countsAs(run, c, Rank.ACE));
                 if (straight && ace) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
             })),
     SHORTCUT("Shortcut", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SHORTCUT)),
@@ -483,7 +483,7 @@ public enum Jokers {
     DUSK("Dusk", Rarity.UNCOMMON, 5, b -> b.retriggerPlayed(
             (run, self, card) -> (run.getRound() != null && run.getRound().getHandsRemaining() == 1) ? 1 : 0)),
     HACK("Hack", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
-            (run, self, card) -> switch (card.getRank()) { case TWO, THREE, FOUR, FIVE -> 1; default -> 0; })),
+            (run, self, card) -> anyRank(run, card, r -> r == Rank.TWO || r == Rank.THREE || r == Rank.FOUR || r == Rank.FIVE) ? 1 : 0)),
     SOCK_AND_BUSKIN("Sock and Buskin", Rarity.UNCOMMON, 6, b -> b.retriggerPlayed(
             (run, self, card) -> run.isFaceCard(card) ? 1 : 0)),
     // endregion
@@ -505,7 +505,7 @@ public enum Jokers {
             .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(Rank.values().length)))
             .on(Trigger.ON_HAND_DISCARDED, (run, self) -> {
                 int n = 0;
-                for (DeckCard c : run.getLastDiscarded()) if (c.getRank().ordinal() == self.getCounter()) n++;
+                for (DeckCard c : run.getLastDiscarded()) if (countsAs(run, c, Rank.values()[self.getCounter()])) n++;
                 if (n > 0) run.addMoney(4 * n);
             })),
     FACELESS_JOKER("Faceless Joker", Rarity.COMMON, 4, b -> b.on(Trigger.ON_HAND_DISCARDED,
@@ -735,7 +735,7 @@ public enum Jokers {
             .on(Trigger.ON_SOLD, (run, self) -> run.setHandSize(run.getHandSize() + 2))),
     WEE_JOKER("Wee Joker", Rarity.RARE, 8, b -> b
             .state(self -> "Currently : +" + self.getCounter() + " Chips")
-            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.TWO) self.addCounter(8); })
+            .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && countsAs(run, c, Rank.TWO)) self.addCounter(8); })
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addChips(self.getCounter()))),
     BASEBALL_CARD("Baseball Card", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
@@ -1038,7 +1038,7 @@ public enum Jokers {
             MAP.put("CUCKOO_BIRD", "If the played hand contains a Three of a Kind, set a held card's rank to match the hand.");
             MAP.put("INVESTMENT", "Earn $1 at end of round for every $5 of Joker sell value you own.");
             MAP.put("MATERIALIST", "All played Gold, Stone, and Steel cards give +7 Mult.");
-            MAP.put("DYSCALCULIE", "Each rank also counts as the rank above it (e.g. an Ace also counts as a 2).");
+            MAP.put("DYSCALCULIE", "Each numbered card also counts as the numbered rank above (Ace as 2); face cards are unaffected. Applies to hands and rank-based Jokers alike.");
             MAP.put("THE_VOID", "+1 Joker slot.");
             MAP.put("CHEF_JOKER", "Gains X1 Mult every time a food Joker is consumed.");
             MAP.put("STRAWBERRY", "X3 Mult; consumed if more than one hand is played.");
@@ -1128,6 +1128,22 @@ public enum Jokers {
 
     private static boolean isFibonacci(Rank r) {
         return switch (r) { case ACE, TWO, THREE, FIVE, EIGHT -> true; default -> false; };
+    }
+
+    /** Whether {@code c} counts as {@code rank} — its own rank, or (under Dyscalculie) the numbered rank above. */
+    private static boolean countsAs(model.game.player.Run run, DeckCard c, Rank rank) {
+        return c.getRank() == rank
+                || (run.hasActiveTrait(JokerTrait.DYSCALCULIA) && c.getRank().numberedAbove() == rank);
+    }
+
+    /** Whether any rank {@code c} counts as (its own, plus the numbered rank above under Dyscalculie) satisfies {@code p}. */
+    private static boolean anyRank(model.game.player.Run run, DeckCard c, java.util.function.Predicate<Rank> p) {
+        if (p.test(c.getRank())) return true;
+        if (run.hasActiveTrait(JokerTrait.DYSCALCULIA)) {
+            Rank above = c.getRank().numberedAbove();
+            return above != null && p.test(above);
+        }
+        return false;
     }
 
     /** Count of deck cards carrying {@code e}. */

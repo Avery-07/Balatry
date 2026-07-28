@@ -74,6 +74,7 @@ public record MatchSnapshot(
         List<HandCardView> hand,   // structured so the client can sort by rank or suit without parsing labels
         List<DeckCardView> deckCards,   // the whole deck, spent cards flagged — the deck-pile hover view
         List<HandLevelView> handLevels, // every hand type at this seat's current level, for the play preview
+        EvalFlags evalFlags,            // the hand-shaping joker traits, so the client's preview classifies like the model
         List<VoucherView> vouchers,     // vouchers this seat has redeemed this run, for the Run Info overlay
         List<ScoreEventView> lastPlay,  // the last play's scoring timeline, for the scoring animation
         List<JokerView> jokers,
@@ -126,6 +127,9 @@ public record MatchSnapshot(
      * how many times this seat has played it this run (the Run Info "×N" usage column).
      */
     public record HandLevelView(String type, int level, long chips, long mult, int plays) { }
+
+    /** The hand-shaping joker traits owned by this seat, so the client's play preview classifies a selection exactly as the model would. */
+    public record EvalFlags(boolean fourFingers, boolean shortcut, boolean smeared, boolean splash, boolean dyscalculia) { }
 
     /** One voucher this seat has redeemed this run, as the Run Info list shows it: name and effect text. */
     public record VoucherView(String name, String description) { }
@@ -317,6 +321,12 @@ public record MatchSnapshot(
                 hand(run),
                 deckCards(run),
                 handLevels(run),
+                new EvalFlags(
+                        run.hasActiveTrait(model.items.jokers.JokerTrait.FOUR_FINGERS),
+                        run.hasActiveTrait(model.items.jokers.JokerTrait.SHORTCUT),
+                        run.hasActiveTrait(model.items.jokers.JokerTrait.SMEARED),
+                        run.hasActiveTrait(model.items.jokers.JokerTrait.SPLASH),
+                        run.hasActiveTrait(model.items.jokers.JokerTrait.DYSCALCULIA)),
                 vouchers(run),
                 scoreEvents(run),
                 jokerViews(run),

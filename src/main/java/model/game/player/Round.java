@@ -60,13 +60,12 @@ public final class Round {
 
     /** A hand evaluator configured by the run's owned jokers: Four Fingers (4-card flush/straight), Shortcut (gap straights), Smeared (merged suits), Splash (all cards score). */
     private static HandEvaluator evaluatorFor(Run run) {
-        boolean fourFingers = run.hasActiveTrait(JokerTrait.FOUR_FINGERS);
-        return new HandEvaluator(
-                fourFingers ? 4 : 5,
-                fourFingers ? 4 : 5,
-                run.hasActiveTrait(JokerTrait.SHORTCUT) ? 1 : 0,
+        return HandEvaluator.forTraits(
+                run.hasActiveTrait(JokerTrait.FOUR_FINGERS),
+                run.hasActiveTrait(JokerTrait.SHORTCUT),
                 run.hasActiveTrait(JokerTrait.SMEARED),
-                run.hasActiveTrait(JokerTrait.SPLASH));
+                run.hasActiveTrait(JokerTrait.SPLASH),
+                run.hasActiveTrait(JokerTrait.DYSCALCULIA));
     }
 
     /** Plays 1-5 cards from the hand: evaluates, scores, banks, removes them, redraws, and updates the outcome. */

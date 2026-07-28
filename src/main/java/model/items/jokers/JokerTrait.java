@@ -29,6 +29,9 @@ public enum JokerTrait {
     /** Splash: every played card scores, not just the cards forming the hand. */
     SPLASH,
 
+    /** Dyscalculie: every card also counts as the rank above (Ace as 2) when classifying the hand. */
+    DYSCALCULIA,
+
     /** Pareidolia: every card counts as a face card (read through {@link model.game.player.Run#isFaceCard}). */
     PAREIDOLIA
 }

@@ -61,6 +61,21 @@ public final class DeckCard extends Card {
         Rank(int chips) { this.chips = chips; }
         public int getChips() { return chips; }
 
+        /**
+         * The next <em>numbered</em> rank up (Dyscalculie's "counts as the rank above"), or {@code null} for face
+         * cards (Jack/Queen/King), which are out of the loop. The ten numbered ranks form a cycle Ace-2-…-10-Ace,
+         * so an Ace counts as a Two and a Ten counts as an Ace.
+         */
+        public Rank numberedAbove() {
+            return switch (this) {
+                case ACE -> TWO;
+                case TWO -> THREE;   case THREE -> FOUR; case FOUR -> FIVE;  case FIVE -> SIX;
+                case SIX -> SEVEN;   case SEVEN -> EIGHT; case EIGHT -> NINE; case NINE -> TEN;
+                case TEN -> ACE;
+                case JACK, QUEEN, KING -> null;
+            };
+        }
+
         /** "2".."10", "Jack".."Ace" — the single authority for a rank's player-facing name. */
         public String displayName() {
             return switch (this) {

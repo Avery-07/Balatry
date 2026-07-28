@@ -36,6 +36,7 @@ public final class SnapshotTests {
         jokerStateSnapshot();
         editionLabelSnapshot();
         stickerLabelSnapshot();
+        evalFlagsSnapshot();
         deckAndLevelsSnapshot();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
@@ -189,6 +190,16 @@ public final class SnapshotTests {
 
     /** Eight cycling-suit Aces and every hand type leveled far up: one hand clears any early blind. */
     /** The top-bar joker views: name, the edition/sticker badge (Sticky shows its live toll), and the grey-out. */
+    /** The hand-shaping joker traits reach the snapshot so the client preview classifies like the model. */
+    private static void evalFlagsSnapshot() {
+        Match m = Match.create(68L, List.of("A", "B"));
+        PlayerId a = m.getSeats().get(0);
+        m.start();
+        check("no hand-shaping traits by default", !MatchSnapshot.of(m, a).evalFlags().fourFingers());
+        m.getRun(a).acquire(model.items.jokers.Jokers.FOUR_FINGERS.make());
+        check("Four Fingers reaches the snapshot flags", MatchSnapshot.of(m, a).evalFlags().fourFingers());
+    }
+
     private static void jokerBadgeSnapshot() {
         Match m = Match.create(33L, List.of("A", "B"));
         PlayerId a = m.getSeats().get(0);

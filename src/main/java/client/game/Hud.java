@@ -160,7 +160,8 @@ final class Hud {
             cards.add(new DeckCard(DeckCard.Rank.values()[e.rank()], DeckCard.Suit.values()[e.suit()]));
         }
         if (cards.isEmpty()) return null;
-        String type = new HandEvaluator().evaluate(cards).type().name();
+        MatchSnapshot.EvalFlags f = ui.s.evalFlags();   // preview classifies with the same joker traits the model scores with
+        String type = HandEvaluator.forTraits(f.fourFingers(), f.shortcut(), f.smeared(), f.splash(), f.dyscalculia()).evaluate(cards).type().name();
         for (MatchSnapshot.HandLevelView hv : ui.s.handLevels())
             if (hv.type().equals(type)) return hv;
         return null;

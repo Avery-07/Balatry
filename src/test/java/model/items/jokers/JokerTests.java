@@ -35,6 +35,7 @@ public final class JokerTests {
         newBalatryJokers();
         newBalatryEventJokers();
         handEvaluatorJokers();
+        dyscalculiaRankJokers();
 
         boardInvariants();
 
@@ -291,6 +292,16 @@ public final class JokerTests {
         check("Shortcut carries its trait", Jokers.SHORTCUT.make().hasActiveTrait(JokerTrait.SHORTCUT));
         check("Smeared carries its trait", Jokers.SMEARED_JOKER.make().hasActiveTrait(JokerTrait.SMEARED));
         check("Splash carries its trait", Jokers.SPLASH.make().hasActiveTrait(JokerTrait.SPLASH));
+        check("Dyscalculie carries its trait", Jokers.DYSCALCULIE.make().hasActiveTrait(JokerTrait.DYSCALCULIA));
+
+        // Dyscalculie reaches rank-based jokers: a played 7 also counts as an 8, so Even Steven (+4 Mult on evens) fires.
+        Run es = new Run(0L);
+        es.board().add(Jokers.EVEN_STEVEN.make());
+        checkScore("Even Steven ignores a lone 7 normally", score(es, List.of(new DeckCard(Rank.SEVEN, Suit.SPADES))), 12);
+        Run esDys = new Run(0L);
+        esDys.board().add(Jokers.EVEN_STEVEN.make());
+        esDys.board().add(Jokers.DYSCALCULIE.make());
+        checkScore("Dyscalculie makes a 7 count as even for Even Steven", score(esDys, List.of(new DeckCard(Rank.SEVEN, Suit.SPADES))), 60);
 
         DeckCard five = new DeckCard(Rank.FIVE, Suit.SPADES);
         check("without Pareidolia a 5 is not a face card", !new Run(0L).isFaceCard(five));
@@ -306,6 +317,36 @@ public final class JokerTests {
         scary.board().add(Jokers.SCARY_FACE.make());
         scary.board().add(Jokers.PAREIDOLIA.make());
         checkScore("Pareidolia makes a 5 a face for Scary Face", score(scary, List.of(new DeckCard(Rank.FIVE, Suit.SPADES))), 40);
+    }
+
+    /** Dyscalculie shifts rank for rank-reading jokers too: a scored card counts as the numbered rank above (Ten as Ace), and deck scans follow suit. */
+    private static void dyscalculiaRankJokers() {
+        // Scholar (+20 Chips, +4 Mult on an Ace): a Ten does nothing alone, but counts as an Ace under Dyscalculie.
+        Run scholar = new Run(0L);
+        scholar.board().add(Jokers.SCHOLAR.make());
+        checkScore("Scholar ignores a lone Ten", score(scholar, List.of(new DeckCard(Rank.TEN, Suit.SPADES))), 15);
+        Run scholarDys = new Run(0L);
+        scholarDys.board().add(Jokers.SCHOLAR.make());
+        scholarDys.board().add(Jokers.DYSCALCULIE.make());
+        checkScore("Dyscalculie makes a Ten count as an Ace for Scholar",
+                score(scholarDys, List.of(new DeckCard(Rank.TEN, Suit.SPADES))), 175);   // (5+10+20) x (1+4)
+
+        // Cloud 9 ($1 per 9 in the deck): under Dyscalculie an 8 counts as a 9 too, but a 7 does not.
+        List<DeckCard> deck = List.of(new DeckCard(Rank.NINE, Suit.SPADES), new DeckCard(Rank.NINE, Suit.HEARTS),
+                new DeckCard(Rank.EIGHT, Suit.CLUBS), new DeckCard(Rank.SEVEN, Suit.DIAMONDS));
+        Run cloud = new Run(0L);
+        cloud.resetDeck(deck);
+        cloud.board().add(Jokers.CLOUD_9.make());
+        int before = cloud.getMoney();
+        cloud.getJokers().get(0).trigger(Trigger.ON_ROUND_END, cloud);
+        check("Cloud 9 pays for the two 9s", cloud.getMoney() - before == 2);
+        Run cloudDys = new Run(0L);
+        cloudDys.resetDeck(deck);
+        cloudDys.board().add(Jokers.CLOUD_9.make());
+        cloudDys.board().add(Jokers.DYSCALCULIE.make());
+        int beforeDys = cloudDys.getMoney();
+        cloudDys.getJokers().get(0).trigger(Trigger.ON_ROUND_END, cloudDys);
+        check("Cloud 9 + Dyscalculie counts the 8 as a 9 (but not the 7)", cloudDys.getMoney() - beforeDys == 3);
     }
 
     private static long score(Run run, List<DeckCard> played) {
