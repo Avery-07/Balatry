@@ -31,6 +31,29 @@ public final class Renderer {
     public void cardSheet(Image img) { if (img != null) { sheet = img; cellW = img.getWidth() / 13.0; cellH = img.getHeight() / 4.0; } }
     public void font(String fam) { if (fam != null) family = fam; }
 
+    // Per-joker face textures, loaded lazily from /sprites/joker/<Name>.png and cached (misses cached as null, so
+    // the classpath is hit once per name). Key = the display name with every non-alphanumeric char stripped, so
+    // "Half Joker" -> HalfJoker.png and "Oops! All 6s" -> OopsAll6s.png. Absent file => vector tile fallback.
+    private final java.util.Map<String, Image> jokerTex = new java.util.HashMap<>();
+
+    /** The face texture for a joker's display name, or {@code null} if no PNG is present (caller draws the vector tile). */
+    public Image jokerTexture(String displayName) {
+        if (displayName == null || displayName.isEmpty()) return null;
+        String key = displayName.replaceAll("[^A-Za-z0-9]", "");
+        if (key.isEmpty()) return null;
+        if (jokerTex.containsKey(key)) return jokerTex.get(key);
+        Image img = null;
+        try {
+            var in = getClass().getResourceAsStream("/sprites/joker/" + key + ".png");
+            if (in != null) { Image i = new Image(in); if (!i.isError() && i.getWidth() > 0) img = i; }
+        } catch (RuntimeException ignored) { }
+        jokerTex.put(key, img);
+        return img;
+    }
+
+    /** Blits a texture into (x,y,w,h) — the same stretch-to-fill the card sheet uses, so any source resolution fits. */
+    public void image(Image img, double x, double y, double w, double h) { if (img != null) g.drawImage(img, x, y, w, h); }
+
     public void fillRect(Color c, double x, double y, double w, double h) { g.setFill(c); g.fillRect(x, y, w, h); }
 
     public void panel(double x, double y, double w, double h, Color fill, Color border, double arc, double bw) {

@@ -103,9 +103,15 @@ final class ShopScreen implements Screen {
         double sway = held ? 0 : client.engine.Idle.swayDeg(ui.now, t.id(), 1.4);
         double tx = row.x(t.id()) - TILE_W / 2, ty = row.y(t.id()) - TILE_H / 2 + bob;
         Layout.Rect rr = new Layout.Rect(tx, ty, TILE_W, TILE_H);
+        // A shop-slot item that is a joker with a face texture shows it; everything else keeps the vector tile.
+        javafx.scene.image.Image tex = "shopSlot".equals(t.kind()) ? r.jokerTexture(t.label()) : null;
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
-            r.panel(rr.x(), rr.y(), rr.w(), rr.h(), t.color(), javafx.scene.paint.Color.web("#0006"), 8, 2);
-            r.textCenter(t.label(), rr.centerX(), ty + 54, 11, INK);
+            if (tex != null) {
+                r.image(tex, rr.x(), rr.y(), rr.w(), rr.h());
+            } else {
+                r.panel(rr.x(), rr.y(), rr.w(), rr.h(), t.color(), javafx.scene.paint.Color.web("#0006"), 8, 2);
+                r.textCenter(t.label(), rr.centerX(), ty + 54, 11, INK);
+            }
             r.panel(tx + 30, ty - 14, 48, 22, PANEL, GOLD, 8, 2);
             r.textCenterBold("$" + t.price(), rr.centerX(), ty - 3, 12, ORANGE);
             if (!t.badge().isEmpty()) {   // the drawback strip: stickers/editions announce themselves pre-purchase

@@ -190,9 +190,15 @@ final class Overlays {
                 double tx = ui.packRow.x(opt.id()) - tw / 2, ty = ui.packRow.y(opt.id()) - th / 2 + bob;
                 boolean chosen = ui.packSel == i;
                 Layout.Rect rr = new Layout.Rect(tx, ty, tw, th);
+                javafx.scene.image.Image tex = r.jokerTexture(opt.label());   // Buffoon-pack jokers show their face
                 r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // the same idle sway/bob a card carries
-                    r.panel(tx, ty, tw, th, Color.web("#2b2c30"), chosen ? ORANGE : EDGE, 8, chosen ? 3 : 2);
-                    r.textCenterBold(opt.label(), tx + tw / 2, ty + th / 2, 12, INK);
+                    if (tex != null) {
+                        r.image(tex, tx, ty, tw, th);
+                        if (chosen) r.panel(tx, ty, tw, th, null, ORANGE, 8, 3);
+                    } else {
+                        r.panel(tx, ty, tw, th, Color.web("#2b2c30"), chosen ? ORANGE : EDGE, 8, chosen ? 3 : 2);
+                        r.textCenterBold(opt.label(), tx + tw / 2, ty + th / 2, 12, INK);
+                    }
                 });
                 ui.tip(rr, packTip(opt));   // hover explains the card
                 int idx = i;
