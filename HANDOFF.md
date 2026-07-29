@@ -29,11 +29,12 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   *drawing* is verified by **compile + eyeball on the user's machine**, not by me. Everything else (model,
   snapshot, engine logic) is unit-tested. When touching the client, compile and rely on the user to confirm
   visuals. This is why the engine is designed so **logic is tested and only `Renderer` drawing is unverified.**
-- **Worktree → main sync.** Work happens in a git worktree (`.claude/worktrees/...`); the user runs from the main
-  folder `C:\Users\Mayeul\IdeaProjects\Balatry`. **After each change, sync to the main folder** and confirm
-  `mvn test` passes there too. Use a full mirror, not a per-file copy:
-  `robocopy <worktree>\src <main>\src /MIR` — `git status` collapses untracked directories, so file-by-file
-  syncing silently misses new packages (this bit once, after a package rename).
+- **Work directly in the main folder** `C:\Users\Mayeul\IdeaProjects\Balatry` — edit those files and run `mvn`
+  there. The user runs from main. **Do NOT use a git worktree + `robocopy /MIR` sync** (an earlier workflow): the
+  user keeps ~140 joker texture PNGs in `src/main/resources/sprites/joker/`, which are not in any worktree, and
+  `/MIR` deletes everything the source lacks — it wiped the textures on every sync. If a stray worktree exists on
+  disk, it is unused; ignore it. Removing it must be done from a separate terminal (`git worktree remove`), never
+  from a session whose shell is anchored inside it.
 - **Determinism is sacred.** Same seed + same actions → bit-identical replays, mirrored across seats
   (`DeterminismTests`). Any RNG use must be keyed/salted deterministically.
   **Never salt an RNG with `Card.id()` / `DeckCard.id()`** — those come from a JVM-global counter that the

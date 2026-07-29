@@ -48,14 +48,7 @@ final class Hud {
         MatchSnapshot s = ui.s;
         Color accent = switch (s.phase()) { case BLIND -> BLUE; case SHOP -> RED; case RESULT -> GREEN; default -> GOLD; };
         r.panel(x, y, w, h, PANEL, accent, 12, 3);
-        double ix = x + 14, iw = w - 28, cy = y + 16;
-
-        String hdr = switch (s.phase()) {
-            case SHOP -> "SHOP"; case RESULT -> Fmt.blindName(s.blind()) + " Defeated!";
-            case BLIND -> "Score at least " + s.target(); default -> "Choose your next Blind"; };
-        r.panel(ix, cy, iw, 52, PANEL2, EDGE, 9, 2);
-        r.textCenterBold(hdr, ix + iw / 2, cy + 26, s.phase() == MatchPhase.SHOP ? 26 : 15, s.phase() == MatchPhase.SHOP ? ORANGE : INK);
-        cy += 64;
+        double ix = x + 14, iw = w - 28;
 
         // The play preview: with cards selected, the chips×mult boxes price the hand the selection would score
         // (at this seat's levels) and its name appears above them; with nothing selected they show the last play.
@@ -77,55 +70,59 @@ final class Hud {
         }
         money.retarget(s.money());
 
-        cy = statBoxPopped(r, ix, cy, iw, "Round score", score);
+        // Lay the sections out to span the whole sidebar top-to-bottom: fixed section heights, with the slack split
+        // into equal gaps, so the lower half is never empty. The readouts are sized big — this is the juicy panel.
+        double hHeader = 64, hScore = 64, hName = 24, hCM = 92, hStats = 96, hMoney = 74, hAnte = 96, hSin = 46;
+        double sum = hHeader + hScore + hName + hCM + hStats + hMoney + hAnte + hSin;
+        double top = y + 16, bottom = y + h - 16;
+        double gap = Math.max(8, (bottom - top - sum) / 7);
+        double cy = top;
 
-        r.textCenterBold(preview == null ? " "
-                        : Fmt.handName(preview.type()) + "  lv." + preview.level(),
-                ix + iw / 2, cy + 6, 14, preview == null ? DIM : ORANGE);
-        cy += 16;
+        String hdr = switch (s.phase()) {
+            case SHOP -> "SHOP"; case RESULT -> Fmt.blindName(s.blind()) + " Defeated!";
+            case BLIND -> "Score at least " + s.target(); default -> "Choose your next Blind"; };
+        r.panel(ix, cy, iw, hHeader, PANEL2, EDGE, 9, 2);
+        r.textCenterBold(hdr, ix + iw / 2, cy + hHeader / 2, s.phase() == MatchPhase.SHOP ? 26 : 16, s.phase() == MatchPhase.SHOP ? ORANGE : INK);
+        cy += hHeader + gap;
+
+        // Round score — a counting, popping readout.
+        r.panel(ix, cy, iw, hScore, PANEL, EDGE, 8, 2);
+        r.textLeftBold("Round score", ix + 12, cy + 14, 14, DIM);
+        r.textCenterBold(whole(score.displayed()), ix + iw - 34, cy + hScore - 22, 26 * score.popScale(), INK);
+        cy += hScore + gap;
+
+        r.textCenterBold(preview == null ? " " : Fmt.handName(preview.type()) + "  lv." + preview.level(),
+                ix + iw / 2, cy + hName / 2, 15, preview == null ? DIM : ORANGE);
+        cy += hName + gap;
 
         double half = (iw - 30) / 2;
-        r.panel(ix, cy, half, 46, BLUE, null, 8, 0);
-        r.textCenterBold(whole(chips.displayed()), ix + half / 2, cy + 23, 24 * chips.popScale(), INK);
-        r.textCenterBold("X", ix + half + 15, cy + 23, 18, RED);
-        r.panel(ix + half + 30, cy, half, 46, RED, null, 8, 0);
-        r.textCenterBold(whole(mult.displayed()), ix + half + 30 + half / 2, cy + 23, 24 * mult.popScale(), INK);
+        r.panel(ix, cy, half, hCM, BLUE, null, 8, 0);
+        r.textCenterBold(whole(chips.displayed()), ix + half / 2, cy + hCM / 2, 30 * chips.popScale(), INK);
+        r.textCenterBold("X", ix + half + 15, cy + hCM / 2, 22, RED);
+        r.panel(ix + half + 30, cy, half, hCM, RED, null, 8, 0);
+        r.textCenterBold(whole(mult.displayed()), ix + half + 30 + half / 2, cy + hCM / 2, 30 * mult.popScale(), INK);
         // The home for ownerless scoring beats (base hand-type, sin transform, Plasma balance): they land on the
         // chips×mult they reshape rather than dead-centre. Overlays.scoreEffect reads this when a beat has no card.
-        ui.scoreAnchor = new Layout.Rect(ix, cy, iw, 46);
-        cy += 58;
+        ui.scoreAnchor = new Layout.Rect(ix, cy, iw, hCM);
+        cy += hCM + gap;
 
-        ui.button(ix, cy, 88, 60, "Run Info", RED, INK, () -> ui.showRunInfo = true, true);
-        cell(r, ix + 98, cy, (iw - 98 - 10) / 2, 60, "Hands", String.valueOf(s.hands()), BLUE);
-        cell(r, ix + 98 + (iw - 98 - 10) / 2 + 10, cy, (iw - 98 - 10) / 2, 60, "Discards", String.valueOf(s.discards()), RED);
-        cy += 72;
+        double cellW = (iw - 102 - 10) / 2;
+        ui.button(ix, cy, 92, hStats, "Run Info", RED, INK, () -> ui.showRunInfo = true, true);
+        cell(r, ix + 102, cy, cellW, hStats, "Hands", String.valueOf(s.hands()), BLUE);
+        cell(r, ix + 102 + cellW + 10, cy, cellW, hStats, "Discards", String.valueOf(s.discards()), RED);
+        cy += hStats + gap;
 
-        r.panel(ix, cy, iw, 44, PANEL, EDGE, 8, 2);
-        r.textCenterBold("$" + whole(money.displayed()), ix + iw / 2, cy + 22, 26 * money.popScale(), ORANGE);
-        cy += 56;
+        r.panel(ix, cy, iw, hMoney, PANEL, EDGE, 8, 2);
+        r.textCenterBold("$" + whole(money.displayed()), ix + iw / 2, cy + hMoney / 2, 30 * money.popScale(), ORANGE);
+        cy += hMoney + gap;
 
-        ui.button(ix, cy, 88, 56, "Options", ORANGE, DARK, () -> ui.status = "Options — not wired.", true);
-        cell(r, ix + 98, cy, (iw - 98 - 10) / 2, 56, "Ante", s.ante() + "/" + s.anteCount(), ORANGE);
-        cell(r, ix + 98 + (iw - 98 - 10) / 2 + 10, cy, (iw - 98 - 10) / 2, 56, "Round", String.valueOf(s.roundNumber()), ORANGE);
-        cy += 68;
+        ui.button(ix, cy, 92, hAnte, "Options", ORANGE, DARK, () -> ui.status = "Options — not wired.", true);
+        cell(r, ix + 102, cy, cellW, hAnte, "Ante", s.ante() + "/" + s.anteCount(), ORANGE);
+        cell(r, ix + 102 + cellW + 10, cy, cellW, hAnte, "Round", String.valueOf(s.roundNumber()), ORANGE);
+        cy += hAnte + gap;
 
-        r.panel(ix, cy, iw, 34, Color.web("#2a1030"), PURPLE, 8, 2);
-        r.textCenter("Ante sin — " + s.activeSin(), ix + iw / 2, cy + 17, 12, Color.web("#ecd7f5"));
-    }
-
-    private double statBox(Renderer r, double x, double y, double w, String k, String v) {
-        r.panel(x, y, w, 40, PANEL, EDGE, 8, 2);
-        r.textLeftBold(k, x + 10, y + 13, 14, DIM);
-        r.textCenterBold(v, x + w - 30, y + 20, 20, INK);
-        return y + 52;
-    }
-
-    /** A statBox whose value is a counting, popping readout. */
-    private double statBoxPopped(Renderer r, double x, double y, double w, String k, Counter c) {
-        r.panel(x, y, w, 40, PANEL, EDGE, 8, 2);
-        r.textLeftBold(k, x + 10, y + 13, 14, DIM);
-        r.textCenterBold(whole(c.displayed()), x + w - 30, y + 20, 20 * c.popScale(), INK);
-        return y + 52;
+        r.panel(ix, cy, iw, hSin, Color.web("#2a1030"), PURPLE, 8, 2);
+        r.textCenter("Ante sin — " + s.activeSin(), ix + iw / 2, cy + hSin / 2, 12, Color.web("#ecd7f5"));
     }
 
     /**
@@ -177,14 +174,14 @@ final class Hud {
 
     private void cell(Renderer r, double x, double y, double w, double h, String k, String v, Color vc) {
         r.panel(x, y, w, h, PANEL, EDGE, 8, 2);
-        r.textCenter(k, x + w / 2, y + 15, 12, DIM);
-        r.textCenterBold(v, x + w / 2, y + h - 18, 22, vc);
+        r.textCenter(k, x + w / 2, y + h * 0.30, 12, DIM);
+        r.textCenterBold(v, x + w / 2, y + h * 0.66, 24, vc);
     }
 
     private void drawTopSlots(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
         MatchSnapshot s = ui.s;
-        double tileW = 54, tileH = Ui.SLOT_H - 30, tileCY = y + 22 + tileH / 2;
+        double tileW = Ui.SLOT_TILE_W, tileH = Ui.SLOT_TILE_H, tileCY = y + 24 + tileH / 2;
 
         // Jokers: a retained, draggable row — reconcile by card id, lay slots out, draw at animated positions. The
         // slots are centered and count-scaled (Layout.slots) within a left zone, so the row spreads and compresses
@@ -193,7 +190,7 @@ final class Hud {
         List<Integer> jokerIds = new ArrayList<>();
         for (MatchSnapshot.JokerView jv : s.jokers()) jokerIds.add(jv.id());
         ui.jokerRow.reconcile(jokerIds);
-        ui.jokerRow.layout(Layout.slots(jokerIds.size(), x + w * 0.32, tileW, 8, w * 0.60), tileCY);
+        ui.jokerRow.layout(Layout.slots(jokerIds.size(), x + w * 0.33, tileW, 8, w * 0.62), tileCY);
 
         // Pass 0 draws the settled tiles (with their idle bob), pass 1 the held one on top of everything.
         for (int pass = 0; pass < 2; pass++)
@@ -233,7 +230,7 @@ final class Hud {
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
             // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
             if (tex != null) {
-                r.image(tex, rr.x(), rr.y(), rr.w(), rr.h());
+                r.imageFit(tex, rr.x(), rr.y(), rr.w(), rr.h());
                 if (jv.debuffed()) r.panel(rr.x(), rr.y(), rr.w(), rr.h(), Color.web("#1a1a1eaa"), null, 8, 0);
             } else {
                 mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));

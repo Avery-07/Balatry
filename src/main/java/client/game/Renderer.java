@@ -51,8 +51,19 @@ public final class Renderer {
         return img;
     }
 
-    /** Blits a texture into (x,y,w,h) — the same stretch-to-fill the card sheet uses, so any source resolution fits. */
-    public void image(Image img, double x, double y, double w, double h) { if (img != null) g.drawImage(img, x, y, w, h); }
+    /**
+     * Draws a texture scaled to fit inside (x,y,w,h) preserving its aspect ratio — the largest centered copy that
+     * fits, letterboxed if the tile's shape differs. Never stretches: a joker face keeps its proportions whatever
+     * the tile's aspect is.
+     */
+    public void imageFit(Image img, double x, double y, double w, double h) {
+        if (img == null) return;
+        double iw = img.getWidth(), ih = img.getHeight();
+        if (iw <= 0 || ih <= 0) return;
+        double s = Math.min(w / iw, h / ih);
+        double dw = iw * s, dh = ih * s;
+        g.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    }
 
     public void fillRect(Color c, double x, double y, double w, double h) { g.setFill(c); g.fillRect(x, y, w, h); }
 

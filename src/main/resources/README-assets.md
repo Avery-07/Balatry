@@ -27,15 +27,3 @@ Expected grid (matches the sheet you provided):
 Cell size is computed at runtime from the image (`width / 13`, `height / 4`), so any resolution
 works as long as the grid is uniform. If the file is absent, cards render as vector 4-color
 faces (blue clubs, orange diamonds, red hearts, dark spades).
-
-## Joker face textures (optional)
-
-Drop one PNG per joker here:
-
-    src/main/resources/sprites/joker/<Name>.png
-
-`<Name>` is the joker's **display name with every non-alphanumeric character stripped** (spaces,
-`!`, `-`, …), keeping its capitalisation — so `Half Joker` → `HalfJoker.png`, `Oops! All 6s` →
-`OopsAll6s.png`. Each texture is used everywhere that joker is drawn (owned in the HUD, in the shop,
-in a Buffoon pack). Any resolution works — it's stretched to fill the tile. Missing files fall back
-to the vector tile, so you can add textures one at a time. See `sprites/joker/README.md`.

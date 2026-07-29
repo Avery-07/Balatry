@@ -17,7 +17,10 @@ import java.util.List;
  */
 final class Ui {
 
-    static final int W = 1320, H = 820, PAD = 24, SIDEBAR = 300, DECK_W = 110, SLOT_H = 118, MAX_SELECTION = 5;
+    static final int W = 1320, H = 820, PAD = 24, SIDEBAR = 300, DECK_W = 110, MAX_SELECTION = 5;
+    // The top joker/consumable bar: taller than the old 118 so the tiles read big, which also lowers the shop
+    // (the center region starts below it). SLOT_TILE_* is the tile size, ~71:95 so joker textures fit unstretched.
+    static final int SLOT_H = 190, SLOT_TILE_W = 108, SLOT_TILE_H = 146;
 
     final Renderer r;
     final Hand hand;
@@ -43,11 +46,11 @@ final class Ui {
 
     // Every tile row is retained and draggable — the same part-and-glide treatment the hand gets. The rows live
     // here because two parties share them: Hud/ShopScreen lay them out and draw, GameClient routes the input.
-    final TileRow jokerRow      = new TileRow(54, Ui.SLOT_H - 30);
-    final TileRow itemRow       = new TileRow(54, Ui.SLOT_H - 30);
-    final TileRow shopSlotRow   = new TileRow(108, 130);   // shop drags have nowhere to land; they lift and glide home
-    final TileRow shopVoucherRow = new TileRow(108, 130);
-    final TileRow shopPackRow   = new TileRow(108, 130);
+    final TileRow jokerRow      = new TileRow(Ui.SLOT_TILE_W, Ui.SLOT_TILE_H);
+    final TileRow itemRow       = new TileRow(Ui.SLOT_TILE_W, Ui.SLOT_TILE_H);
+    final TileRow shopSlotRow   = new TileRow(116, 156);   // shop drags have nowhere to land; they lift and glide home
+    final TileRow shopVoucherRow = new TileRow(116, 156);
+    final TileRow shopPackRow   = new TileRow(116, 156);
     final TileRow packRow       = new TileRow(108, 130);   // a pack's offered cards: shop-style tiles that lift and glide too
 
     // --- scoring animation ---------------------------------------------------

@@ -193,7 +193,7 @@ final class Overlays {
                 javafx.scene.image.Image tex = r.jokerTexture(opt.label());   // Buffoon-pack jokers show their face
                 r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // the same idle sway/bob a card carries
                     if (tex != null) {
-                        r.image(tex, tx, ty, tw, th);
+                        r.imageFit(tex, tx, ty, tw, th);
                         if (chosen) r.panel(tx, ty, tw, th, null, ORANGE, 8, 3);
                     } else {
                         r.panel(tx, ty, tw, th, Color.web("#2b2c30"), chosen ? ORANGE : EDGE, 8, chosen ? 3 : 2);
