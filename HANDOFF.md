@@ -21,7 +21,8 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
      remove the extra joker.
   2. `SCALPER`'s description is keyed by display name `"Scalper"` in `Jokers.Descriptions.MAP` instead of the enum name
      `"SCALPER"`, so `Descriptions.of("SCALPER")` returns empty and "every joker has a description" fails. Fix the key.
-  Everything else this session was kept green and synced to the main folder after each change.
+  These two reds were **not** touched recently. The last few sessions made client-only changes that **compiled
+  clean**; `mvn test` was **not** re-run, so confirm the suite before relying on it being green.
 
 ## Critical working conventions (read these)
 
@@ -164,22 +165,48 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 ## What's next (recommended order)
 
 0. **Fix the two pre-existing `JokerTests` reds** (see Build & run) — 5-minute content fix, restores a green suite.
-1. **Eyeball the last session's client work** — a large batch of un-verified GUI changes landed (I can't open the
-   window here). See "Last session — needs eyeball" below. Verify before building more UI on top.
+1. **Eyeball the most recent client work** — the shop redesign, the enlarged joker/consumable top bar, and the new
+   joker textures all landed un-verified (no display here). See "Most recent session" below. Confirm the shop fills
+   cleanly (no bottom hole), tiles/price tags sit right, and textures fit unstretched before building more UI on top.
 2. **Finish the remaining 9 stub jokers** (listed under Current content state). The 5 cross-player ones each need a
    new cross-seat event/mechanism — do them one at a time, tested, not as a batch (determinism is sensitive here).
    Vulture and Transparent Joker are the most self-contained starting points.
-3. **Assets (free visual win, no code):** drop the card sprite sheet at `src/main/resources/cards/deck.png`
-   (4 suit rows H/C/D/S, 13 rank cols 2→A) and a pixel font at `src/main/resources/font/game.ttf`. The client
-   loads both with fallbacks. See `src/main/resources/README-assets.md`.
-   **Textures are designed but unbuilt** — the agreed plan is one file per item keyed by enum name
-   (`/sprites/joker/MAIL_IN_REBATE.png`), an `Assets` cache returning null for missing files, and the existing
-   vector look as the fallback. Editions are deliberately **not** textures: they are canvas-drawn effects
-   (Foil/Holo/Polychrome as gradients + blend modes, Negative as a precomputed inverted variant).
+3. **Assets:** the card sprite sheet (`src/main/resources/cards/deck.png`, 4 suit rows H/C/D/S × 13 rank cols
+   2→A) and pixel font (`src/main/resources/font/game.ttf`) are still optional drop-ins with fallbacks — see
+   `README-assets.md`. **Joker textures are now IMPLEMENTED** (see "Most recent session"), and the user has added
+   ~140 joker PNGs under `src/main/resources/sprites/joker/`. Remaining texture work, if wanted: extend the same
+   `Renderer.jokerTexture` + `imageFit` pattern to consumables/vouchers/relics/packs, and supply the deck sheet.
+   Editions stay canvas-drawn effects (Foil/Holo/Polychrome gradients + blend modes, Negative a precomputed
+   inverted variant), deliberately **not** textures.
 4. **Reconnect** — the log-replay architecture makes it feasible (send the log, replay, resume) but it is a real
    protocol design task. Kicking is the smaller sibling.
 
-## Last session — what landed (all model tests green, synced to main)
+## Most recent session — what landed (client-only; compiled, NOT eyeballed, `mvn test` not re-run)
+
+**Joker textures — implemented.**
+- `Renderer.jokerTexture(displayName)` lazily loads `/sprites/joker/<Name>.png` and caches it (misses cached as
+  null, so the classpath is hit once per name). The key is the **display name with every non-alphanumeric char
+  stripped**, keeping capitalisation — `Half Joker` → `HalfJoker.png`, `Oops! All 6s` → `OopsAll6s.png`. This is
+  the naming the user's files use; it **supersedes the old "keyed by enum name" plan**. Folder has a `README.md`.
+- `Renderer.imageFit(img, x, y, w, h)` draws the texture **scaled to fit, preserving aspect (never stretched)**,
+  centered/letterboxed — the user explicitly required no stretching. (The folder `README.md`'s "Format" line still
+  says "stretched" — stale wording; the code fits without stretching.)
+- Wired at three draw sites, each falling back to the vector tile when no PNG exists: `Hud.drawJokerTile` (owned
+  jokers), `ShopScreen.draw` (shop-slot jokers, matched by label), `Overlays.pack` (Buffoon-pack options).
+- The user has dropped ~140 texture PNGs into the folder. **Do not delete them** — that folder is source-of-truth
+  content (see the working-conventions note about never mirroring a worktree onto main).
+
+**Shop + top-bar layout redesign (Balatro-flavored; needs eyeballing).**
+- Top joker/consumable bar enlarged so tiles read big: `Ui.SLOT_H` 118→190, new `Ui.SLOT_TILE_W/H`=108×146;
+  `jokerRow`/`itemRow` sized to match. This intentionally lowers the center region (`cTop` grows).
+- `ShopScreen` fully rewritten to **fill the whole center region — no empty hole at the bottom** (a prior
+  "shrink the panel" attempt left a backdrop gap the user disliked). Now: a header (Next Round / Reroll) over two
+  **framed inset shelf rows** that split the remaining height evenly — the card shelf on top, Voucher + Booster
+  Packs side by side below. Tiles 116×156 centered per shelf, price tags centered above (shop `TileRow`s sized to
+  match). Balatry rolls more items than Balatro (up to 2 vouchers / 4 packs), so packs can still overlap when full.
+- Result/Selection screens use fixed, top-anchored panels, so the smaller center region doesn't break them.
+
+## Prior session — what landed (all model tests green)
 
 **New engine machinery** (reuse these before adding more):
 - **Triggers** (`Trigger.java`): `ON_CARD_DESTROYED`, `ON_PACK_OPENED`, `ON_PACK_SKIPPED`, `ON_LUCKY_TRIGGERED`,

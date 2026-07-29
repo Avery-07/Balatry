@@ -93,7 +93,7 @@ public enum Spectrals {
         }
     }),
     TRANCE("Trance", "Adds a Blue Seal to 1 selected card.", (run, self) -> sealFirst(run, Seal.BLUE_SEAL)),
-    MEDIUM("Medium", "Adds a Green Seal to 1 selected card.", (run, self) -> sealFirst(run, Seal.GREEN_SEAL)),
+    MEDIUM("Medium", "Adds a Purple Seal to 1 selected card.", (run, self) -> sealFirst(run, Seal.PURPLE_SEAL)),
     EXORCISM("Exorcism", "Removes a random sticker from 1 selected card, joker, or consumable.", (run, self) -> {
         List<Card> t = run.getConsumableTargets();   // any selected card: deck card, joker, or consumable
         if (t.isEmpty()) return;

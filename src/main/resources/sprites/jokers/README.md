@@ -19,6 +19,6 @@ the existing capitalisation, plus `.png`:
 
 ## Format
 
-Any resolution works — the image is stretched to fill the tile (same as the card sheet), so the
-source's own aspect and pixel size don't need to match anything. The prepared set is 71×95 PNG.
+Any resolution works — the image is scaled to fit the tile **preserving its aspect ratio** (centered,
+letterboxed if the shapes differ), never stretched (`Renderer.imageFit`). The prepared set is 71×95 PNG.
 Use transparency for rounded corners; the tiles are drawn as plain rectangles.
