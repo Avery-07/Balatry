@@ -487,6 +487,18 @@ public final class GameClient extends Application {
             if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.sealSheet(img); }
         } catch (RuntimeException ignored) { }
         try {
+            var in = getClass().getResourceAsStream("/sprites/consumables/Planets.png");
+            if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.planetSheet(img); }
+        } catch (RuntimeException ignored) { }
+        try {
+            var in = getClass().getResourceAsStream("/sprites/consumables/Tarots.png");
+            if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.tarotSheet(img); }
+        } catch (RuntimeException ignored) { }
+        try {
+            var in = getClass().getResourceAsStream("/sprites/consumables/Spectrals.png");
+            if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.spectralSheet(img); }
+        } catch (RuntimeException ignored) { }
+        try {
             var in = getClass().getResourceAsStream("/font/game.ttf");
             if (in != null) { Font f = Font.loadFont(in, 14); if (f != null) fontFamily = f.getFamily(); }
         } catch (RuntimeException ignored) { }

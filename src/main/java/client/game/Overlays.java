@@ -190,10 +190,12 @@ final class Overlays {
                 double tx = ui.packRow.x(opt.id()) - tw / 2, ty = ui.packRow.y(opt.id()) - th / 2 + bob;
                 boolean chosen = ui.packSel == i;
                 Layout.Rect rr = new Layout.Rect(tx, ty, tw, th);
-                javafx.scene.image.Image tex = r.jokerTexture(opt.label());   // Buffoon-pack jokers show their face
+                javafx.scene.image.Image tex = r.jokerTexture(opt.label());   // a joker (Buffoon) shows its face; consumables use their sheet
                 r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // the same idle sway/bob a card carries
-                    if (tex != null) {
-                        r.imageFit(tex, tx, ty, tw, th);
+                    boolean textured = tex != null;
+                    if (tex != null) r.imageFit(tex, tx, ty, tw, th);
+                    else textured = r.consumableFace(opt.label(), tx, ty, tw, th);
+                    if (textured) {
                         if (chosen) r.panel(tx, ty, tw, th, null, ORANGE, 8, 3);
                     } else {
                         r.panel(tx, ty, tw, th, Color.web("#2b2c30"), chosen ? ORANGE : EDGE, 8, chosen ? 3 : 2);

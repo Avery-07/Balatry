@@ -249,7 +249,10 @@ final class Hud {
         Renderer r = ui.r;
         Layout.Rect rr = new Layout.Rect(ui.itemRow.x(it.id()) - tileW / 2, ui.itemRow.y(it.id()) - tileH / 2 + bob, tileW, tileH);
         double sway = ui.itemRow.isDragged(it.id()) ? 0 : client.engine.Idle.swayDeg(ui.now, it.id(), 1.4);
-        r.rotated(rr.centerX(), rr.centerY(), sway, () -> mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label())));
+        r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // a consumable shows its planet/tarot/spectral face; a relic keeps the tile
+            if (!r.consumableFace(it.label(), rr.x(), rr.y(), rr.w(), rr.h()))
+                mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
+        });
         ui.selectables.add(new Ui.Sel(rr, "item", index));
         ui.tip(rr, itemTip(it));
     }

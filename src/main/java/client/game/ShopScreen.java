@@ -112,12 +112,13 @@ final class ShopScreen implements Screen {
         double sway = held ? 0 : client.engine.Idle.swayDeg(ui.now, t.id(), 1.4);
         double tx = row.x(t.id()) - TILE_W / 2, ty = row.y(t.id()) - TILE_H / 2 + bob;
         Layout.Rect rr = new Layout.Rect(tx, ty, TILE_W, TILE_H);
-        // A shop-slot item that is a joker with a face texture shows it (fit, never stretched); else the vector tile.
+        // A shop-slot item shows its face when one exists — a joker PNG, or a planet/tarot/spectral sheet cell (both
+        // fit, never stretched); otherwise the vector tile. Vouchers and packs keep their tiles.
         javafx.scene.image.Image tex = "shopSlot".equals(t.kind()) ? r.jokerTexture(t.label()) : null;
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
             if (tex != null) {
                 r.imageFit(tex, rr.x(), rr.y(), rr.w(), rr.h());
-            } else {
+            } else if (!("shopSlot".equals(t.kind()) && r.consumableFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h()))) {
                 r.panel(rr.x(), rr.y(), rr.w(), rr.h(), t.color(), Color.web("#0006"), 8, 2);
                 r.textCenter(t.label(), rr.centerX(), rr.centerY(), 12, INK);
             }

@@ -77,6 +77,68 @@ public final class Renderer {
         g.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
     }
 
+    // --- consumable atlases (Planet / Tarot / Spectral): one sheet each, a grid of 71x95 cells. A stripped display
+    // name maps to a cell, so the draw sites look a face up by the same label the joker path uses. ---
+    private static final class Atlas {
+        Image img; int cols; double cw, ch;
+        final java.util.Map<String, Integer> cell = new java.util.HashMap<>();
+    }
+    private final Atlas planets = new Atlas(), tarots = new Atlas(), spectrals = new Atlas();
+
+    /** A display name reduced to its texture key — letters and digits only, the same rule the joker path uses. */
+    private static String key(String displayName) { return displayName == null ? "" : displayName.replaceAll("[^A-Za-z0-9]", ""); }
+
+    private static void loadAtlas(Atlas a, Image img, int cols, int rows) {
+        a.img = img; a.cols = cols; a.cw = img.getWidth() / (double) cols; a.ch = img.getHeight() / (double) rows;
+    }
+
+    /** The Planet sheet (4x3). Enum order maps to cells through the layout array (the sheet is not in enum order). */
+    public void planetSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(planets, img, 4, 3);
+        int[] cell = { 11, 3, 9, 4, 8, 7, 5, 6, 10, 2, 1, 0 };
+        var v = model.items.consumables.Planets.values();
+        for (int i = 0; i < v.length && i < cell.length; i++) planets.cell.put(key(v[i].spec().getName()), cell[i]);
+    }
+
+    /** The Tarot sheet (5x5). Enum order maps 1:1 except JUSTICE/STRENGTH, which the sheet numbers traditionally. */
+    public void tarotSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(tarots, img, 5, 5);
+        int[] cell = { 0, 1, 2, 3, 4, 5, 6, 7, 11, 9, 10, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21 };
+        var v = model.items.consumables.Tarots.values();
+        for (int i = 0; i < v.length && i < cell.length; i++) tarots.cell.put(key(v[i].spec().getName()), cell[i]);
+    }
+
+    /** The Spectral sheet (5x4). The Soul sits at cell 0; Exorcism and Black Hole have no art (-1 => vector fallback). */
+    public void spectralSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(spectrals, img, 5, 4);
+        int[] cell = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -1, 16, 0, -1 };
+        var v = model.items.consumables.Spectrals.values();
+        for (int i = 0; i < v.length && i < cell.length; i++) if (cell[i] >= 0) spectrals.cell.put(key(v[i].spec().getName()), cell[i]);
+    }
+
+    /**
+     * Draws a consumable's face (planet, tarot or spectral) for its display name into (x,y,w,h), preserving aspect
+     * (letterboxed, never stretched). Returns false when no sheet carries that name — so the caller falls back to its
+     * vector tile, exactly like the joker faces. Names are unique across the three sheets, so the order is arbitrary.
+     */
+    public boolean consumableFace(String label, double x, double y, double w, double h) {
+        String k = key(label);
+        return drawCell(tarots, k, x, y, w, h) || drawCell(planets, k, x, y, w, h) || drawCell(spectrals, k, x, y, w, h);
+    }
+
+    private boolean drawCell(Atlas a, String k, double x, double y, double w, double h) {
+        if (a.img == null) return false;
+        Integer cell = a.cell.get(k);
+        if (cell == null) return false;
+        double s = Math.min(w / a.cw, h / a.ch), dw = a.cw * s, dh = a.ch * s;
+        g.drawImage(a.img, (cell % a.cols) * a.cw, (cell / a.cols) * a.ch, a.cw, a.ch,
+                x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+        return true;
+    }
+
     public void fillRect(Color c, double x, double y, double w, double h) { g.setFill(c); g.fillRect(x, y, w, h); }
 
     public void panel(double x, double y, double w, double h, Color fill, Color border, double arc, double bw) {
