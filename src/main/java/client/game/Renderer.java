@@ -17,18 +17,25 @@ public final class Renderer {
     private final GraphicsContext g;
     private Image sheet;
     private double cellW, cellH;
+    private Image enhSheet;              // enhancement backgrounds (3x3 grid of 71x95); the transparent face draws on top
+    private double enhCellW, enhCellH;
     private String family = "Monospaced";
 
     // 4-color deck (Hearts red, Clubs blue, Diamonds orange, Spades dark) — suit ordinals: SPADES0 HEARTS1 CLUBS2 DIAMONDS3.
     private static final Color[] SUIT_COLOR = { Color.web("#33373f"), Color.web("#e0392c"), Color.web("#2f6fb0"), Color.web("#e0861e") };
     private static final String[] SUIT_SYM = { "♠", "♥", "♣", "♦" };
     private static final String[] RANK = { "2","3","4","5","6","7","8","9","10","J","Q","K","A" };
+    // Enhancement.ordinal() -> cell index in Enhancements.png (3x3). Enum order is BONUS,MULT,WILD,GLASS,STEEL,
+    // STONE,GOLD,LUCKY; the sheet's order isn't. Cell 0 is the plain base drawn behind an un-enhanced face.
+    private static final int[] ENH_CELL = { 3, 4, 5, 7, 8, 1, 2, 6 };
+    private static final int ENH_STONE = 5;   // STONE ordinal: a Stone card is only the stone, no rank/suit
 
     public Renderer(GraphicsContext g) { this.g = g; g.setImageSmoothing(false); }
 
     public GraphicsContext gc() { return g; }
 
     public void cardSheet(Image img) { if (img != null) { sheet = img; cellW = img.getWidth() / 13.0; cellH = img.getHeight() / 4.0; } }
+    public void enhancementSheet(Image img) { if (img != null && !img.isError() && img.getWidth() > 0) { enhSheet = img; enhCellW = img.getWidth() / 3.0; enhCellH = img.getHeight() / 3.0; } }
     public void font(String fam) { if (fam != null) family = fam; }
 
     // Per-joker face textures, loaded lazily from /sprites/joker/<Name>.png and cached (misses cached as null, so
@@ -44,7 +51,7 @@ public final class Renderer {
         if (jokerTex.containsKey(key)) return jokerTex.get(key);
         Image img = null;
         try {
-            var in = getClass().getResourceAsStream("/sprites/joker/" + key + ".png");
+            var in = getClass().getResourceAsStream("/sprites/jokers/" + key + ".png");
             if (in != null) { Image i = new Image(in); if (!i.isError() && i.getWidth() > 0) img = i; }
         } catch (RuntimeException ignored) { }
         jokerTex.put(key, img);
@@ -99,14 +106,26 @@ public final class Renderer {
 
     /** Draws a card centered at (cx,cy), tilted {@code deg}, with an optional selection ring. */
     public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected) {
-        card(rankOrd, suitOrd, cx, cy, w, h, deg, selected, 0);
+        card(rankOrd, suitOrd, -1, cx, cy, w, h, deg, selected, 0);
+    }
+
+    /** As {@link #card}, carrying an enhancement ordinal ({@code -1} for none). */
+    public void card(int rankOrd, int suitOrd, int enhancement, double cx, double cy, double w, double h, double deg, boolean selected) {
+        card(rankOrd, suitOrd, enhancement, cx, cy, w, h, deg, selected, 0);
+    }
+
+    /** As {@link #card}, plus a flip, with no enhancement. */
+    public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected, double flipT) {
+        card(rankOrd, suitOrd, -1, cx, cy, w, h, deg, selected, flipT);
     }
 
     /**
-     * As {@link #card}, plus a flip: {@code flipT} 0 is face up, 1 face down (the deck's back), and anything in
-     * between squashes the card horizontally through its edge-on midpoint — the turn animation itself.
+     * Draws a card with an {@code enhancement} ordinal ({@code -1} = none) and a flip: {@code flipT} 0 is face up,
+     * 1 face down (the deck's back), between squashes it through its edge-on midpoint — the turn animation. The
+     * face art ({@code cards.png}) is transparent-backed, so a card base is drawn first: the enhancement's
+     * background when it has one, else the plain base cell. A Stone card shows only the stone — no rank/suit.
      */
-    public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h,
+    public void card(int rankOrd, int suitOrd, int enhancement, double cx, double cy, double w, double h,
                      double deg, boolean selected, double flipT) {
         g.save();
         g.translate(cx, cy);
@@ -118,7 +137,14 @@ public final class Renderer {
         if (flipT > 0.5 || rankOrd < 0) {   // the back: past edge-on, or a card we are not allowed to see
             back(x, y, w, h, arc);
         } else if (sheet != null) {
-            g.drawImage(sheet, rankOrd * cellW, spriteRow(suitOrd) * cellH, cellW, cellH, x, y, w, h);
+            if (enhSheet != null) {   // the card base: enhancement background, or cell 0 (plain) for an un-enhanced card
+                int cell = (enhancement >= 0 && enhancement < ENH_CELL.length) ? ENH_CELL[enhancement] : 0;
+                g.drawImage(enhSheet, (cell % 3) * enhCellW, (cell / 3) * enhCellH, enhCellW, enhCellH, x, y, w, h);
+            } else {
+                g.setFill(Color.web("#f6f4ee")); g.fillRoundRect(x, y, w, h, arc, arc);
+            }
+            if (!(enhancement == ENH_STONE && enhSheet != null))   // Stone hides rank/suit; every other card draws its face
+                g.drawImage(sheet, rankOrd * cellW, spriteRow(suitOrd) * cellH, cellW, cellH, x, y, w, h);
         } else {
             g.setFill(Color.web("#f6f4ee")); g.fillRoundRect(x, y, w, h, arc, arc);
             Color sc = SUIT_COLOR[suitOrd];

@@ -114,13 +114,13 @@ public record MatchSnapshot(
      * A card the boss dealt {@code faceDown} is masked at the boundary — rank and suit are {@code -1} and the
      * label is blank — so no tooltip, sort or preview can leak what its owner is not allowed to see.
      */
-    public record HandCardView(int id, String label, int rank, int suit, boolean faceDown) { }
+    public record HandCardView(int id, String label, int rank, int suit, int enhancement, boolean faceDown) { }
 
     /**
      * One card of the full deck, for the deck-pile hover: rank/suit ordinals and whether it is still {@code live}
      * (in the draw pile or the hand). During a round a spent card greys out; outside a round everything is live.
      */
-    public record DeckCardView(int rank, int suit, boolean live) { }
+    public record DeckCardView(int rank, int suit, int enhancement, boolean live) { }
 
     /**
      * One poker hand at this seat's current level — what a play of that type is worth right now, plus {@code plays}:
@@ -355,9 +355,10 @@ public record MatchSnapshot(
         List<HandCardView> out = new ArrayList<>();
         for (DeckCard c : run.getSelectionHand()) {
             if (round != null && round.isFaceDown(c))
-                out.add(new HandCardView(c.id(), "", -1, -1, true));
+                out.add(new HandCardView(c.id(), "", -1, -1, -1, true));
             else
-                out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal(), false));
+                out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal(),
+                        c.getEnhancement() == null ? -1 : c.getEnhancement().ordinal(), false));
         }
         return out;
     }
@@ -378,6 +379,7 @@ public record MatchSnapshot(
         List<DeckCardView> out = new ArrayList<>();
         for (DeckCard c : run.getDeck())
             out.add(new DeckCardView(c.getRank().ordinal(), c.getSuit().ordinal(),
+                    c.getEnhancement() == null ? -1 : c.getEnhancement().ordinal(),
                     liveIds == null || liveIds.contains(c.id())));
         return out;
     }

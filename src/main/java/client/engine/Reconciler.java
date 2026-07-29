@@ -17,8 +17,10 @@ public final class Reconciler {
 
     private Reconciler() { }
 
-    /** One card the snapshot wants on screen, in hand order. */
-    public record Desired(int id, int rank, int suit, String label) { }
+    /** One card the snapshot wants on screen, in hand order. {@code enhancement} is an ordinal, or -1 for none. */
+    public record Desired(int id, int rank, int suit, int enhancement, String label) {
+        public Desired(int id, int rank, int suit, String label) { this(id, rank, suit, -1, label); }
+    }
 
     /**
      * Returns a fresh list in {@code desired} order, reusing existing entities by id (preserving their motion and
@@ -35,9 +37,9 @@ public final class Reconciler {
         for (Desired d : desired) {
             CardEntity e = byId.get(d.id());
             if (e == null) {
-                e = new CardEntity(d.id(), d.rank(), d.suit(), d.label(), spawnX, spawnY, durationSeconds, ease);
+                e = new CardEntity(d.id(), d.rank(), d.suit(), d.label(), d.enhancement(), spawnX, spawnY, durationSeconds, ease);
             } else {
-                e.update(d.rank(), d.suit(), d.label());   // keeps its Motion and selection
+                e.update(d.rank(), d.suit(), d.enhancement(), d.label());   // keeps its Motion and selection
             }
             out.add(e);
         }

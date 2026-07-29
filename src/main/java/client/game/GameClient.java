@@ -461,8 +461,12 @@ public final class GameClient extends Application {
 
     private void loadAssets() {
         try {
-            var in = getClass().getResourceAsStream("/cards/deck.png");
+            var in = getClass().getResourceAsStream("/sprites/cards/cards.png");
             if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.cardSheet(img); }
+        } catch (RuntimeException ignored) { }
+        try {
+            var in = getClass().getResourceAsStream("/sprites/cards/Enhancements.png");
+            if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.enhancementSheet(img); }
         } catch (RuntimeException ignored) { }
         try {
             var in = getClass().getResourceAsStream("/font/game.ttf");

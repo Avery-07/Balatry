@@ -16,6 +16,7 @@ public final class CardEntity {
     private final int id;
     private int rank;
     private int suit;
+    private int enhancement = -1;   // Enhancement.ordinal(), or -1 for a plain card; drives the card's background art
     private String label;
     private final Motion motion;
     private final Tween flip;   // 0 = face up, 1 = face down; mid-flight values are the turn itself
@@ -24,9 +25,15 @@ public final class CardEntity {
 
     public CardEntity(int id, int rank, int suit, String label,
                       double x, double y, double durationSeconds, DoubleUnaryOperator ease) {
+        this(id, rank, suit, label, -1, x, y, durationSeconds, ease);
+    }
+
+    public CardEntity(int id, int rank, int suit, String label, int enhancement,
+                      double x, double y, double durationSeconds, DoubleUnaryOperator ease) {
         this.id = id;
         this.rank = rank;
         this.suit = suit;
+        this.enhancement = enhancement;
         this.label = label;
         this.motion = new Motion(x, y, durationSeconds, ease);
         this.flip = new Tween(0, FLIP_SECONDS, Easing.EASE_IN_OUT);
@@ -40,6 +47,7 @@ public final class CardEntity {
     public int id()          { return id; }
     public int rank()        { return rank; }
     public int suit()        { return suit; }
+    public int enhancement() { return enhancement; }
     public String label()    { return label; }
     public double x()        { return motion.x(); }
     public double y()        { return motion.y(); }
@@ -76,5 +84,5 @@ public final class CardEntity {
     /** Releases the card: the layout owns it again and the next {@link #moveTo} glides it into place. */
     public void endDrag() { dragging = false; }
 
-    void update(int rank, int suit, String label) { this.rank = rank; this.suit = suit; this.label = label; }
+    void update(int rank, int suit, int enhancement, String label) { this.rank = rank; this.suit = suit; this.enhancement = enhancement; this.label = label; }
 }

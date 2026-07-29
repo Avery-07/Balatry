@@ -338,7 +338,7 @@ final class Overlays {
             double x = gx + (gw - rowW) / 2;
             for (MatchSnapshot.DeckCardView c : row) {
                 r.gc().setGlobalAlpha(c.live() ? 1.0 : 0.28);
-                r.card(c.rank(), c.suit(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
+                r.card(c.rank(), c.suit(), c.enhancement(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
                 x += step;
             }
             r.gc().setGlobalAlpha(1.0);
