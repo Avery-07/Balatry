@@ -145,7 +145,7 @@ final class Overlays {
         r.gc().setFill(Color.web("#040a08", 0.62)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
         // Sits below the top joker/consumable row and above the hand, so both stay visible and selectable for a
         // targeted pick (hand cards for tarots/relic rank-suit-hand, a joker for Katadesmos).
-        double pw = 760, ph = 340, px = (Ui.W - pw) / 2, py = Ui.PAD + Ui.SLOT_H + 14;
+        double pw = 760, ph = 270, px = (Ui.W - pw) / 2, py = Ui.PAD + Ui.SLOT_H + 14;
         r.panel(px, py, pw, ph, Color.web("#241a3a"), PURPLE, 14, 3);
         r.textCenterBold(p.packName(), px + pw / 2, py + 26, 22, ORANGE);
         r.textCenter("Choose " + p.picksLeft() + " — click a card to preview, then Use", px + pw / 2, py + 50, 13, DIM);
@@ -162,7 +162,7 @@ final class Overlays {
 
         // The offered cards ride the same retained, count-scaled, draggable row the shop shelves use: a taken option
         // is a static "(taken)" hole, live ones lift and glide. Click previews (packSel); the Use button commits.
-        double tw = 108, th = 130, oy = py + 72, tileCY = oy + th / 2;
+        double tw = 108, th = 110, oy = py + 64, tileCY = oy + th / 2;
         double[] all = Layout.slots(n, px + pw / 2, tw, 12, pw - 48);
         List<Integer> liveIds = new ArrayList<>();
         List<Double> liveX = new ArrayList<>();
@@ -209,11 +209,11 @@ final class Overlays {
         // text is not repeated here — the hover tooltip already shows it.
         if (ui.packSel >= 0) {
             MatchSnapshot.PackOption opt = p.options().get(ui.packSel);
-            double dy = oy + th + 16;
+            double dy = oy + th + 12;
             r.textCenterBold(opt.label(), px + pw / 2, dy, 14, ORANGE);
             String need = optionNeed(opt);
             boolean ready = optionReady(ui, opt, selected);
-            if (!need.isEmpty()) r.textCenter(need, px + pw / 2, dy + 22, 11, ready ? GREEN : ORANGE);
+            if (!need.isEmpty()) r.textCenter(need, px + pw / 2, dy + 18, 11, ready ? GREEN : ORANGE);
             // Drawn and registered as a pack button (not ui.button) because only packButtons are live during the modal.
             String verb = opt.isRelic() || opt.minTargets() > 0 ? "Use" : "Take";
             double bw = 120, bh = 36, bx = px + pw / 2 - bw / 2, by = py + ph - 52;
@@ -338,7 +338,7 @@ final class Overlays {
             double x = gx + (gw - rowW) / 2;
             for (MatchSnapshot.DeckCardView c : row) {
                 r.gc().setGlobalAlpha(c.live() ? 1.0 : 0.28);
-                r.card(c.rank(), c.suit(), c.enhancement(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
+                r.card(c.rank(), c.suit(), c.enhancement(), c.seal(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
                 x += step;
             }
             r.gc().setGlobalAlpha(1.0);

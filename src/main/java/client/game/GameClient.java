@@ -154,13 +154,16 @@ public final class GameClient extends Application {
         pressOnHand = false; pressTarget = null;
         if (!inMatch() || ui.s == null || ui.showRunInfo || ui.atBlindBarrier()) return;
 
-        if (ui.s.opening() != null) {   // during a pack, only its cards lift & glide; options and the hand are click-only
-            if (ui.packRow.tileAt(x, y) != -1) pressTarget = packDrag;
-            return;
-        }
-        if (ui.s.phase() == MatchPhase.BLIND && hand.cardAt(x, y) != null) { pressOnHand = true; return; }
-        for (DragTarget t : dragTargets)
+        boolean pack = ui.s.opening() != null;
+        if (pack && ui.packRow.tileAt(x, y) != -1) { pressTarget = packDrag; return; }   // a pack option lifts & glides
+        // Hand cards reorder in the blind, and in a pack's dealt targeting hand.
+        if ((ui.s.phase() == MatchPhase.BLIND || pack) && hand.cardAt(x, y) != null) { pressOnHand = true; return; }
+        // Jokers and consumables reorder at any time (including during a pack); the shop rows only in the shop, and
+        // are never reachable through the pack modal.
+        for (DragTarget t : dragTargets) {
+            if (pack && t.row() != ui.jokerRow && t.row() != ui.itemRow) continue;
             if (t.active().getAsBoolean() && t.row().tileAt(x, y) != -1) { pressTarget = t; return; }
+        }
     }
 
     /** Once the cursor travels far enough, the press becomes a drag; from then on the drag owns the cursor. */
@@ -467,6 +470,10 @@ public final class GameClient extends Application {
         try {
             var in = getClass().getResourceAsStream("/sprites/cards/Enhancements.png");
             if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.enhancementSheet(img); }
+        } catch (RuntimeException ignored) { }
+        try {
+            var in = getClass().getResourceAsStream("/sprites/cards/Seals.png");
+            if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.sealSheet(img); }
         } catch (RuntimeException ignored) { }
         try {
             var in = getClass().getResourceAsStream("/font/game.ttf");

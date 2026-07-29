@@ -19,6 +19,8 @@ public final class Renderer {
     private double cellW, cellH;
     private Image enhSheet;              // enhancement backgrounds (3x3 grid of 71x95); the transparent face draws on top
     private double enhCellW, enhCellH;
+    private Image sealSheet;             // seals (2x2 grid of 71x95); a transparent stamp drawn on top of the face
+    private double sealCellW, sealCellH;
     private String family = "Monospaced";
 
     // 4-color deck (Hearts red, Clubs blue, Diamonds orange, Spades dark) — suit ordinals: SPADES0 HEARTS1 CLUBS2 DIAMONDS3.
@@ -29,6 +31,8 @@ public final class Renderer {
     // STONE,GOLD,LUCKY; the sheet's order isn't. Cell 0 is the plain base drawn behind an un-enhanced face.
     private static final int[] ENH_CELL = { 3, 4, 5, 7, 8, 1, 2, 6 };
     private static final int ENH_STONE = 5;   // STONE ordinal: a Stone card is only the stone, no rank/suit
+    // Seal.ordinal() -> cell in Seals.png (2x2). Enum order is RED,BLUE,GOLD,PURPLE; the sheet is Gold,Purple,Red,Blue.
+    private static final int[] SEAL_CELL = { 2, 3, 0, 1 };
 
     public Renderer(GraphicsContext g) { this.g = g; g.setImageSmoothing(false); }
 
@@ -36,6 +40,7 @@ public final class Renderer {
 
     public void cardSheet(Image img) { if (img != null) { sheet = img; cellW = img.getWidth() / 13.0; cellH = img.getHeight() / 4.0; } }
     public void enhancementSheet(Image img) { if (img != null && !img.isError() && img.getWidth() > 0) { enhSheet = img; enhCellW = img.getWidth() / 3.0; enhCellH = img.getHeight() / 3.0; } }
+    public void sealSheet(Image img) { if (img != null && !img.isError() && img.getWidth() > 0) { sealSheet = img; sealCellW = img.getWidth() / 2.0; sealCellH = img.getHeight() / 2.0; } }
     public void font(String fam) { if (fam != null) family = fam; }
 
     // Per-joker face textures, loaded lazily from /sprites/joker/<Name>.png and cached (misses cached as null, so
@@ -106,26 +111,27 @@ public final class Renderer {
 
     /** Draws a card centered at (cx,cy), tilted {@code deg}, with an optional selection ring. */
     public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected) {
-        card(rankOrd, suitOrd, -1, cx, cy, w, h, deg, selected, 0);
+        card(rankOrd, suitOrd, -1, -1, cx, cy, w, h, deg, selected, 0);
     }
 
-    /** As {@link #card}, carrying an enhancement ordinal ({@code -1} for none). */
-    public void card(int rankOrd, int suitOrd, int enhancement, double cx, double cy, double w, double h, double deg, boolean selected) {
-        card(rankOrd, suitOrd, enhancement, cx, cy, w, h, deg, selected, 0);
+    /** As {@link #card}, carrying an enhancement and seal ordinal ({@code -1} for none of each). */
+    public void card(int rankOrd, int suitOrd, int enhancement, int seal, double cx, double cy, double w, double h, double deg, boolean selected) {
+        card(rankOrd, suitOrd, enhancement, seal, cx, cy, w, h, deg, selected, 0);
     }
 
-    /** As {@link #card}, plus a flip, with no enhancement. */
+    /** As {@link #card}, plus a flip, with no enhancement or seal. */
     public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected, double flipT) {
-        card(rankOrd, suitOrd, -1, cx, cy, w, h, deg, selected, flipT);
+        card(rankOrd, suitOrd, -1, -1, cx, cy, w, h, deg, selected, flipT);
     }
 
     /**
-     * Draws a card with an {@code enhancement} ordinal ({@code -1} = none) and a flip: {@code flipT} 0 is face up,
-     * 1 face down (the deck's back), between squashes it through its edge-on midpoint — the turn animation. The
-     * face art ({@code cards.png}) is transparent-backed, so a card base is drawn first: the enhancement's
-     * background when it has one, else the plain base cell. A Stone card shows only the stone — no rank/suit.
+     * Draws a card with {@code enhancement} and {@code seal} ordinals ({@code -1} = none) and a flip: {@code flipT}
+     * 0 is face up, 1 face down (the deck's back), between squashes it through its edge-on midpoint — the turn
+     * animation. The face art ({@code cards.png}) is transparent-backed, so a card base is drawn first: the
+     * enhancement's background when it has one, else the plain base cell. A Stone card shows only the stone — no
+     * rank/suit. The seal, if any, is a stamp drawn on top of the finished face.
      */
-    public void card(int rankOrd, int suitOrd, int enhancement, double cx, double cy, double w, double h,
+    public void card(int rankOrd, int suitOrd, int enhancement, int seal, double cx, double cy, double w, double h,
                      double deg, boolean selected, double flipT) {
         g.save();
         g.translate(cx, cy);
@@ -155,6 +161,11 @@ public final class Renderer {
             g.setTextAlign(TextAlignment.CENTER); g.setTextBaseline(VPos.CENTER);
             g.setFont(Font.font(family, javafx.scene.text.FontWeight.BOLD, h * 0.42));
             g.fillText(SUIT_SYM[suitOrd], 0, 4);
+        }
+        boolean faceUp = !(flipT > 0.5 || rankOrd < 0);
+        if (faceUp && sealSheet != null && seal >= 0 && seal < SEAL_CELL.length) {   // the seal stamp, over the finished face
+            int scell = SEAL_CELL[seal];
+            g.drawImage(sealSheet, (scell % 2) * sealCellW, (scell / 2) * sealCellH, sealCellW, sealCellH, x, y, w, h);
         }
         if (selected) { g.setStroke(Color.web("#f0a92b")); g.setLineWidth(4); g.strokeRoundRect(x, y, w, h, arc, arc); }
         g.restore();
