@@ -110,8 +110,14 @@ public final class MatchHost {
 
     private boolean allRoundsResolved(List<PlayerId> active) {
         for (PlayerId id : active) {
-            var round = match.getRun(id).getRound();
+            var run = match.getRun(id);
+            var round = run.getRound();
             if (round == null || round.getOutcome() == RoundOutcome.IN_PROGRESS) return false;
+            // A SKIPPED round still owes the seat the free pack its tag granted: hold the barrier until it is opened
+            // and picked, so the pack isn't discarded unopened when the round settles. (A played round's packs are
+            // out of scope — a skip is the only place we currently surface a pending pack to open.)
+            if (round.getOutcome() == RoundOutcome.SKIPPED
+                    && (run.getCurrentOpening() != null || !run.getPendingPacks().isEmpty())) return false;
         }
         return true;
     }

@@ -152,7 +152,8 @@ public final class GameClient extends Application {
     private void handlePress(double x, double y) {
         pressX = x; pressY = y;
         pressOnHand = false; pressTarget = null;
-        if (!inMatch() || ui.s == null || ui.showRunInfo || ui.atBlindBarrier()) return;
+        if (!inMatch() || ui.s == null || ui.showRunInfo) return;
+        if (ui.atBlindBarrier() && ui.s.opening() == null) return;   // the barrier blocks input, except while opening a pack
 
         boolean pack = ui.s.opening() != null;
         if (pack && ui.packRow.tileAt(x, y) != -1) { pressTarget = packDrag; return; }   // a pack option lifts & glides
@@ -364,8 +365,12 @@ public final class GameClient extends Application {
 
         hud.render(ui);
         boolean blindWait = ui.atBlindBarrier();   // this seat is done with the blind, waiting on the others
-        if (ui.s.opening() == null) ui.packSel = -1;   // no pack open: drop any stale preview selection
-        if (ui.s.opening() != null) {
+        boolean packOpen = ui.s.opening() != null;
+        // A skipped round can still owe the seat the free pack its tag granted: the barrier waits for it, and the
+        // seat gets an "Open" gate here rather than the dead waiting popup.
+        boolean packToOpen = blindWait && ui.blindSkipped() && !packOpen && !ui.s.pendingPacks().isEmpty();
+        if (!packOpen) ui.packSel = -1;   // no pack open: drop any stale preview selection
+        if (packOpen) {
             overlays.pack(ui);   // the pack panel sits up top until its picks are spent
             if (!ui.s.hand().isEmpty())   // a targeted pick needs the hand shown below the panel to aim at
                 ui.hand.render(ui, 0, cTop, Ui.W, cH);   // centered on the screen, under the pack panel — not the play-area center
@@ -378,6 +383,7 @@ public final class GameClient extends Application {
             else r.textCenter(String.valueOf(ui.s.phase()), cx + cW / 2, cTop + cH / 2, 20, Palette.DIM);
             if (!blindWait) overlays.contextActions(ui);   // no contextual buy/use/sell while waiting at the barrier
         }
+        if (packToOpen) overlays.pendingPackPrompt(ui);   // the "Open" gate for a free skip/Wrath pack, over the barrier
         if (!ui.status.isEmpty()) r.textLeft(ui.status, Ui.PAD + 8, Ui.H - 20, 12, Palette.DIM);
         if (ui.showRunInfo) overlays.runInfo(ui);
 
@@ -385,8 +391,10 @@ public final class GameClient extends Application {
         if (hand.hasStaged()) hand.renderStaged(ui, cx, cTop + cH * 0.34, cW);
         if (ui.reel.playing()) overlays.scoreEffect(ui);
 
-        if (blindWait) {
-            overlays.blindWait(ui);   // the irremovable modal, above the backdrop but under the fade
+        if (blindWait && !packOpen && !packToOpen) {
+            overlays.blindWait(ui);   // the irremovable modal — only once there is no pack left to open
+        } else if (blindWait) {
+            overlays.tooltip(ui);     // a pack is open (or waiting to be opened) at the barrier: keep its tooltips
         } else {
             // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
             if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
@@ -422,8 +430,7 @@ public final class GameClient extends Application {
             return;
         }
         if (ui.s == null) return;
-        if (ui.atBlindBarrier()) return;   // irremovable modal: no input crosses the blind barrier
-        if (ui.s.opening() != null) {   // pack modal: pick an option, or select hand cards / a joker to aim a targeted pick
+        if (ui.s.opening() != null) {   // pack modal (live even at the blind barrier): pick an option, select hand cards / a joker
             CardEntity e = hand.cardAt(x, y);
             if (e != null) {
                 if (!e.selected() && hand.selectedCount() >= Ui.MAX_SELECTION) ui.status = "At most " + Ui.MAX_SELECTION + " cards.";
@@ -435,6 +442,10 @@ public final class GameClient extends Application {
                 ui.jokerTarget = (ui.jokerTarget == se.index()) ? -1 : se.index();
                 return;
             }
+            return;
+        }
+        if (ui.atBlindBarrier()) {   // the barrier: the only live control is Open, on a free pending pack; else a dead wait
+            for (Ui.Btn b : ui.packButtons) if (b.rect().contains(x, y)) { b.action().run(); return; }
             return;
         }
         if (ui.showRunInfo) {

@@ -140,6 +140,11 @@ public final class MatchViewModel {
         submit(new Action.BuyPack(client.getSeat(), packIndex));
     }
 
+    /** Opens a granted-but-unopened pending pack (a skip tag's free pack, or Wrath's) at the blind barrier. */
+    public void openPack(int pendingIndex) {
+        submit(new Action.OpenPack(client.getSeat(), pendingIndex));
+    }
+
     /**
      * Picks the option at {@code optionIndex} from the pack being opened, using it immediately. A targeted
      * consumable passes the hand cards it applies to in {@code targetHandIndices}; a relic passes its derived

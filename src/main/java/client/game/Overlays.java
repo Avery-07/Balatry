@@ -226,6 +226,29 @@ final class Overlays {
         }
     }
 
+    /**
+     * The blind-barrier free-pack gate: a skip tag (or the Wrath sin) granted a pack that hasn't been opened. The
+     * barrier waits for it, so instead of the dead "waiting" popup the seat gets an Open button that routes into the
+     * normal pack modal. Shown one pack at a time (opening removes it from the pending list; the next then appears).
+     */
+    void pendingPackPrompt(Ui ui) {
+        java.util.List<MatchSnapshot.PendingPackView> packs = ui.s.pendingPacks();
+        if (packs.isEmpty()) return;
+        Renderer r = ui.r;
+        r.gc().setFill(Color.web("#040a08", 0.66)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+        MatchSnapshot.PendingPackView next = packs.get(0);
+        double pw = 440, ph = 172, px = (Ui.W - pw) / 2, py = 250;
+        r.panel(px, py, pw, ph, Color.web("#241a3a"), PURPLE, 14, 3);
+        r.textCenterBold("Free Booster Pack", px + pw / 2, py + 38, 20, ORANGE);
+        r.textCenter(next.label(), px + pw / 2, py + 70, 15, INK);
+        if (packs.size() > 1) r.textCenter(packs.size() + " packs to open", px + pw / 2, py + 92, 11, DIM);
+        double bw = 170, bh = 44, bx = px + pw / 2 - bw / 2, by = py + ph - 60;
+        r.panel(bx, by, bw, bh, ORANGE, ORANGE.darker(), 8, 2);
+        r.textCenterBold("Open", bx + bw / 2, by + bh / 2, 16, DARK);
+        int idx = next.index();
+        ui.packButtons.add(new Ui.Btn(new Layout.Rect(bx, by, bw, bh), () -> ui.vm.openPack(idx)));
+    }
+
     /** A pack option's hover text: name, effect, and what a targeted pick still needs. */
     private static String packTip(MatchSnapshot.PackOption o) {
         StringBuilder t = new StringBuilder(o.label());

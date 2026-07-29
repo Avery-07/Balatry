@@ -83,6 +83,7 @@ public record MatchSnapshot(
         boolean inShop,
         ShopView shop,             // null outside the shop phase
         PackOpeningView opening,   // a booster pack being picked from, or null
+        List<PendingPackView> pendingPacks,   // granted, unopened packs (skip tags, Wrath) awaiting an Open at the barrier
         boolean hasChosen,         // this seat has made its blind-selection choice
         boolean isReady,           // this seat has signalled ready to leave RESULT/SHOP — waiting on the others
         int readyCount,            // how many still-playing seats have signalled ready
@@ -201,6 +202,9 @@ public record MatchSnapshot(
 
     /** A booster pack being opened: its name, the remaining pick budget, and each option's label (null = taken). */
     public record PackOpeningView(String packName, int picksLeft, List<PackOption> options) { }
+
+    /** A granted, unopened booster pack (a skip tag's free pack, or Wrath's) the seat opens at the blind barrier; {@code index} into the run's pending list. */
+    public record PendingPackView(String label, int index) { }
 
     /**
      * One offered option in an open pack, everything the client needs to pick it (every pick is used at once):
@@ -335,6 +339,7 @@ public record MatchSnapshot(
                 inShop,
                 shopView,
                 packOpening(run),
+                pendingPacks(run),
                 hasChosen,
                 match.isReady(me),
                 match.readyCount(),
@@ -477,6 +482,14 @@ public record MatchSnapshot(
             }
         }
         return new PackOpeningView(String.valueOf(o.getPack()), o.getPicksLeft(), options);
+    }
+
+    /** Granted-but-unopened packs, in pending order, so the client can offer an Open at the blind barrier. */
+    private static List<PendingPackView> pendingPacks(Run run) {
+        var packs = run.getPendingPacks();
+        List<PendingPackView> out = new ArrayList<>(packs.size());
+        for (int i = 0; i < packs.size(); i++) out.add(new PendingPackView(String.valueOf(packs.get(i)), i));
+        return out;
     }
 
     private static ShopView buildShop(Shop shop, Run run) {
