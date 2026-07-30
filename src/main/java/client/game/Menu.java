@@ -50,6 +50,11 @@ final class Menu {
     int seat = -1;                 // this client's seat, once the server has assigned one
     String status = "";
 
+    // --- collection overlay: every joker, paginated, drawn on top of the main menu with the same idle sway/bob ---
+    private boolean showCollection;
+    private int collectionPage;
+    private double time;           // frame clock for the collection tiles' idle animation
+
     /** Set by GameClient: what the buttons actually do. */
     Runnable onHost, onJoin, onBegin, onLeave, onLoadoutChange;
     java.util.function.Consumer<DeckType> onDeckChange;
@@ -63,6 +68,7 @@ final class Menu {
 
     /** Appends one typed character to the focused field, if it is printable and there is room. */
     void onChar(String ch) {
+        if (showCollection) return;   // the collection modal swallows typing
         if (focus == Focus.NONE || ch.isEmpty()) return;
         char c = ch.charAt(0);
         if (c < ' ' || c == 127) return;   // control characters (Enter, Backspace) arrive here too
@@ -71,6 +77,7 @@ final class Menu {
     }
 
     void onBackspace() {
+        if (showCollection) return;
         if (focus == Focus.NAME && !name.isEmpty()) name = name.substring(0, name.length() - 1);
         else if (focus == Focus.ADDRESS && !address.isEmpty()) address = address.substring(0, address.length() - 1);
     }
@@ -88,7 +95,7 @@ final class Menu {
         slide.retarget(0);   // …and glide up into place
     }
 
-    void advance(double dt) { slide.advance(dt); }
+    void advance(double dt) { slide.advance(dt); time += dt; }
 
     void render(Ui ui) {
         // Draw under a translate for the slide-in; Ui.regionOffsetY keeps every registered hitbox in sync with
@@ -100,6 +107,7 @@ final class Menu {
         ui.regionOffsetY = 0;
         ui.r.gc().restore();
         if (!status.isEmpty()) ui.r.textCenter(status, Ui.W / 2.0, Ui.H - 28, 13, status.startsWith("ERR") ? RED : DIM);
+        if (showCollection) renderCollection(ui);   // the modal sits on top, outside the slide, owning input
     }
 
     /** The main menu is only identity and connection; the loadout is picked in the lobby, where others can see it. */
@@ -127,6 +135,68 @@ final class Menu {
         y += 80;
 
         textField(ui, px + 30, y, pw - 60, 40, Focus.ADDRESS, address, "host address");
+
+        // Opens the collection modal (every joker, browsable) over the menu.
+        ui.button(px, py + ph + 18, pw, 46, "Collection", PURPLE, INK,
+                () -> { showCollection = true; collectionPage = 0; }, true);
+    }
+
+    /**
+     * The collection: every joker, five-by-three across paged tiles, each carrying the same idle sway/bob the
+     * in-game tiles do. Drawn as a full-screen modal over the menu; it clears the menu's registered buttons so its
+     * own page/Back controls are the only live ones (nothing clicks through to the menu behind).
+     */
+    private void renderCollection(Ui ui) {
+        Renderer r = ui.r;
+        ui.buttons.clear();   // the modal owns input — drop the menu widgets behind it
+        r.gc().setFill(Color.web("#04060a", 0.74));
+        r.gc().fillRect(0, 0, Ui.W, Ui.H);
+
+        double pw = 1140, ph = 724, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        r.panel(px, py, pw, ph, Color.web("#141517"), EDGE, 16, 3);
+        r.textCenterBold("COLLECTION — Jokers", Ui.W / 2.0, py + 40, 30, ORANGE);
+
+        model.items.jokers.Jokers[] all = model.items.jokers.Jokers.values();
+        int cols = 5, rows = 3, perPage = cols * rows;
+        int pages = (all.length + perPage - 1) / perPage;
+        collectionPage = Math.max(0, Math.min(collectionPage, pages - 1));
+        int start = collectionPage * perPage;
+
+        double cardW = 120, cardH = 162, gapX = 44, gapY = 22;
+        double gridW = cols * cardW + (cols - 1) * gapX;
+        double gx = px + (pw - gridW) / 2, gy = py + 78;
+
+        for (int i = 0; i < perPage && start + i < all.length; i++) {
+            model.items.jokers.Jokers jk = all[start + i];
+            int seed = start + i;
+            double cx = gx + (i % cols) * (cardW + gapX) + cardW / 2;
+            double bob = client.engine.Idle.bobPx(time, seed, 1.8);
+            double sway = client.engine.Idle.swayDeg(time, seed, 1.4);
+            double baseTy = gy + (i / cols) * (cardH + gapY);   // the static tile, for a hover target that doesn't bob
+            double tx = cx - cardW / 2, ty = baseTy + bob;
+            r.rotated(cx, ty + cardH / 2, sway, () -> {
+                javafx.scene.image.Image tex = r.jokerTexture(jk.spec().getName());
+                if (tex != null) {
+                    r.imageFit(tex, tx, ty, cardW, cardH);
+                } else {   // no PNG yet: the same vector tile the HUD falls back to
+                    r.panel(tx, ty, cardW, cardH, Color.web("#c0392b"), Color.web("#0006"), 8, 2);
+                    r.textCenter(Fmt.shortName(jk.spec().getName()), cx, ty + cardH / 2, 11, INK);
+                }
+            });
+            // The same hover system every card uses: name + effect, drawn by Overlays.tooltip on the menu path.
+            String desc = jk.spec().getDescription();
+            ui.tip(new Layout.Rect(tx, baseTy, cardW, cardH),
+                    desc == null || desc.isEmpty() ? jk.spec().getName() : jk.spec().getName() + "\n" + desc);
+        }
+
+        // Page nav and Back.
+        double navY = py + ph - 108;
+        int lastPage = pages - 1;
+        ui.button(Ui.W / 2.0 - 170, navY, 44, 44, "◀", RED, INK, () -> collectionPage = Math.max(0, collectionPage - 1), true);
+        r.panel(Ui.W / 2.0 - 120, navY, 240, 44, RED, RED.darker(), 8, 2);
+        r.textCenterBold("Page " + (collectionPage + 1) + " / " + pages, Ui.W / 2.0, navY + 22, 18, INK);
+        ui.button(Ui.W / 2.0 + 126, navY, 44, 44, "▶", RED, INK, () -> collectionPage = Math.min(lastPage, collectionPage + 1), true);
+        ui.button(px + 40, py + ph - 52, pw - 80, 40, "Back", ORANGE, DARK, () -> showCollection = false, true);
     }
 
     private void renderLobby(Ui ui) {

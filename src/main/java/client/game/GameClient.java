@@ -355,7 +355,7 @@ public final class GameClient extends Application {
     private void render() {
         ui.newFrame();
         paintBackground();
-        if (!inMatch()) { menu.render(ui); drawFade(); return; }   // menu and lobby own the screen until the match begins
+        if (!inMatch()) { menu.render(ui); overlays.tooltip(ui); drawFade(); return; }   // menu owns the screen; its hover tips draw last
         if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
 
         double cx = Ui.PAD + Ui.SIDEBAR + 18;
