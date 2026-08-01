@@ -6,9 +6,6 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.effect.BlendMode;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
-import javafx.scene.paint.CycleMethod;
-import javafx.scene.paint.LinearGradient;
-import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
 
@@ -310,61 +307,36 @@ public final class Renderer {
         g.restore();
     }
 
+    private final EditionArt editions = new EditionArt();
+
     /**
-     * Paints an edition's effect inside the card/tile silhouette at (x,y,w,h), clipped to the rounded shape so it
-     * never bleeds into the transparent corners: Foil a cool metallic sheen, Holographic a pink shimmer, Polychrome
-     * a drifting rainbow, Negative a colour inversion. Animated on the frame {@link #clock}. A no-op for {@code -1}.
-     * Public so tile draws (jokers, consumables, shop/pack items) can lay it over their texture the same way.
+     * Paints an edition's shimmer inside the card/tile silhouette at (x,y,w,h), clipped to the rounded shape so it
+     * never bleeds into the transparent corners. Foil/Holographic/Polychrome blit {@link EditionArt}'s animated
+     * pattern buffers (the real Balatro foil math) with a SCREEN blend so the pattern lightens the art; Negative
+     * darkens the card toward navy and adds a faint sheen. Animated on the frame {@link #clock}; a no-op for -1.
+     * Public so tile draws (jokers, consumables, shop/pack items) lay it over their texture the same way.
      */
     public void editionEffect(int edition, double x, double y, double w, double h, double arc) {
         if (edition < 0) return;
+        editions.ensure(clock);
         g.save();
         clipRoundRect(x, y, w, h, arc);
         switch (edition) {
-            case 0 -> sheen(x, y, w, h, Color.web("#bff2ff"), Color.web("#5fd0ff"), 0.85, BlendMode.SCREEN);   // FOIL
-            case 1 -> sheen(x, y, w, h, Color.web("#ff9ad6"), Color.web("#b06bff"), 0.65, BlendMode.SCREEN);   // HOLOGRAPHIC
-            case 2 -> polychrome(x, y, w, h);                                                                  // POLYCHROME
-            case 3 -> {                                                                                        // NEGATIVE
-                g.setGlobalBlendMode(BlendMode.DIFFERENCE);
-                g.setFill(Color.WHITE);
-                g.fillRect(x, y, w, h);   // white × DIFFERENCE inverts the card's colours
+            case 0 -> { g.setGlobalBlendMode(BlendMode.SCREEN); g.drawImage(editions.foil(), x, y, w, h); }   // FOIL
+            case 1 -> { g.setGlobalBlendMode(BlendMode.SCREEN); g.drawImage(editions.holo(), x, y, w, h); }   // HOLOGRAPHIC
+            case 2 -> { g.setGlobalBlendMode(BlendMode.SCREEN); g.setGlobalAlpha(0.9); g.drawImage(editions.poly(), x, y, w, h); }  // POLYCHROME
+            case 3 -> {                                                                                        // NEGATIVE: dark navy + faint sheen
+                g.setGlobalBlendMode(BlendMode.MULTIPLY);
+                g.setFill(Color.web("#4a4f7a"));
+                g.fillRect(x, y, w, h);
+                g.setGlobalBlendMode(BlendMode.SCREEN);
+                g.setGlobalAlpha(0.5);
+                g.drawImage(editions.foil(), x, y, w, h);
             }
             default -> { }
         }
         g.restore();
     }
-
-    /** A moving diagonal light band (Foil, Holographic) — a two-tone highlight that drifts across on the clock. */
-    private void sheen(double x, double y, double w, double h, Color bright, Color tint, double alpha, BlendMode blend) {
-        double p = 0.3 + 0.4 * (Math.sin(clock * 0.9) * 0.5 + 0.5);
-        LinearGradient lg = new LinearGradient(x, y, x + w, y + h, false, CycleMethod.NO_CYCLE,
-                new Stop(0, transparent(tint)),
-                new Stop(Math.max(0.001, p - 0.28), transparent(tint)),
-                new Stop(p, bright),
-                new Stop(Math.min(0.999, p + 0.28), transparent(tint)),
-                new Stop(1, transparent(tint)));
-        g.setGlobalBlendMode(blend);
-        g.setGlobalAlpha(alpha);
-        g.setFill(lg);
-        g.fillRect(x, y, w, h);
-    }
-
-    /** The Polychrome rainbow: a full-spectrum gradient whose hues drift along the clock. */
-    private void polychrome(double x, double y, double w, double h) {
-        double shift = (clock * 0.12) % 1.0;
-        Stop[] stops = new Stop[7];
-        for (int i = 0; i <= 6; i++) {
-            double pos = i / 6.0;
-            stops[i] = new Stop(pos, Color.hsb(((pos + shift) % 1.0) * 360, 0.85, 1.0, 0.55));
-        }
-        LinearGradient lg = new LinearGradient(x, y, x + w, y, false, CycleMethod.NO_CYCLE, stops);
-        g.setGlobalBlendMode(BlendMode.OVERLAY);
-        g.setGlobalAlpha(0.75);
-        g.setFill(lg);
-        g.fillRect(x, y, w, h);
-    }
-
-    private static Color transparent(Color c) { return Color.color(c.getRed(), c.getGreen(), c.getBlue(), 0); }
 
     /** Clips the graphics context to a rounded rectangle — the card's silhouette, so overlays stay inside it. */
     private void clipRoundRect(double x, double y, double w, double h, double r) {
