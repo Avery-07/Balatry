@@ -27,6 +27,9 @@ public final class CatalogShopPool implements ShopPool {
     private static final int JOKER_WEIGHT = 72;
     private static final int TAROT_WEIGHT = 14;   // remainder is Planet
 
+    /** Share of card-row rolls that become a playing card while Magic Trick is active (out of 100). */
+    private static final int MAGIC_TRICK_CARD_WEIGHT = 20;
+
     /** Share of the Planet band the Ghost deck turns into Spectrals (out of 100). */
     private static final int GHOST_SPECTRAL_SHARE = 50;
 
@@ -37,6 +40,14 @@ public final class CatalogShopPool implements ShopPool {
 
     @Override
     public Card roll(Run run, RandomGenerator stream) {
+        // Magic Trick: playing cards join the card row, rolling their modifiers at the same odds packs use (Illusion
+        // boosts them). Rolled first and only when active, so a run without the voucher consumes the stream as before.
+        if (run != null && run.isMagicTrickActive() && stream.nextInt(100) < MAGIC_TRICK_CARD_WEIGHT) {
+            model.items.DeckCard card = model.items.PlayingCards.rolled(stream, run.isIllusionActive());
+            card.setShopValue(1);
+            return card;
+        }
+
         int type = stream.nextInt(100);
         if (type < JOKER_WEIGHT)                return Jokers.weightedRandom(stream).make();
         if (type < JOKER_WEIGHT + TAROT_WEIGHT) return Tarots.random(stream).make();

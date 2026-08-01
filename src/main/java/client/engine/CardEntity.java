@@ -18,6 +18,7 @@ public final class CardEntity {
     private int suit;
     private int enhancement = -1;   // Enhancement.ordinal(), or -1 for a plain card; drives the card's background art
     private int seal = -1;          // Seal.ordinal(), or -1 for none; drawn as a stamp on top of the face
+    private int edition = -1;       // Edition.ordinal(), or -1 for none; drawn as the animated shimmer on top
     private String label;
     private final Motion motion;
     private final Tween flip;   // 0 = face up, 1 = face down; mid-flight values are the turn itself
@@ -26,16 +27,17 @@ public final class CardEntity {
 
     public CardEntity(int id, int rank, int suit, String label,
                       double x, double y, double durationSeconds, DoubleUnaryOperator ease) {
-        this(id, rank, suit, label, -1, -1, x, y, durationSeconds, ease);
+        this(id, rank, suit, label, -1, -1, -1, x, y, durationSeconds, ease);
     }
 
-    public CardEntity(int id, int rank, int suit, String label, int enhancement, int seal,
+    public CardEntity(int id, int rank, int suit, String label, int enhancement, int seal, int edition,
                       double x, double y, double durationSeconds, DoubleUnaryOperator ease) {
         this.id = id;
         this.rank = rank;
         this.suit = suit;
         this.enhancement = enhancement;
         this.seal = seal;
+        this.edition = edition;
         this.label = label;
         this.motion = new Motion(x, y, durationSeconds, ease);
         this.flip = new Tween(0, FLIP_SECONDS, Easing.EASE_IN_OUT);
@@ -51,6 +53,7 @@ public final class CardEntity {
     public int suit()        { return suit; }
     public int enhancement() { return enhancement; }
     public int seal()        { return seal; }
+    public int edition()     { return edition; }
     public String label()    { return label; }
     public double x()        { return motion.x(); }
     public double y()        { return motion.y(); }
@@ -87,5 +90,5 @@ public final class CardEntity {
     /** Releases the card: the layout owns it again and the next {@link #moveTo} glides it into place. */
     public void endDrag() { dragging = false; }
 
-    void update(int rank, int suit, int enhancement, int seal, String label) { this.rank = rank; this.suit = suit; this.enhancement = enhancement; this.seal = seal; this.label = label; }
+    void update(int rank, int suit, int enhancement, int seal, int edition, String label) { this.rank = rank; this.suit = suit; this.enhancement = enhancement; this.seal = seal; this.edition = edition; this.label = label; }
 }

@@ -59,7 +59,7 @@ final class Hand {
         List<Reconciler.Desired> desired = new ArrayList<>();
         Set<Integer> wantedIds = new HashSet<>();
         for (MatchSnapshot.HandCardView c : snapHand) {
-            desired.add(new Reconciler.Desired(c.id(), c.rank(), c.suit(), c.enhancement(), c.seal(), c.label()));
+            desired.add(new Reconciler.Desired(c.id(), c.rank(), c.suit(), c.enhancement(), c.seal(), c.edition(), c.label()));
             wantedIds.add(c.id());
         }
         for (CardEntity e : cards)
@@ -96,7 +96,7 @@ final class Hand {
             double pop = ui.scorePop(e.id());   // the trigger animation: this card's beat is live
             double size = 1 + 0.18 * pop;
             double cx = e.x(), cy = e.y() - 18 * pop;
-            ui.r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), cx, cy, CARD_W * size, CARD_H * size, 0, pop > 0.05, e.flipT());
+            ui.r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), cx, cy, CARD_W * size, CARD_H * size, 0, pop > 0.05, e.flipT());
             ui.noteSourceRect(e.id(), new Layout.Rect(
                     cx - CARD_W * size / 2, cy - CARD_H * size / 2, CARD_W * size, CARD_H * size));
         }
@@ -135,7 +135,7 @@ final class Hand {
             CardEntity e = exiting.get(i).card;
             double alpha = Math.max(0, 1 - exiting.get(i).age / EXIT_SECONDS);
             r.gc().setGlobalAlpha(alpha);
-            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.x(), e.y(), CARD_W, CARD_H, 0, false, e.flipT());
+            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), e.y(), CARD_W, CARD_H, 0, false, e.flipT());
             r.gc().setGlobalAlpha(1);
         }
 
@@ -166,7 +166,7 @@ final class Hand {
             double pop = ui.scorePop(e.id());
             double size = 1 + 0.18 * pop;
             double drawY = e.y() + bob - 18 * pop;
-            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.x(), drawY, CARD_W * size, CARD_H * size,
+            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), drawY, CARD_W * size, CARD_H * size,
                     fan.get(k).rotationDeg() + sway, e.selected() || pop > 0.05, e.flipT());
             ui.noteSourceRect(e.id(), new Layout.Rect(
                     e.x() - CARD_W * size / 2, drawY - CARD_H * size / 2, CARD_W * size, CARD_H * size));
@@ -175,7 +175,7 @@ final class Hand {
                         Fmt.cardTip(e.label(), e.rank(), e.suit()));
         }
         if (dragged != null)
-            r.card(dragged.rank(), dragged.suit(), dragged.enhancement(), dragged.seal(), dragged.x(), dragged.y(), CARD_W, CARD_H,
+            r.card(dragged.rank(), dragged.suit(), dragged.enhancement(), dragged.seal(), dragged.edition(), dragged.x(), dragged.y(), CARD_W, CARD_H,
                     0, dragged.selected(), dragged.flipT());
 
         int sel = selectedCount();

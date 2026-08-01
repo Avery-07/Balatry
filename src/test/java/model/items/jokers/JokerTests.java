@@ -24,7 +24,7 @@ public final class JokerTests {
     private static final ScoringEngine ENGINE = new ScoringEngine();
 
     public static void main(String[] args) {
-        checkInt("catalog: 137 base + 27 new Balatry jokers", Jokers.values().length, 164);
+        checkInt("catalog: 137 base + 28 new Balatry jokers", Jokers.values().length, 165);
         for (Jokers j : Jokers.values())
             check("every joker has a description: " + j.name(), !j.spec().getDescription().isEmpty());
         scoringDeltas();

@@ -39,8 +39,8 @@ public enum Vouchers {
     BLANK("Blank", null, "Does nothing (a prerequisite for Antimatter).", VoucherEffect.NONE),
     ANTIMATTER("Antimatter", BLANK, "+1 joker slot.", r -> r.setJokerSlots(r.getJokerSlots() + 1)),
 
-    MAGIC_TRICK("Magic Trick", null, "Playing cards appear for purchase in the shop.", VoucherEffect.NONE),   // out of card-row scope for now
-    ILLUSION("Illusion", MAGIC_TRICK, "Shop playing cards may have enhancements, editions and seals.", VoucherEffect.NONE),
+    MAGIC_TRICK("Magic Trick", null, "Playing cards can be purchased from the shop too.", r -> r.setMagicTrickCards(true)),
+    ILLUSION("Illusion", MAGIC_TRICK, "Playing cards are more likely to have enhancements, editions and seals.", r -> { r.setMagicTrickCards(true); r.setIllusion(true); }),
 
     PAINT_BRUSH("Paint Brush", null, "+1 hand size.", r -> r.setHandSize(r.getHandSize() + 1)),
     PALETTE("Palette", PAINT_BRUSH, "+1 hand size.", r -> r.setHandSize(r.getHandSize() + 1)),

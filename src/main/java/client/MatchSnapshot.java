@@ -115,13 +115,13 @@ public record MatchSnapshot(
      * A card the boss dealt {@code faceDown} is masked at the boundary — rank and suit are {@code -1} and the
      * label is blank — so no tooltip, sort or preview can leak what its owner is not allowed to see.
      */
-    public record HandCardView(int id, String label, int rank, int suit, int enhancement, int seal, boolean faceDown) { }
+    public record HandCardView(int id, String label, int rank, int suit, int enhancement, int seal, int edition, boolean faceDown) { }
 
     /**
      * One card of the full deck, for the deck-pile hover: rank/suit ordinals and whether it is still {@code live}
      * (in the draw pile or the hand). During a round a spent card greys out; outside a round everything is live.
      */
-    public record DeckCardView(int rank, int suit, int enhancement, int seal, boolean live) { }
+    public record DeckCardView(int rank, int suit, int enhancement, int seal, int edition, boolean live) { }
 
     /**
      * One poker hand at this seat's current level — what a play of that type is worth right now, plus {@code plays}:
@@ -154,7 +154,7 @@ public record MatchSnapshot(
      * it is currently doing nothing. The badge exists because stickers are drawbacks the player agreed to — they
      * have to stay visible after the purchase, not just in the shop.
      */
-    public record JokerView(int id, String name, String description, String state, String badge, boolean debuffed) { }
+    public record JokerView(int id, String name, String description, String state, String badge, int edition, boolean debuffed) { }
 
     /**
      * One of the ante's three blinds, as the selection screen shows it: its type, chip target and cash reward,
@@ -175,7 +175,7 @@ public record MatchSnapshot(
      * needsSeat} is true only for relics the caster aims by hand.
      */
     public record ItemView(int id, String label, String description, String badge, boolean isRelic, int modelIndex,
-                           String kind, String selector, boolean needsSeat, int minTargets) { }
+                           String kind, String selector, boolean needsSeat, int minTargets, int edition) { }
 
     /** One seat's line in the final standings; {@code isMe} marks the local seat, {@code departed} a player who left. */
     public record StandingView(int seat, String name, long points, int rank, boolean isMe, boolean departed) { }
@@ -195,7 +195,10 @@ public record MatchSnapshot(
      * {@code badge} naming its edition and stickers — empty for a plain card, but a Sticky or Perishable roll is
      * a real drawback, so the buyer must see it on the tile <em>before</em> paying.
      */
-    public record ShopItem(int id, String label, int price, String tooltip, String badge) { }
+    public record ShopItem(int id, String label, int price, String tooltip, String badge, CardFace card, int edition) { }
+
+    /** A playing card's face, for a shop slot or pack option that is a card (Standard packs, Magic Trick) — rank/suit/enhancement/seal/edition ordinals (−1 = none), so the client draws it like a hand card. Null on non-card items. */
+    public record CardFace(int rank, int suit, int enhancement, int seal, int edition) { }
 
     /** One offered voucher: name, price, hover text, and whether it can be redeemed now (one per ante). */
     public record VoucherItem(int id, String label, int price, String tooltip, boolean redeemable) { }
@@ -214,7 +217,7 @@ public record MatchSnapshot(
      * description} is the card's authored effect text, for the hover tooltip; {@code id} is the card's stable id,
      * so the client can ride each option on the same retained, draggable row the shop tiles use ({@code -1} once taken).
      */
-    public record PackOption(int id, String label, String description, int minTargets, boolean isRelic, String selector, boolean needsSeat) { }
+    public record PackOption(int id, String label, String description, int minTargets, boolean isRelic, String selector, boolean needsSeat, CardFace card, int edition) { }
 
     /** Shop contents for the local seat, present only during the shop phase. */
     public record ShopView(
@@ -360,11 +363,11 @@ public record MatchSnapshot(
         List<HandCardView> out = new ArrayList<>();
         for (DeckCard c : run.getSelectionHand()) {
             if (round != null && round.isFaceDown(c))
-                out.add(new HandCardView(c.id(), "", -1, -1, -1, -1, true));
+                out.add(new HandCardView(c.id(), "", -1, -1, -1, -1, -1, true));
             else
                 out.add(new HandCardView(c.id(), describe(c), c.getRank().ordinal(), c.getSuit().ordinal(),
                         c.getEnhancement() == null ? -1 : c.getEnhancement().ordinal(),
-                        c.getSeal() == null ? -1 : c.getSeal().ordinal(), false));
+                        c.getSeal() == null ? -1 : c.getSeal().ordinal(), editionOf(c), false));
         }
         return out;
     }
@@ -386,7 +389,7 @@ public record MatchSnapshot(
         for (DeckCard c : run.getDeck())
             out.add(new DeckCardView(c.getRank().ordinal(), c.getSuit().ordinal(),
                     c.getEnhancement() == null ? -1 : c.getEnhancement().ordinal(),
-                    c.getSeal() == null ? -1 : c.getSeal().ordinal(),
+                    c.getSeal() == null ? -1 : c.getSeal().ordinal(), editionOf(c),
                     liveIds == null || liveIds.contains(c.id())));
         return out;
     }
@@ -466,7 +469,7 @@ public record MatchSnapshot(
         if (o == null) return null;
         List<PackOption> options = new ArrayList<>();
         for (Card c : o.getOptions()) {
-            if (c == null) { options.add(new PackOption(-1, null, "", 0, false, "NONE", false)); continue; }
+            if (c == null) { options.add(new PackOption(-1, null, "", 0, false, "NONE", false, null, -1)); continue; }
             String label = c instanceof DeckCard d ? describe(d) : nameOf(c);
             String desc = descriptionOf(c);
             if (c instanceof model.items.relics.RelicCard rc) {
@@ -475,10 +478,11 @@ public record MatchSnapshot(
                     case OPPONENT -> true;
                     case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false;
                 };
-                options.add(new PackOption(c.id(), label, desc, 0, true, spec.getSelector().name(), needsSeat));
+                options.add(new PackOption(c.id(), label, desc, 0, true, spec.getSelector().name(), needsSeat, null, editionOf(c)));
             } else {
                 int minTargets = c instanceof model.items.consumables.ConsumableCard cc ? cc.getSpec().getMinTargets() : 0;
-                options.add(new PackOption(c.id(), label, desc, minTargets, false, "NONE", false));
+                CardFace face = c instanceof DeckCard dc ? faceOf(dc) : null;   // Standard-pack playing cards draw as a real card
+                options.add(new PackOption(c.id(), label, desc, minTargets, false, "NONE", false, face, editionOf(c)));
             }
         }
         return new PackOpeningView(String.valueOf(o.getPack()), o.getPicksLeft(), options);
@@ -501,9 +505,10 @@ public record MatchSnapshot(
             if (c == null) { slots.add(null); continue; }
             int price = shop.slotPrice(i);
             String badge = badgeOf(c);
+            CardFace face = c instanceof DeckCard dc ? faceOf(dc) : null;   // Magic Trick playing cards draw as a real card
             slots.add(new ShopItem(c.id(), nameOf(c), price,
                     tooltip(nameOf(c), descriptionOf(c), categoryOf(c) + (badge.isEmpty() ? "" : " · " + badge), price),
-                    badge));
+                    badge, face, editionOf(c)));
         }
         List<ShopItem> packs = new ArrayList<>();
         for (int i = 0; i < shop.getPackCount(); i++) {
@@ -511,7 +516,7 @@ public record MatchSnapshot(
             if (p == null) { packs.add(null); continue; }
             int price = shop.packPrice(i);
             String label = String.valueOf(p);
-            packs.add(new ShopItem(p.id(), label, price, tooltip(label, "", "Booster Pack", price), ""));
+            packs.add(new ShopItem(p.id(), label, price, tooltip(label, "", "Booster Pack", price), "", null, -1));
         }
         List<VoucherItem> vouchers = new ArrayList<>();
         for (int i = 0; i < shop.getVoucherCount(); i++) {
@@ -565,6 +570,16 @@ public record MatchSnapshot(
         return String.valueOf(c);
     }
 
+    /** A playing card's face for the client: rank/suit ordinals plus enhancement/seal/edition ordinals (−1 when absent). */
+    private static CardFace faceOf(DeckCard d) {
+        return new CardFace(d.getRank().ordinal(), d.getSuit().ordinal(),
+                d.getEnhancement() == null ? -1 : d.getEnhancement().ordinal(),
+                d.getSeal() == null ? -1 : d.getSeal().ordinal(), editionOf(d));
+    }
+
+    /** A card's edition ordinal, or −1 when it has none. */
+    private static int editionOf(Card c) { return c.getEdition() == null ? -1 : c.getEdition().ordinal(); }
+
     /** The purchasable card's authored effect description, or empty if none has been written yet. */
     private static String descriptionOf(Card c) {
         if (c instanceof JokerCard j)         return j.getSpec().getDescription();
@@ -593,7 +608,7 @@ public record MatchSnapshot(
             var card = consumables.get(i);
             var spec = card.getSpec();
             out.add(new ItemView(card.id(), spec.getName(), spec.getDescription(), badgeOf(card), false, i, null, "NONE", false,
-                    spec.getMinTargets()));
+                    spec.getMinTargets(), editionOf(card)));
         }
         List<RelicCard> relics = run.getRelics();
         for (int i = 0; i < relics.size(); i++) {
@@ -604,7 +619,7 @@ public record MatchSnapshot(
                 case RANDOM_RIVAL, RIVALS, SELF, GLOBAL -> false; // random / standings-driven / no target
             };
             out.add(new ItemView(card.id(), spec.getName(), spec.getDescription(), badgeOf(card), true, i,
-                    spec.getKind().name(), spec.getSelector().name(), needsSeat, 0));
+                    spec.getKind().name(), spec.getSelector().name(), needsSeat, 0, editionOf(card)));
         }
         return out;
     }
@@ -618,7 +633,7 @@ public record MatchSnapshot(
         for (JokerCard j : run.getJokers()) {
             String state = j.getSpec().stateOf(j, info);
             out.add(new JokerView(j.id(), j.getSpec().getName(), j.getSpec().getDescription(),
-                    state == null ? "" : state, badgeOf(j), j.isDebuffed()));
+                    state == null ? "" : state, badgeOf(j), editionOf(j), j.isDebuffed()));
         }
         return out;
     }

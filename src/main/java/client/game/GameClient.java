@@ -354,6 +354,7 @@ public final class GameClient extends Application {
 
     private void render() {
         ui.newFrame();
+        r.clock(ui.now);   // the edition shimmers animate on this
         paintBackground();
         if (!inMatch()) { menu.render(ui); overlays.tooltip(ui); drawFade(); return; }   // menu owns the screen; its hover tips draw last
         if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
@@ -498,11 +499,25 @@ public final class GameClient extends Application {
             var in = getClass().getResourceAsStream("/sprites/consumables/Spectrals.png");
             if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.spectralSheet(img); }
         } catch (RuntimeException ignored) { }
+        loadSheet("/sprites/packs/ArcanaPacks.png",    img -> r.packSheet(model.items.packs.PackKind.ARCANA, img));
+        loadSheet("/sprites/packs/BuffoonPacks.png",   img -> r.packSheet(model.items.packs.PackKind.BUFFOON, img));
+        loadSheet("/sprites/packs/CelestialPacks.png", img -> r.packSheet(model.items.packs.PackKind.CELESTIAL, img));
+        loadSheet("/sprites/packs/SpectralPacks.png",  img -> r.packSheet(model.items.packs.PackKind.SPECTRAL, img));
+        loadSheet("/sprites/packs/StandardPacks.png",  img -> r.packSheet(model.items.packs.PackKind.STANDARD, img));
+        loadSheet("/sprites/vouchers/Vouchers.png",    r::voucherSheet);
         try {
             var in = getClass().getResourceAsStream("/font/game.ttf");
             if (in != null) { Font f = Font.loadFont(in, 14); if (f != null) fontFamily = f.getFamily(); }
         } catch (RuntimeException ignored) { }
         r.font(fontFamily);
+    }
+
+    /** Loads an optional classpath image and hands it to {@code apply}; a missing or broken file is silently skipped. */
+    private void loadSheet(String path, java.util.function.Consumer<Image> apply) {
+        try {
+            var in = getClass().getResourceAsStream(path);
+            if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) apply.accept(img); }
+        } catch (RuntimeException ignored) { }
     }
 
     public static void main(String[] args) { launch(args); }

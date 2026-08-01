@@ -2,8 +2,6 @@ package model.items.packs;
 
 import model.items.Card;
 import model.items.DeckCard;
-import model.items.DeckCard.Rank;
-import model.items.DeckCard.Suit;
 import model.items.consumables.Planets;
 import model.items.consumables.Spectrals;
 import model.items.consumables.Tarots;
@@ -63,7 +61,7 @@ public final class BoosterPack extends Card {
     public List<Card> open(Run run, RandomGenerator stream) {
         int count = baseOptionCount() + run.getPackOptionBonus();
         List<Card> options = new ArrayList<>();
-        for (int i = 0; i < count; i++) options.add(generate(stream));
+        for (int i = 0; i < count; i++) options.add(generate(run, stream));
         return options;
     }
 
@@ -77,17 +75,15 @@ public final class BoosterPack extends Card {
         return basePickCount() + (size == PackSize.MEGA ? run.getPackMegaPickBonus() : 0);
     }
 
-    private Card generate(RandomGenerator stream) {
+    private Card generate(Run run, RandomGenerator stream) {
         return switch (kind) {
             case ARCANA    -> Tarots.random(stream).make();
             case CELESTIAL -> Planets.random(stream).make();
             case BUFFOON   -> Jokers.weightedRandom(stream).make();
             case SPECTRAL  -> Spectrals.random(stream).make();
             case MYTH      -> Relics.random(stream).make();
-            case STANDARD  -> {
-                DeckCard d = new DeckCard(
-                        Rank.values()[stream.nextInt(Rank.values().length)],
-                        Suit.values()[stream.nextInt(Suit.values().length)]);
+            case STANDARD  -> {   // a real playing card, with rolled enhancement/seal/edition (Illusion boosts the odds)
+                DeckCard d = model.items.PlayingCards.rolled(stream, run.isIllusionActive());
                 d.setShopValue(1);
                 yield d;
             }

@@ -190,11 +190,17 @@ final class Overlays {
                 double tx = ui.packRow.x(opt.id()) - tw / 2, ty = ui.packRow.y(opt.id()) - th / 2 + bob;
                 boolean chosen = ui.packSel == i;
                 Layout.Rect rr = new Layout.Rect(tx, ty, tw, th);
-                javafx.scene.image.Image tex = r.jokerTexture(opt.label());   // a joker (Buffoon) shows its face; consumables use their sheet
+                MatchSnapshot.CardFace cf = opt.card();   // a Standard-pack playing card draws as a real card
+                javafx.scene.image.Image tex = cf == null ? r.jokerTexture(opt.label()) : null;   // else a joker or consumable face
                 r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // the same idle sway/bob a card carries
-                    boolean textured = tex != null;
-                    if (tex != null) r.imageFit(tex, tx, ty, tw, th);
+                    boolean textured = false;
+                    if (cf != null) {
+                        double ch = Math.min(th, tw * 95.0 / 71.0), cw = ch * 71.0 / 95.0;
+                        r.card(cf.rank(), cf.suit(), cf.enhancement(), cf.seal(), cf.edition(), tx + tw / 2, ty + th / 2, cw, ch, 0, false);
+                        textured = true;
+                    } else if (tex != null) { r.imageFit(tex, tx, ty, tw, th); textured = true; }
                     else textured = r.consumableFace(opt.label(), tx, ty, tw, th);
+                    if (textured && cf == null) r.editionEffect(opt.edition(), tx, ty, tw, th, 8);   // shimmer over a joker/consumable face
                     if (textured) {
                         if (chosen) r.panel(tx, ty, tw, th, null, ORANGE, 8, 3);
                     } else {
@@ -363,7 +369,7 @@ final class Overlays {
             double x = gx + (gw - rowW) / 2;
             for (MatchSnapshot.DeckCardView c : row) {
                 r.gc().setGlobalAlpha(c.live() ? 1.0 : 0.28);
-                r.card(c.rank(), c.suit(), c.enhancement(), c.seal(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
+                r.card(c.rank(), c.suit(), c.enhancement(), c.seal(), c.edition(), x + cw / 2, y + ch / 2, cw, ch, 0, false);
                 x += step;
             }
             r.gc().setGlobalAlpha(1.0);

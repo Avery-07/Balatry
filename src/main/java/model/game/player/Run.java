@@ -77,6 +77,8 @@ public final class Run {
     private int shopDiscount;         // % off shop prices (Clearance Sale / Liquidation)
     private int packOptionBonus;      // extra options shown per booster pack (Sampler)
     private int packMegaPickBonus;    // extra cards kept from Mega packs (Connoisseur)
+    private boolean magicTrickCards;  // Magic Trick: playing cards may appear in the shop card row
+    private boolean illusion;         // Illusion: shop/pack playing cards roll their modifiers at boosted odds
     private Round round;              // non-null only during a blind
     private Shop shop;                // non-null only during a shop
     private ScoringSession scoring;   // non-null only during a hand
@@ -511,6 +513,10 @@ public final class Run {
     public void setPackOptionBonus(int n) { packOptionBonus = n; }
     public int getPackMegaPickBonus()  { return packMegaPickBonus; }
     public void setPackMegaPickBonus(int n) { packMegaPickBonus = n; }
+    public boolean isMagicTrickActive() { return magicTrickCards; }
+    public void setMagicTrickCards(boolean b) { magicTrickCards = b; }
+    public boolean isIllusionActive()  { return illusion; }
+    public void setIllusion(boolean b) { illusion = b; }
 
     /** Whether {@code spec} has been redeemed on this run (used for upgrade prerequisites). */
     public boolean hasRedeemed(VoucherSpec spec) { return stats.hasRedeemed(spec); }

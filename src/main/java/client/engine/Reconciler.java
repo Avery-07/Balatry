@@ -17,9 +17,9 @@ public final class Reconciler {
 
     private Reconciler() { }
 
-    /** One card the snapshot wants on screen, in hand order. {@code enhancement}/{@code seal} are ordinals, -1 = none. */
-    public record Desired(int id, int rank, int suit, int enhancement, int seal, String label) {
-        public Desired(int id, int rank, int suit, String label) { this(id, rank, suit, -1, -1, label); }
+    /** One card the snapshot wants on screen, in hand order. {@code enhancement}/{@code seal}/{@code edition} are ordinals, -1 = none. */
+    public record Desired(int id, int rank, int suit, int enhancement, int seal, int edition, String label) {
+        public Desired(int id, int rank, int suit, String label) { this(id, rank, suit, -1, -1, -1, label); }
     }
 
     /**
@@ -37,9 +37,9 @@ public final class Reconciler {
         for (Desired d : desired) {
             CardEntity e = byId.get(d.id());
             if (e == null) {
-                e = new CardEntity(d.id(), d.rank(), d.suit(), d.label(), d.enhancement(), d.seal(), spawnX, spawnY, durationSeconds, ease);
+                e = new CardEntity(d.id(), d.rank(), d.suit(), d.label(), d.enhancement(), d.seal(), d.edition(), spawnX, spawnY, durationSeconds, ease);
             } else {
-                e.update(d.rank(), d.suit(), d.enhancement(), d.seal(), d.label());   // keeps its Motion and selection
+                e.update(d.rank(), d.suit(), d.enhancement(), d.seal(), d.edition(), d.label());   // keeps its Motion and selection
             }
             out.add(e);
         }

@@ -1,9 +1,14 @@
 package client.game;
 
+import debug.Log;
 import javafx.geometry.VPos;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.effect.BlendMode;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
 
@@ -38,6 +43,10 @@ public final class Renderer {
 
     public GraphicsContext gc() { return g; }
 
+    private double clock;   // frame time (seconds), set once per frame; drives the animated edition shimmers
+    /** Sets the frame clock the edition effects animate on; call once per frame before drawing cards. */
+    public void clock(double t) { clock = t; }
+
     public void cardSheet(Image img) { if (img != null) { sheet = img; cellW = img.getWidth() / 13.0; cellH = img.getHeight() / 4.0; } }
     public void enhancementSheet(Image img) { if (img != null && !img.isError() && img.getWidth() > 0) { enhSheet = img; enhCellW = img.getWidth() / 3.0; enhCellH = img.getHeight() / 3.0; } }
     public void sealSheet(Image img) { if (img != null && !img.isError() && img.getWidth() > 0) { sealSheet = img; sealCellW = img.getWidth() / 2.0; sealCellH = img.getHeight() / 2.0; } }
@@ -58,7 +67,8 @@ public final class Renderer {
         try {
             var in = getClass().getResourceAsStream("/sprites/jokers/" + key + ".png");
             if (in != null) { Image i = new Image(in); if (!i.isError() && i.getWidth() > 0) img = i; }
-        } catch (RuntimeException ignored) { }
+            else { Log.error("Error loading joker texture: " + key);}
+        } catch (RuntimeException ignored) {}
         jokerTex.put(key, img);
         return img;
     }
@@ -139,6 +149,72 @@ public final class Renderer {
         return true;
     }
 
+    // --- pack atlases: one 2x2 sheet per kind, size -> cell (NORMAL 0, JUMBO 1, MEGA 2; cell 3 spare). Myth (relic
+    // packs) has no art yet, so it falls back to the vector tile. ---
+    private final Atlas arcanaPacks = new Atlas(), buffoonPacks = new Atlas(), celestialPacks = new Atlas(),
+            spectralPacks = new Atlas(), standardPacks = new Atlas();
+
+    private Atlas packAtlas(model.items.packs.PackKind kind) {
+        return switch (kind) {
+            case ARCANA -> arcanaPacks;
+            case BUFFOON -> buffoonPacks;
+            case CELESTIAL -> celestialPacks;
+            case SPECTRAL -> spectralPacks;
+            case STANDARD -> standardPacks;
+            case MYTH -> null;   // relic packs have no art yet
+        };
+    }
+
+    /** A pack sheet for one kind (2x2). Each size's display label ("Mega Arcana Pack", …) maps to its cell. */
+    public void packSheet(model.items.packs.PackKind kind, Image img) {
+        Atlas a = packAtlas(kind);
+        if (a == null || img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(a, img, 2, 2);
+        int[] sizeCell = { 0, 1, 2 };   // NORMAL, JUMBO, MEGA
+        var sizes = model.items.packs.PackSize.values();
+        for (int i = 0; i < sizes.length && i < sizeCell.length; i++)
+            a.cell.put(key(new model.items.packs.BoosterPack(kind, sizes[i]).toString()), sizeCell[i]);
+    }
+
+    /** Draws a booster pack's art for its display label into (x,y,w,h) preserving aspect, or false if no sheet has it. */
+    public boolean packFace(String label, double x, double y, double w, double h) {
+        String k = key(label);
+        return drawCell(arcanaPacks, k, x, y, w, h) || drawCell(buffoonPacks, k, x, y, w, h)
+                || drawCell(celestialPacks, k, x, y, w, h) || drawCell(spectralPacks, k, x, y, w, h)
+                || drawCell(standardPacks, k, x, y, w, h);
+    }
+
+    // --- voucher atlas (Vouchers.png, 8x4 = 32 cells) ---
+    private final Atlas voucherAtlas = new Atlas();
+
+    // TODO(mapping): Vouchers.ordinal() -> cell in Vouchers.png. Right now EVERY voucher points at cell 0 (the first
+    // texture) as a placeholder. Edit this array to give each voucher its real cell — the order matches the Vouchers
+    // enum (see model/items/vouchers/Vouchers.java), the comment on each row names the eight entries, and -1 means
+    // "no art, keep the vector tile" (the sheet has 32 cells but the enum has 34, so at least two must be -1).
+    private static final int[] VOUCHER_CELL = {
+            0, 8, 3, 11, 4, 12, 16, 22, // Overstock, Overstock Plus, Clearance Sale, Liquidation, Hone, Glow Up, Reroll Surplus, Reroll Glut
+            18, 24, 19, 25, 5, 13, 6, 14,   // Crystal Ball, Omen Globe, Telescope, Observatory, Grabber, Nacho Tong, Wasteful, Recyclomancy
+            1, 9, 2, 10, 17, 23, 7, 15,   // Tarot Merchant, Tarot Tycoon, Planet Merchant, Planet Tycoon, Seed Money, Money Tree, Blank, Antimatter
+            20, 26, 21, 27, 0, 0, 0, 0,   // Magic Trick, Illusion, Paint Brush, Palette, Sampler, Connoisseur, Relic Merchant, Relic Tycoon
+            0, 0                      // Showman, Encore
+    };
+
+    /** The voucher sheet (8x4). Each voucher's display name maps to a cell via {@link #VOUCHER_CELL}. */
+    public void voucherSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(voucherAtlas, img, 8, 4);
+        var v = model.items.vouchers.Vouchers.values();
+        for (int i = 0; i < v.length; i++) {
+            int cell = i < VOUCHER_CELL.length ? VOUCHER_CELL[i] : -1;
+            if (cell >= 0) voucherAtlas.cell.put(key(v[i].spec().getName()), cell);
+        }
+    }
+
+    /** Draws a voucher's art for its display name into (x,y,w,h) preserving aspect, or false if none. */
+    public boolean voucherFace(String label, double x, double y, double w, double h) {
+        return drawCell(voucherAtlas, key(label), x, y, w, h);
+    }
+
     public void fillRect(Color c, double x, double y, double w, double h) { g.setFill(c); g.fillRect(x, y, w, h); }
 
     public void panel(double x, double y, double w, double h, Color fill, Color border, double arc, double bw) {
@@ -173,27 +249,27 @@ public final class Renderer {
 
     /** Draws a card centered at (cx,cy), tilted {@code deg}, with an optional selection ring. */
     public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected) {
-        card(rankOrd, suitOrd, -1, -1, cx, cy, w, h, deg, selected, 0);
+        card(rankOrd, suitOrd, -1, -1, -1, cx, cy, w, h, deg, selected, 0);
     }
 
-    /** As {@link #card}, carrying an enhancement and seal ordinal ({@code -1} for none of each). */
-    public void card(int rankOrd, int suitOrd, int enhancement, int seal, double cx, double cy, double w, double h, double deg, boolean selected) {
-        card(rankOrd, suitOrd, enhancement, seal, cx, cy, w, h, deg, selected, 0);
+    /** As {@link #card}, carrying enhancement/seal/edition ordinals ({@code -1} for none of each). */
+    public void card(int rankOrd, int suitOrd, int enhancement, int seal, int edition, double cx, double cy, double w, double h, double deg, boolean selected) {
+        card(rankOrd, suitOrd, enhancement, seal, edition, cx, cy, w, h, deg, selected, 0);
     }
 
-    /** As {@link #card}, plus a flip, with no enhancement or seal. */
+    /** As {@link #card}, plus a flip, with no modifiers. */
     public void card(int rankOrd, int suitOrd, double cx, double cy, double w, double h, double deg, boolean selected, double flipT) {
-        card(rankOrd, suitOrd, -1, -1, cx, cy, w, h, deg, selected, flipT);
+        card(rankOrd, suitOrd, -1, -1, -1, cx, cy, w, h, deg, selected, flipT);
     }
 
     /**
-     * Draws a card with {@code enhancement} and {@code seal} ordinals ({@code -1} = none) and a flip: {@code flipT}
-     * 0 is face up, 1 face down (the deck's back), between squashes it through its edge-on midpoint — the turn
-     * animation. The face art ({@code cards.png}) is transparent-backed, so a card base is drawn first: the
-     * enhancement's background when it has one, else the plain base cell. A Stone card shows only the stone — no
-     * rank/suit. The seal, if any, is a stamp drawn on top of the finished face.
+     * Draws a card with {@code enhancement}/{@code seal}/{@code edition} ordinals ({@code -1} = none) and a flip:
+     * {@code flipT} 0 is face up, 1 face down (the deck's back), between squashes it through its edge-on midpoint —
+     * the turn animation. The face art ({@code cards.png}) is transparent-backed, so a card base is drawn first: the
+     * enhancement's background when it has one, else the plain base cell. A Stone card shows only the stone. The
+     * seal is a stamp over the finished face; the edition is its animated shimmer on top of everything.
      */
-    public void card(int rankOrd, int suitOrd, int enhancement, int seal, double cx, double cy, double w, double h,
+    public void card(int rankOrd, int suitOrd, int enhancement, int seal, int edition, double cx, double cy, double w, double h,
                      double deg, boolean selected, double flipT) {
         g.save();
         g.translate(cx, cy);
@@ -229,8 +305,77 @@ public final class Renderer {
             int scell = SEAL_CELL[seal];
             g.drawImage(sealSheet, (scell % 2) * sealCellW, (scell / 2) * sealCellH, sealCellW, sealCellH, x, y, w, h);
         }
+        if (faceUp) editionEffect(edition, x, y, w, h, arc);   // Foil/Holo/Poly shimmer or Negative inversion, over the face
         if (selected) { g.setStroke(Color.web("#f0a92b")); g.setLineWidth(4); g.strokeRoundRect(x, y, w, h, arc, arc); }
         g.restore();
+    }
+
+    /**
+     * Paints an edition's effect inside the card/tile silhouette at (x,y,w,h), clipped to the rounded shape so it
+     * never bleeds into the transparent corners: Foil a cool metallic sheen, Holographic a pink shimmer, Polychrome
+     * a drifting rainbow, Negative a colour inversion. Animated on the frame {@link #clock}. A no-op for {@code -1}.
+     * Public so tile draws (jokers, consumables, shop/pack items) can lay it over their texture the same way.
+     */
+    public void editionEffect(int edition, double x, double y, double w, double h, double arc) {
+        if (edition < 0) return;
+        g.save();
+        clipRoundRect(x, y, w, h, arc);
+        switch (edition) {
+            case 0 -> sheen(x, y, w, h, Color.web("#bff2ff"), Color.web("#5fd0ff"), 0.85, BlendMode.SCREEN);   // FOIL
+            case 1 -> sheen(x, y, w, h, Color.web("#ff9ad6"), Color.web("#b06bff"), 0.65, BlendMode.SCREEN);   // HOLOGRAPHIC
+            case 2 -> polychrome(x, y, w, h);                                                                  // POLYCHROME
+            case 3 -> {                                                                                        // NEGATIVE
+                g.setGlobalBlendMode(BlendMode.DIFFERENCE);
+                g.setFill(Color.WHITE);
+                g.fillRect(x, y, w, h);   // white × DIFFERENCE inverts the card's colours
+            }
+            default -> { }
+        }
+        g.restore();
+    }
+
+    /** A moving diagonal light band (Foil, Holographic) — a two-tone highlight that drifts across on the clock. */
+    private void sheen(double x, double y, double w, double h, Color bright, Color tint, double alpha, BlendMode blend) {
+        double p = 0.3 + 0.4 * (Math.sin(clock * 0.9) * 0.5 + 0.5);
+        LinearGradient lg = new LinearGradient(x, y, x + w, y + h, false, CycleMethod.NO_CYCLE,
+                new Stop(0, transparent(tint)),
+                new Stop(Math.max(0.001, p - 0.28), transparent(tint)),
+                new Stop(p, bright),
+                new Stop(Math.min(0.999, p + 0.28), transparent(tint)),
+                new Stop(1, transparent(tint)));
+        g.setGlobalBlendMode(blend);
+        g.setGlobalAlpha(alpha);
+        g.setFill(lg);
+        g.fillRect(x, y, w, h);
+    }
+
+    /** The Polychrome rainbow: a full-spectrum gradient whose hues drift along the clock. */
+    private void polychrome(double x, double y, double w, double h) {
+        double shift = (clock * 0.12) % 1.0;
+        Stop[] stops = new Stop[7];
+        for (int i = 0; i <= 6; i++) {
+            double pos = i / 6.0;
+            stops[i] = new Stop(pos, Color.hsb(((pos + shift) % 1.0) * 360, 0.85, 1.0, 0.55));
+        }
+        LinearGradient lg = new LinearGradient(x, y, x + w, y, false, CycleMethod.NO_CYCLE, stops);
+        g.setGlobalBlendMode(BlendMode.OVERLAY);
+        g.setGlobalAlpha(0.75);
+        g.setFill(lg);
+        g.fillRect(x, y, w, h);
+    }
+
+    private static Color transparent(Color c) { return Color.color(c.getRed(), c.getGreen(), c.getBlue(), 0); }
+
+    /** Clips the graphics context to a rounded rectangle — the card's silhouette, so overlays stay inside it. */
+    private void clipRoundRect(double x, double y, double w, double h, double r) {
+        g.beginPath();
+        g.moveTo(x + r, y);
+        g.arcTo(x + w, y, x + w, y + h, r);
+        g.arcTo(x + w, y + h, x, y + h, r);
+        g.arcTo(x, y + h, x, y, r);
+        g.arcTo(x, y, x + w, y, r);
+        g.closePath();
+        g.clip();
     }
 
     /**

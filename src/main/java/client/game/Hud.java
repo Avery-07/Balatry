@@ -235,6 +235,7 @@ final class Hud {
             } else {
                 mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
             }
+            r.editionEffect(jv.edition(), rr.x(), rr.y(), rr.w(), rr.h(), 8);   // Foil/Holo/Poly shimmer or Negative
             if (!jv.badge().isEmpty()) {
                 r.panel(rr.x(), rr.y() + rr.h() - 16, rr.w(), 16, Color.web("#000a"), null, 6, 0);
                 r.textCenter(jv.badge(), rr.centerX(), rr.y() + rr.h() - 8, 8, GOLD);
@@ -252,6 +253,7 @@ final class Hud {
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // a consumable shows its planet/tarot/spectral face; a relic keeps the tile
             if (!r.consumableFace(it.label(), rr.x(), rr.y(), rr.w(), rr.h()))
                 mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
+            r.editionEffect(it.edition(), rr.x(), rr.y(), rr.w(), rr.h(), 8);   // Negative etc. on a consumable/relic
         });
         ui.selectables.add(new Ui.Sel(rr, "item", index));
         ui.tip(rr, itemTip(it));

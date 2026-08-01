@@ -46,7 +46,7 @@ final class ShopScreen implements Screen {
                 i -> {
                     MatchSnapshot.ShopItem it = shop.slots().get(i);
                     return it == null ? null : new Tile(it.id(), it.label(), it.price(),
-                            Color.web("#c0392b"), true, "shopSlot", it.badge(), it.tooltip(), i);
+                            Color.web("#c0392b"), true, "shopSlot", it.badge(), it.tooltip(), i, it.card(), it.edition());
                 });
         cy += rowH + rowGap;
 
@@ -58,18 +58,18 @@ final class ShopScreen implements Screen {
                 i -> {
                     MatchSnapshot.VoucherItem v = shop.vouchers().get(i);
                     return v == null ? null : new Tile(v.id(), v.label(), v.price(), BLUE, v.redeemable(), "shopVoucher", "",
-                            v.tooltip() + (v.redeemable() ? "" : "\n(one voucher per ante — already redeemed)"), i);
+                            v.tooltip() + (v.redeemable() ? "" : "\n(one voucher per ante — already redeemed)"), i, null, -1);
                 });
         shelf(ui, ui.shopPackRow, shop.packs().size(), ix + half + 20, cy + labelH, half, rowH - labelH,
                 i -> {
                     MatchSnapshot.ShopItem p = shop.packs().get(i);
-                    return p == null ? null : new Tile(p.id(), p.label(), p.price(), PURPLE, true, "shopPack", "", p.tooltip(), i);
+                    return p == null ? null : new Tile(p.id(), p.label(), p.price(), PURPLE, true, "shopPack", "", p.tooltip(), i, p.card(), p.edition());
                 });
     }
 
     /** Everything one shelf tile needs to draw and register itself; {@code slotIndex} is the MODEL's slot. */
     private record Tile(int id, String label, int price, Color color,
-                        boolean enabled, String kind, String badge, String tooltip, int slotIndex) { }
+                        boolean enabled, String kind, String badge, String tooltip, int slotIndex, MatchSnapshot.CardFace card, int edition) { }
 
     /**
      * Draws one framed shelf inset spanning (px,py,pw,ph) and lays its tiles out centered inside it — vertically on
@@ -112,13 +112,23 @@ final class ShopScreen implements Screen {
         double sway = held ? 0 : client.engine.Idle.swayDeg(ui.now, t.id(), 1.4);
         double tx = row.x(t.id()) - TILE_W / 2, ty = row.y(t.id()) - TILE_H / 2 + bob;
         Layout.Rect rr = new Layout.Rect(tx, ty, TILE_W, TILE_H);
-        // A shop-slot item shows its face when one exists — a joker PNG, or a planet/tarot/spectral sheet cell (both
-        // fit, never stretched); otherwise the vector tile. Vouchers and packs keep their tiles.
-        javafx.scene.image.Image tex = "shopSlot".equals(t.kind()) ? r.jokerTexture(t.label()) : null;
+        // A shop tile shows its face when one exists — a playing card (Magic Trick), a joker PNG or a
+        // planet/tarot/spectral cell (shopSlot), or a pack's art (shopPack); all fit, never stretched. Otherwise a tile.
+        MatchSnapshot.CardFace cf = t.card();
+        javafx.scene.image.Image jtex = (cf == null && "shopSlot".equals(t.kind())) ? r.jokerTexture(t.label()) : null;
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
-            if (tex != null) {
-                r.imageFit(tex, rr.x(), rr.y(), rr.w(), rr.h());
-            } else if (!("shopSlot".equals(t.kind()) && r.consumableFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h()))) {
+            boolean textured = false;
+            if (cf != null) {
+                double ch = Math.min(rr.h(), rr.w() * 95.0 / 71.0), cw = ch * 71.0 / 95.0;
+                r.card(cf.rank(), cf.suit(), cf.enhancement(), cf.seal(), cf.edition(), rr.centerX(), rr.centerY(), cw, ch, 0, false);
+                textured = true;
+            }
+            else if (jtex != null) { r.imageFit(jtex, rr.x(), rr.y(), rr.w(), rr.h()); textured = true; }
+            else if ("shopSlot".equals(t.kind())) textured = r.consumableFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
+            else if ("shopPack".equals(t.kind())) textured = r.packFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
+            else if ("shopVoucher".equals(t.kind())) textured = r.voucherFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
+            if (textured && cf == null) r.editionEffect(t.edition(), rr.x(), rr.y(), rr.w(), rr.h(), 8);   // shimmer over a joker/consumable/pack face
+            if (!textured) {
                 r.panel(rr.x(), rr.y(), rr.w(), rr.h(), t.color(), Color.web("#0006"), 8, 2);
                 r.textCenter(t.label(), rr.centerX(), rr.centerY(), 12, INK);
             }
