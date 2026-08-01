@@ -1,6 +1,7 @@
 package model.game.scoring;
 
 import model.items.consumables.ConsumableCard;
+import model.items.consumables.Planets;
 import model.items.DeckCard;
 import model.items.jokers.JokerCard;
 import model.game.rng.RngSource;
@@ -73,6 +74,19 @@ public final class ScoringEngine {
             if (consumable.isDebuffed()) continue;
             s.setSource(consumable, consumable.getSpec().getName());
             s.applyEdition(consumable.getEdition());
+        }
+
+        // Observatory: each held Planet whose hand matches the one just played applies that hand's Mult again.
+        if (run.hasObservatory() && hand != null) {
+            long handMult = run.getHandLevels().multFor(hand.type());
+            for (ConsumableCard consumable : run.getConsumables()) {
+                if (consumable.isDebuffed()) continue;
+                Planets p = Planets.forSpec(consumable.getSpec());
+                if (p != null && p.hand() == hand.type()) {
+                    s.setSource(consumable, consumable.getSpec().getName());
+                    s.addMult(handMult);
+                }
+            }
         }
 
         // A card that broke while scoring gets its own beat, so the client can show it shatter.

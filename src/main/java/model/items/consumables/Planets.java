@@ -41,4 +41,16 @@ public enum Planets {
         Planets[] all = values();
         return all[stream.nextInt(all.length)];
     }
+
+    /** The planet that levels {@code hand}, or {@code null} if none does (Telescope / Observatory look-up). */
+    public static Planets forHand(HandType hand) {
+        for (Planets p : values()) if (p.hand == hand) return p;
+        return null;
+    }
+
+    /** The planet backing a held consumable {@code spec}, or {@code null} if it is not a Planet (Observatory look-up). */
+    public static Planets forSpec(ConsumableSpec spec) {
+        for (Planets p : values()) if (p.spec == spec) return p;
+        return null;
+    }
 }

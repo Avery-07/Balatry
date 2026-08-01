@@ -9,17 +9,17 @@ public enum Vouchers {
     CLEARANCE_SALE("Clearance Sale", null, "25% off all shop prices.", r -> r.setShopDiscount(25)),
     LIQUIDATION("Liquidation", CLEARANCE_SALE, "50% off all shop prices.", r -> r.setShopDiscount(50)),
 
-    HONE("Hone", null, "Shiny editions appear more often.", VoucherEffect.NONE),   // edition rates: needs editions in the pool
-    GLOW_UP("Glow Up", HONE, "Shiny editions appear much more often.", VoucherEffect.NONE),
+    HONE("Hone", null, "Shop jokers gain shiny editions more often.", r -> r.setEditionRate(1)),
+    GLOW_UP("Glow Up", HONE, "Shop jokers gain shiny editions much more often.", r -> r.setEditionRate(2)),
 
     REROLL_SURPLUS("Reroll Surplus", null, "Rerolls cost $2 less.", r -> r.setBaseRerollCost(Math.max(0, r.getBaseRerollCost() - 2))),
     REROLL_GLUT("Reroll Glut", REROLL_SURPLUS, "Rerolls cost $2 less.", r -> r.setBaseRerollCost(Math.max(0, r.getBaseRerollCost() - 2))),
 
     CRYSTAL_BALL("Crystal Ball", null, "+1 consumable slot.", r -> r.setConsumableSlots(r.getConsumableSlots() + 1)),
-    OMEN_GLOBE("Omen Globe", CRYSTAL_BALL, "Spectral cards may appear in Arcana Packs.", VoucherEffect.NONE),   // spectral in Arcana packs: needs Spectral catalog
+    OMEN_GLOBE("Omen Globe", CRYSTAL_BALL, "Spectral cards may appear in Arcana Packs.", r -> r.setOmenGlobe(true)),
 
-    TELESCOPE("Telescope", null, "Celestial Packs contain your most-played hand's Planet.", VoucherEffect.NONE),   // needs hand-tracking hook
-    OBSERVATORY("Observatory", TELESCOPE, "Planets you hold apply their hand's Mult when scoring.", VoucherEffect.NONE),
+    TELESCOPE("Telescope", null, "Celestial Packs contain your most-played hand's Planet.", r -> r.setTelescope(true)),
+    OBSERVATORY("Observatory", TELESCOPE, "Planets you hold apply their hand's Mult when scoring.", r -> { r.setTelescope(true); r.setObservatory(true); }),
 
     GRABBER("Grabber", null, "+1 hand per round.", r -> r.setBaseHands(r.getBaseHands() + 1)),
     NACHO_TONG("Nacho Tong", GRABBER, "+1 hand per round.", r -> r.setBaseHands(r.getBaseHands() + 1)),
@@ -27,11 +27,11 @@ public enum Vouchers {
     WASTEFUL("Wasteful", null, "+1 discard per round.", r -> r.setBaseDiscards(r.getBaseDiscards() + 1)),
     RECYCLOMANCY("Recyclomancy", WASTEFUL, "+1 discard per round.", r -> r.setBaseDiscards(r.getBaseDiscards() + 1)),
 
-    TAROT_MERCHANT("Tarot Merchant", null, "Tarot cards appear more often in the shop.", VoucherEffect.NONE),   // needs a weight knob
-    TAROT_TYCOON("Tarot Tycoon", TAROT_MERCHANT, "Tarot cards appear much more often in the shop.", VoucherEffect.NONE),
+    TAROT_MERCHANT("Tarot Merchant", null, "Tarot cards appear more often in the shop.", r -> r.addTarotWeight(20)),
+    TAROT_TYCOON("Tarot Tycoon", TAROT_MERCHANT, "Tarot cards appear much more often in the shop.", r -> r.addTarotWeight(40)),
 
-    PLANET_MERCHANT("Planet Merchant", null, "Planet cards appear more often in the shop.", VoucherEffect.NONE),
-    PLANET_TYCOON("Planet Tycoon", PLANET_MERCHANT, "Planet cards appear much more often in the shop.", VoucherEffect.NONE),
+    PLANET_MERCHANT("Planet Merchant", null, "Planet cards appear more often in the shop.", r -> r.addPlanetWeight(20)),
+    PLANET_TYCOON("Planet Tycoon", PLANET_MERCHANT, "Planet cards appear much more often in the shop.", r -> r.addPlanetWeight(40)),
 
     SEED_MONEY("Seed Money", null, "Raises the interest cap to $10 per round.", r -> r.setInterestCap(10)),
     MONEY_TREE("Money Tree", SEED_MONEY, "Raises the interest cap to $20 per round.", r -> r.setInterestCap(20)),
@@ -51,8 +51,8 @@ public enum Vouchers {
     RELIC_MERCHANT("Relic Merchant", null, "Relics appear more often in the shop.", VoucherEffect.NONE),   // needs Relic weight knob
     RELIC_TYCOON("Relic Tycoon", RELIC_MERCHANT, "Relics appear much more often in the shop.", VoucherEffect.NONE),
 
-    SHOWMAN("Showman", null, "Jokers and consumables can appear more than once in the shop.", VoucherEffect.NONE),   // needs shop uniqueness knob
-    ENCORE("Encore", null, "Jokers and consumables you already own appear more often.", VoucherEffect.NONE);          // needs shop weight knob
+    SHOWMAN("Showman", null, "Jokers and consumables you already own can still appear in the shop.", r -> r.setShowman(true)),
+    ENCORE("Encore", null, "Jokers and consumables you already own appear more often.", r -> r.setEncore(true));
 
     private static final int COST = 10;
 

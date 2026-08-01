@@ -2,12 +2,14 @@ package model.items.packs;
 
 import model.items.Card;
 import model.items.DeckCard;
+import model.items.consumables.ConsumableCard;
 import model.items.consumables.Planets;
 import model.items.consumables.Spectrals;
 import model.items.consumables.Tarots;
 import model.items.jokers.Jokers;
 import model.items.relics.Relics;
 import model.game.player.Run;
+import model.game.scoring.HandType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +43,8 @@ public final class BoosterPack extends Card {
     @Override
     public String toString() { return displayName(); }   // the client shows packs via String.valueOf
 
+    private static final int OMEN_GLOBE_SPECTRAL_SHARE = 20;   // Omen Globe: % of Arcana-pack options that become Spectral
+
     private static int cost(PackSize size) {
         return switch (size) { case NORMAL -> 4; case JUMBO -> 6; case MEGA -> 8; };
     }
@@ -62,6 +66,13 @@ public final class BoosterPack extends Card {
         int count = baseOptionCount() + run.getPackOptionBonus();
         List<Card> options = new ArrayList<>();
         for (int i = 0; i < count; i++) options.add(generate(run, stream));
+        // Telescope: a Celestial pack always offers your most-played hand's Planet (planted in the first slot).
+        if (kind == PackKind.CELESTIAL && run.hasTelescope() && !options.isEmpty()) {
+            HandType most = run.getStats().getMostPlayedHand();
+            Planets p = most == null ? null : Planets.forHand(most);
+            if (p != null && options.stream().noneMatch(c -> c instanceof ConsumableCard cc && cc.getSpec() == p.spec()))
+                options.set(0, p.make());
+        }
         return options;
     }
 
@@ -77,7 +88,8 @@ public final class BoosterPack extends Card {
 
     private Card generate(Run run, RandomGenerator stream) {
         return switch (kind) {
-            case ARCANA    -> Tarots.random(stream).make();
+            case ARCANA    -> (run.hasOmenGlobe() && stream.nextInt(100) < OMEN_GLOBE_SPECTRAL_SHARE)
+                    ? Spectrals.random(stream).make() : Tarots.random(stream).make();   // Omen Globe: Spectrals in Arcana packs
             case CELESTIAL -> Planets.random(stream).make();
             case BUFFOON   -> Jokers.weightedRandom(stream).make();
             case SPECTRAL  -> Spectrals.random(stream).make();
