@@ -18,7 +18,7 @@ import java.util.EnumSet;
  */
 public final class Log {
 
-    public enum Category { RECV, SEND, PHASE, UI, ERROR }
+    public enum Category { RECV, SEND, PHASE, UI, ERROR, DEV }
 
     private static final EnumSet<Category> ENABLED = EnumSet.allOf(Category.class);
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
@@ -55,6 +55,11 @@ public final class Log {
 
     public static void ui(String msg) {
         log(Category.UI, msg);
+    }
+
+    /** A dev-mode cheat the local player triggered (money, summon, slot change, revert). */
+    public static void dev(String msg) {
+        log(Category.DEV, msg);
     }
 
     public static void error(String msg) {

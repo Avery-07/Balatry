@@ -42,6 +42,12 @@ public final class GameClient extends Application {
 
     private final Menu menu = new Menu();
     private final client.engine.Fader fader = new client.engine.Fader();
+
+    // Dev/cheat overlay for local testing, toggled with '*'. Gated so it can't be opened in a real match by accident:
+    // set the BALATRY_DEV env var (inherited by the forked app JVM) or -Dbalatry.dev=true.
+    private static final boolean DEV = "true".equalsIgnoreCase(System.getenv("BALATRY_DEV")) || Boolean.getBoolean("balatry.dev");
+    private final DevPanel dev = new DevPanel();
+    private MatchPhase lastPhase;   // for logging phase transitions
     private final Background background = new Background();   // the looping animated backdrop
     private MatchClient client;
     private HostedMatch hosted;      // non-null when this client is the one hosting
@@ -77,7 +83,10 @@ public final class GameClient extends Application {
         menu.onLoadoutChange = () -> { if (client != null) client.setLoadout(menu.sleeve, menu.stake); };
 
         Scene scene = new Scene(new StackPane(canvas), Ui.W, Ui.H);
-        scene.setOnKeyTyped(e -> { if (!inMatch()) menu.onChar(e.getCharacter()); });
+        scene.setOnKeyTyped(e -> {
+            if (DEV && "*".equals(e.getCharacter())) { dev.toggle(); return; }   // dev overlay toggle, any phase
+            if (!inMatch()) menu.onChar(e.getCharacter());
+        });
         scene.setOnKeyPressed(e -> { if (!inMatch() && e.getCode() == KeyCode.BACK_SPACE) menu.onBackspace(); });
         stage.setScene(scene);
         stage.setTitle("Balatry");
@@ -255,6 +264,7 @@ public final class GameClient extends Application {
             menu.status = "";
         } catch (Exception e) {
             client = null;
+            Log.error("connect failed: " + e);
             menu.status = "ERR: could not connect — " + (e.getMessage() == null ? e : e.getMessage());
         }
     }
@@ -265,6 +275,7 @@ public final class GameClient extends Application {
      * complete, finished replay, so the screen is left alone and the loss is reported in the status line.
      */
     private void onConnectionClosed(String reason) {
+        Log.phase("CONNECTED", "CLOSED: " + reason);
         if (client == null) return;             // we tore the connection down ourselves; nothing to report
         if (inMatch()) { ui.status = reason; return; }
         leaveLobby();
@@ -282,6 +293,7 @@ public final class GameClient extends Application {
 
     /** FX thread: the server closed the lobby and everyone has built the same match — fade into it. */
     private void onMatchStarted() {
+        Log.phase("LOBBY", "MATCH");
         fader.start(() -> {
             vm = new MatchViewModel(client);
             ui.vm = vm;
@@ -358,6 +370,7 @@ public final class GameClient extends Application {
         paintBackground();
         if (!inMatch()) { menu.render(ui); overlays.tooltip(ui); drawFade(); return; }   // menu owns the screen; its hover tips draw last
         if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
+        if (lastPhase != ui.s.phase()) { Log.phase(lastPhase, ui.s.phase()); lastPhase = ui.s.phase(); }
 
         double cx = Ui.PAD + Ui.SIDEBAR + 18;
         double cTop = Ui.PAD + Ui.SLOT_H + 12;
@@ -402,7 +415,13 @@ public final class GameClient extends Application {
             else overlays.tooltip(ui);
         }
 
+        if (DEV) dev.render(ui, localRun());   // cheat overlay on top of everything but the fade
         drawFade();
+    }
+
+    /** The local seat's live {@link model.game.player.Run} for the dev panel to mutate, or null before the match starts. */
+    private model.game.player.Run localRun() {
+        return (client != null && client.isStarted()) ? client.getLocalHost().getMatch().getRun(client.getSeat()) : null;
     }
 
     /** The fade-to-black transition overlay; the screen switch itself happens inside the Fader at full black. */
@@ -425,6 +444,7 @@ public final class GameClient extends Application {
 
     private void handleClick(double x, double y) {
         if (suppressClick) { suppressClick = false; return; }   // this click was the tail end of a drag
+        for (Ui.Btn b : ui.devButtons) if (b.rect().contains(x, y)) { b.action().run(); return; }   // cheat controls win any phase
         if (!inMatch()) {   // menu/lobby: only the widgets it registered this frame are live
             for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
             menu.focus = Menu.Focus.NONE;   // clicked outside every field — drop the caret

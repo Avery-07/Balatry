@@ -30,6 +30,7 @@ final class Ui {
     boolean showRunInfo;
 
     final List<Btn> buttons = new ArrayList<>();
+    final List<Btn> devButtons = new ArrayList<>();    // dev-mode cheat controls; handled before anything else, any phase
     final List<Btn> packButtons = new ArrayList<>();   // pack-opening option picks (modal: only these are live during a pack)
     final List<Sel> selectables = new ArrayList<>();   // shop/consumable items selectable for contextual actions
     final List<Sel> jokerSel = new ArrayList<>();      // held jokers (own selection: Sell, and Katadesmos's target)
@@ -127,7 +128,7 @@ final class Ui {
     double regionOffsetY;
 
     void newFrame() {
-        buttons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); tips.clear();
+        buttons.clear(); devButtons.clear(); packButtons.clear(); selectables.clear(); jokerSel.clear(); tips.clear();
         deckRect = null;
         scoreAnchor = null;
         // Rects are recorded as tiles draw and read by the effect square later in the same frame, so they are
