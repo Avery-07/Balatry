@@ -2,6 +2,7 @@ package model.game.net;
 
 import model.items.DeckType;
 import model.game.MatchConfig;
+import model.game.SinSelector;
 import model.game.Stake;
 import model.game.host.MatchHost;
 import model.game.player.SeatConfig;
@@ -28,7 +29,7 @@ import java.util.Locale;
  *   -Dbalatry.players=Ann:RED_BLUE:GOLD,Bo:black:purple   (name:sleeve:stake, per seat; case-insensitive)
  * </pre>
  */
-public record MatchSetup(long seed, DeckType deck, List<SeatConfig> seats) {
+public record MatchSetup(long seed, DeckType deck, boolean sinsEnabled, List<SeatConfig> seats) {
 
     /** Field separator inside one seat entry, and between seats — kept out of names by {@link #sanitize}. */
     private static final String SEAT_SEP = ",", FIELD_SEP = ":";
@@ -38,16 +39,23 @@ public record MatchSetup(long seed, DeckType deck, List<SeatConfig> seats) {
         seats = List.copyOf(seats);
     }
 
+    /** Backward-compatible construction with sins on (the default table rule). */
+    public MatchSetup(long seed, DeckType deck, List<SeatConfig> seats) { this(seed, deck, true, seats); }
+
     /** Reads the setup from system properties, applying the documented defaults. */
     public static MatchSetup fromProperties() {
         return new MatchSetup(
                 Long.parseLong(System.getProperty("balatry.seed", "42")),
                 parse(DeckType.class, System.getProperty("balatry.deck", "STANDARD")),
+                !"false".equalsIgnoreCase(System.getProperty("balatry.sins", "true")),
                 parseSeats(System.getProperty("balatry.players", "P0,P1")));
     }
 
-    /** The match config this setup implies: the networked policies plus the table's deck. */
-    public MatchConfig config() { return MatchHost.networkedConfig().withDeckType(deck); }
+    /** The match config this setup implies: the networked policies, the table's deck, and whether sins are active. */
+    public MatchConfig config() {
+        MatchConfig c = MatchHost.networkedConfig().withDeckType(deck);
+        return sinsEnabled ? c : c.withSinSelector(SinSelector.NONE);
+    }
 
     /** Seat names in order, for logging and for the seat count the server waits on. */
     public List<String> names() {
@@ -57,16 +65,20 @@ public record MatchSetup(long seed, DeckType deck, List<SeatConfig> seats) {
     }
 
     /** This setup with a different table deck (the host's pick in the lobby). */
-    public MatchSetup withDeck(DeckType d) { return new MatchSetup(seed, d, seats); }
+    public MatchSetup withDeck(DeckType d) { return new MatchSetup(seed, d, sinsEnabled, seats); }
+
+    /** This setup with sins turned on or off (the host's pick in the lobby). */
+    public MatchSetup withSins(boolean on) { return new MatchSetup(seed, deck, on, seats); }
 
     /** This setup with a different roster (a seat joining, leaving, or changing its loadout). */
-    public MatchSetup withSeats(List<SeatConfig> s) { return new MatchSetup(seed, deck, s); }
+    public MatchSetup withSeats(List<SeatConfig> s) { return new MatchSetup(seed, deck, sinsEnabled, s); }
 
     // --- wire form ---------------------------------------------------------
 
-    /** {@code seed<TAB>DECK<TAB>name:SLEEVE:STAKE,name:SLEEVE:STAKE} — the exact bytes every side must agree on. */
+    /** {@code seed<TAB>DECK<TAB>SINS<TAB>name:SLEEVE:STAKE,…} — the exact bytes every side must agree on. */
     public String encode() {
-        StringBuilder sb = new StringBuilder().append(seed).append('\t').append(deck.name()).append('\t');
+        StringBuilder sb = new StringBuilder().append(seed).append('\t').append(deck.name())
+                .append('\t').append(sinsEnabled).append('\t');
         for (int i = 0; i < seats.size(); i++) {
             SeatConfig s = seats.get(i);
             if (i > 0) sb.append(SEAT_SEP);
@@ -78,9 +90,10 @@ public record MatchSetup(long seed, DeckType deck, List<SeatConfig> seats) {
     /** Parses {@link #encode}'s form. An empty roster is legal: a lobby nobody has joined yet. */
     public static MatchSetup decode(String line) {
         String[] parts = line.split("\t", -1);
-        if (parts.length < 3) throw new IllegalArgumentException("malformed setup: " + line);
-        List<SeatConfig> seats = parts[2].isBlank() ? List.of() : parseSeats(parts[2]);
-        return new MatchSetup(Long.parseLong(parts[0].trim()), parse(DeckType.class, parts[1]), seats);
+        if (parts.length < 4) throw new IllegalArgumentException("malformed setup: " + line);
+        List<SeatConfig> seats = parts[3].isBlank() ? List.of() : parseSeats(parts[3]);
+        return new MatchSetup(Long.parseLong(parts[0].trim()), parse(DeckType.class, parts[1]),
+                Boolean.parseBoolean(parts[2].trim()), seats);
     }
 
     // --- parsing -----------------------------------------------------------

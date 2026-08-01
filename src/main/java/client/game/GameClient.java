@@ -80,6 +80,7 @@ public final class GameClient extends Application {
         menu.onLeave = this::leaveLobby;
         ui.onLeaveMatch = this::leaveLobby;   // the same teardown; from a finished match it just returns to the menu
         menu.onDeckChange = d -> { if (client != null) client.chooseDeck(d); };
+        menu.onSinsChange = on -> { if (client != null) client.chooseSins(on); };
         menu.onLoadoutChange = () -> { if (client != null) client.setLoadout(menu.sleeve, menu.stake); };
 
         Scene scene = new Scene(new StackPane(canvas), Ui.W, Ui.H);

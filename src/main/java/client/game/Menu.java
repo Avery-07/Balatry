@@ -43,6 +43,7 @@ final class Menu {
     Sleeve sleeve = Sleeve.STANDARD;
     Stake stake = Stake.WHITE;
     DeckType deck = DeckType.STANDARD;
+    boolean sinsEnabled = true;    // table rule (host-set): are the ante sins active this match?
 
     boolean host;                  // this client opened the lobby (seat 0)
     String hostAddress = "";       // shown to the host so they can share it
@@ -58,6 +59,7 @@ final class Menu {
     /** Set by GameClient: what the buttons actually do. */
     Runnable onHost, onJoin, onBegin, onLeave, onLoadoutChange;
     java.util.function.Consumer<DeckType> onDeckChange;
+    java.util.function.Consumer<Boolean> onSinsChange;
 
     /** This player's choices, sanitized for the wire (the name is typed, so it cannot be trusted raw). */
     SeatConfig seatConfig() {
@@ -285,6 +287,25 @@ final class Menu {
             r.textCenter("the host picks the table's deck", x + w / 2, y + 74, 10, FAINT);
         }
         r.textCenter(deck.description(), x + w / 2, y + 62, 11, FAINT);
+        y += 86;
+
+        // Table rule: whether the seven deadly sins modify each ante. Host-set, like the deck; everyone sees it.
+        r.textLeftBold("ANTE SINS", x, y, 13, DIM);
+        y += 24;
+        if (host) {
+            ui.button(x, y, w, 40, "Sins:  " + (sinsEnabled ? "ON" : "OFF"),
+                    sinsEnabled ? GREEN : Color.web("#303237"), sinsEnabled ? INK : DIM,
+                    () -> changeSins(!sinsEnabled), true);
+        } else {
+            r.panel(x, y, w, 40, Color.web("#1a1b1f"), EDGE, 8, 2);
+            r.textCenterBold("Sins:  " + (sinsEnabled ? "ON" : "OFF"), x + w / 2, y + 20, 15, DIM);
+        }
+        r.textCenter("the seven deadly sins modify every ante", x + w / 2, y + 58, 11, FAINT);
+    }
+
+    private void changeSins(boolean on) {
+        sinsEnabled = on;
+        if (onSinsChange != null) onSinsChange.accept(on);
     }
 
     private List<SeatConfig> seats() { return lobby == null ? List.of() : lobby.seats(); }
@@ -329,6 +350,7 @@ final class Menu {
     void applyLobby(MatchSetup setup) {
         lobby = setup;
         deck = setup.deck();
+        sinsEnabled = setup.sinsEnabled();
         if (seat >= 0 && seat < setup.seats().size()) {
             SeatConfig mine = setup.seats().get(seat);
             sleeve = mine.sleeve();

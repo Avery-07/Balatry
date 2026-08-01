@@ -54,6 +54,10 @@ public final class LobbyTests {
 
         MatchSetup empty = new MatchSetup(1L, DeckType.STANDARD, List.of());
         check("an empty lobby round-trips", MatchSetup.decode(empty.encode()).seats().isEmpty());
+
+        MatchSetup noSins = setup.withSins(false);
+        check("the sins-off rule round-trips", !MatchSetup.decode(noSins.encode()).sinsEnabled());
+        check("sins default to on", back.sinsEnabled());
     }
 
     /** A typed name reaches the wire, so the separators it could otherwise smuggle in must be stripped. */

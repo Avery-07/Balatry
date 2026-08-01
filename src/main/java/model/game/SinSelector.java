@@ -14,4 +14,7 @@ public interface SinSelector {
         Sin[] all = Sin.values();
         return all[rng.nextInt(RngSource.ANTE_MODIFIER, ante, all.length)];
     };
+
+    /** No sin ever active: {@code null} resolves to {@link model.game.sins.SinModifier#NONE}. Used when the host turns sins off. */
+    SinSelector NONE = (ante, rng) -> null;
 }

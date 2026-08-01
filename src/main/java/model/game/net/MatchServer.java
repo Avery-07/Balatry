@@ -55,6 +55,7 @@ public final class MatchServer implements AutoCloseable {
     private final boolean autoStart;   // dedicated-server mode: begin as soon as the cap is reached
 
     private DeckType deck;
+    private boolean sinsEnabled = true;   // table rule: ante sins active (host toggles it in the lobby)
     private MatchHost host;            // null until the match starts — the lobby has no model yet
     private volatile boolean running = true;
 
@@ -85,7 +86,7 @@ public final class MatchServer implements AutoCloseable {
     public synchronized MatchSetup getSetup() {
         List<SeatConfig> seats = new ArrayList<>(clients.size());
         for (ClientLink c : clients) seats.add(c.config);
-        return new MatchSetup(seed, deck, seats);
+        return new MatchSetup(seed, deck, sinsEnabled, seats);
     }
 
     /** Starts the accept loop on a daemon thread and returns; callers stay free to run their own UI. */
@@ -153,6 +154,12 @@ public final class MatchServer implements AutoCloseable {
             } catch (IllegalArgumentException e) {
                 from.send("ERR\t" + e.getMessage());
             }
+            return true;
+        }
+        if (line.startsWith("SINS\t")) {
+            if (from.id.seat() != 0) { from.send("ERR\tonly the host sets the table rules"); return true; }
+            sinsEnabled = Boolean.parseBoolean(line.substring("SINS\t".length()).trim());
+            broadcastLobby();
             return true;
         }
         if (line.equals("BEGIN")) {

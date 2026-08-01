@@ -161,6 +161,9 @@ public final class MatchClient implements AutoCloseable {
     /** Host only: change the table's deck. Ignored by the server if sent from any other seat. */
     public void chooseDeck(DeckType deck) { send("DECK\t" + deck.name()); }
 
+    /** Host only: turn the ante sins on or off for the table. Ignored by the server if sent from any other seat. */
+    public void chooseSins(boolean on) { send("SINS\t" + on); }
+
     /** Host only: close the lobby and start the match with whoever is seated. */
     public void begin() { send("BEGIN"); }
 

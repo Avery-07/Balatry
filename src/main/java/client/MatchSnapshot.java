@@ -307,7 +307,7 @@ public record MatchSnapshot(
                 match.getRoundNumber(),
                 String.valueOf(match.getBlind()),
                 match.getCurrentTarget(me),   // this seat's own stake-scaled target
-                String.valueOf(match.getActiveSin()),
+                match.getActiveSin() == null ? "None" : String.valueOf(match.getActiveSin()),
                 match.getCurrentBoss() == null ? null : String.valueOf(match.getCurrentBoss()),
                 String.valueOf(match.getCurrentTag()),
                 match.getDeckType().displayName(),

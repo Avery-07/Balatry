@@ -20,6 +20,7 @@ public final class SinTests {
 
     public static void main(String[] args) {
         registration();
+        sinsDisabled();
         roundBeginChoice();
         roundSettledThreshold();
         stateReset();
@@ -58,6 +59,18 @@ public final class SinTests {
         boolean allRegistered = true;
         for (Sin sin : Sin.values()) allRegistered &= Sins.modifierFor(sin) != SinModifier.NONE;
         check("all seven sins resolve to a real modifier", allRegistered);
+    }
+
+    /** The host's "sins off" table rule: {@link SinSelector#NONE} means no sin is ever active and the modifier is NONE. */
+    private static void sinsDisabled() {
+        Match off = Match.create(9L, List.of("A", "B"), MatchConfig.defaults().withSinSelector(SinSelector.NONE));
+        off.start();
+        check("sins off -> no active sin", off.getActiveSin() == null);
+        check("sins off -> NONE modifier (no double-skip grant)", off.getSinModifier().tagsPerSkip() == 1);
+
+        Match on = Match.create(9L, List.of("A", "B"), MatchConfig.defaults());
+        on.start();
+        check("sins on -> an active sin", on.getActiveSin() != null);
     }
 
     /** onRoundBegin consults the injected provider and stores the chosen multiplier on each seat's SinState. */
