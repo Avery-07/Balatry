@@ -123,6 +123,9 @@ final class Hud {
 
         r.panel(ix, cy, iw, hSin, Color.web("#2a1030"), PURPLE, 8, 2);
         r.textCenter("Ante sin — " + s.activeSin(), ix + iw / 2, cy + hSin / 2, 12, Color.web("#ecd7f5"));
+        // Hover the sin to read its effect.
+        if (!s.activeSinDesc().isEmpty())
+            ui.tip(new Layout.Rect(ix, cy, iw, hSin), s.activeSin() + "\n" + s.activeSinDesc());
     }
 
     /**

@@ -54,6 +54,7 @@ public record MatchSnapshot(
         String blind,
         long target,
         String activeSin,
+        String activeSinDesc,   // the active sin's effect text, for the sidebar hover and the ante-change banner
         String boss,
         String skipTag,
         String deckType,           // the table's shared starting deck (display name)
@@ -307,7 +308,8 @@ public record MatchSnapshot(
                 match.getRoundNumber(),
                 String.valueOf(match.getBlind()),
                 match.getCurrentTarget(me),   // this seat's own stake-scaled target
-                match.getActiveSin() == null ? "None" : String.valueOf(match.getActiveSin()),
+                match.getActiveSin() == null ? "None" : match.getActiveSin().displayName(),
+                match.getActiveSin() == null ? "" : match.getActiveSin().description(),
                 match.getCurrentBoss() == null ? null : String.valueOf(match.getCurrentBoss()),
                 String.valueOf(match.getCurrentTag()),
                 match.getDeckType().displayName(),

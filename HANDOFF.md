@@ -15,14 +15,13 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   separate server is needed. A lobby seats **2-4**. To play locally, run
   `mvn javafx:run` twice: host in the first window, join `localhost` in the second, then Start in the first.
   `mvn exec:java@server` still runs a headless dedicated server that auto-starts when its seats fill.
-- **31 harnesses; 30 pass. `JokerTests` fails on two PRE-EXISTING content bugs** (not from recent work), worth fixing early
-  so the suite is green again:
-  1. Its catalog assertion expects **164** jokers but there are **165** (`Jokers.values().length`) — bump the test to 165, or
-     remove the extra joker.
-  2. `SCALPER`'s description is keyed by display name `"Scalper"` in `Jokers.Descriptions.MAP` instead of the enum name
-     `"SCALPER"`, so `Descriptions.of("SCALPER")` returns empty and "every joker has a description" fails. Fix the key.
-  These two reds were **not** touched recently. The last few sessions made client-only changes that **compiled
-  clean**; `mvn test` was **not** re-run, so confirm the suite before relying on it being green.
+- **33 harnesses, all green** (`mvn test` → "33 harnesses, 0 failed"). The old two `JokerTests` reds are fixed
+  (count is 165; the SCALPER key was already corrected). Keep it green — it is a real safety net now.
+- **Dev/cheat overlay** for testing: set the `BALATRY_DEV=true` env var (inherited by the forked app JVM, so
+  `$env:BALATRY_DEV="true"; mvn javafx:run` in PowerShell), then press **`*`** in a match to toggle `DevPanel` —
+  money/slots/summon-joker/summon-card-with-modifiers/summon-consumable + a Revert undo stack. It mutates the
+  **local** model directly (single-player/host testing only — cheats don't go through the action log, so they
+  won't sync to other seats or survive a determinism replay). Off unless the flag is set.
 
 ## Critical working conventions (read these)
 
@@ -32,10 +31,15 @@ This doc is the "start here" for a fresh session. Read it, then dig into the fil
   visuals. This is why the engine is designed so **logic is tested and only `Renderer` drawing is unverified.**
 - **Work directly in the main folder** `C:\Users\Mayeul\IdeaProjects\Balatry` — edit those files and run `mvn`
   there. The user runs from main. **Do NOT use a git worktree + `robocopy /MIR` sync** (an earlier workflow): the
-  user keeps ~140 joker texture PNGs in `src/main/resources/sprites/joker/`, which are not in any worktree, and
-  `/MIR` deletes everything the source lacks — it wiped the textures on every sync. If a stray worktree exists on
-  disk, it is unused; ignore it. Removing it must be done from a separate terminal (`git worktree remove`), never
-  from a session whose shell is anchored inside it.
+  user keeps ~140 texture PNGs the worktree lacks, and `/MIR` deletes everything the source lacks — it wiped the
+  textures on every sync. If a stray worktree exists on disk it is unused; ignore it. Removing it must be done from
+  a separate terminal (`git worktree remove`), never from a session whose shell is anchored inside it.
+- **Textures are the user's source-of-truth content — never delete/overwrite `src/main/resources/sprites/**`.** The
+  tree the client loads (`GameClient.loadAssets`): `sprites/jokers/<Name>.png` (per-joker, **plural** folder — note
+  `Renderer.jokerTexture` was updated from the old singular `joker/`); `sprites/cards/{cards,Enhancements,Seals,Decks}.png`
+  (sheets); `sprites/consumables/{Planets,Tarots,Spectrals}.png`; `sprites/packs/{Arcana,Buffoon,Celestial,Spectral,Standard}Packs.png`;
+  `sprites/vouchers/Vouchers.png`. `Decks.png` (card backs) and `difficultyStake/Stakes.png` exist but aren't wired
+  yet; there is **no** Myth-pack or relic art. `*/ignore.png` files are scratch — skip them.
 - **Determinism is sacred.** Same seed + same actions → bit-identical replays, mirrored across seats
   (`DeterminismTests`). Any RNG use must be keyed/salted deterministically.
   **Never salt an RNG with `Card.id()` / `DeckCard.id()`** — those come from a JVM-global counter that the
@@ -131,8 +135,30 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
   `JokerSpec.state(...)` renderer. Rank-reading jokers must route rank checks through `countsAs(run, card, rank)` /
   `anyRank(run, card, predicate)` (Jokers.java) so **Dyscalculie** shifts them; face checks go through `run.isFaceCard(c)`
   so **Pareidolia** reaches them.
-- **Consumables / vouchers / relics: fully implemented and described.** Targeted consumables declare
-  `ConsumableSpec.minTargets`, enforced in `Run.useConsumable` (refused, card kept) and mirrored in the UI.
+- **Consumables / relics: fully implemented and described.** Targeted consumables declare `ConsumableSpec.minTargets`,
+  enforced in `Run.useConsumable` (refused, card kept) and mirrored in the UI.
+- **Vouchers: all live.** `BLANK` is an intentional no-op (Antimatter's prerequisite).
+  The wiring uses per-run knobs on `Run` (`tarot/planet/relicWeightBonus`, `editionRate`, `omenGlobe`/`telescope`/
+  `observatory`/`showman`/`encore`, `magicTrickCards`/`illusion`): Tarot/Planet/Relic Merchant & Tycoon add shop
+  appearance weight (read in `CatalogShopPool`), Hone/Glow Up stamp editions on shop jokers, Omen Globe puts
+  Spectrals in Arcana packs, Telescope plants your most-played Planet in a Celestial pack, Observatory adds a held
+  Planet's Mult in scoring (`ScoringEngine` Phase C), **Showman** removes the new own-item shop de-duplication,
+  **Encore** biases the shop toward owned jokers. Covered by `VoucherEffectTests`.
+- **Textures & editions (client).** A texture-atlas layer in `Renderer` draws real art everywhere: playing cards
+  (`cards.png`, transparent-backed → an enhancement/base cell is drawn under the face; seals overlaid), jokers,
+  planets/tarots/spectrals, packs (kind sheet, size→cell 0/1/2), and vouchers. **Editions are real now** —
+  `EditionArt` computes Balatro's actual foil-shader pattern into animated buffers, blitted with a SCREEN blend
+  (`Renderer.editionEffect`); Foil/Holo/Poly + Negative (dark-navy). Enhancement/seal/edition ordinals are threaded
+  through the card-family snapshot views + `CardEntity`/`Reconciler` (backward-compat constructors). **The voucher
+  cell map is a placeholder** — `Renderer.VOUCHER_CELL` points every voucher at cell 0; the user is filling it in
+  (search `TODO(mapping)`).
+- **Standard packs & Magic Trick** offer real playing cards that roll enhancement/seal/edition (stackable) via
+  `model.items.PlayingCards`; **Illusion** boosts those odds. Rendered as actual card faces (`CardFace` on
+  `ShopItem`/`PackOption`). Tested by `PlayingCardTests`.
+- **Sins are togglable per match.** The lobby has a host-set "Ante Sins: ON/OFF" (threaded through
+  `MatchSetup.sinsEnabled` → the wire form's 4th tab field → `MatchConfig`; off = `SinSelector.NONE`, so
+  `activeSin` is null and the modifier is `SinModifier.NONE`). Each `Sin` now has `displayName()`/`description()`;
+  the sidebar sin panel hovers to show the effect, and `AnteBanner` shows an old→new sin handover on ante change.
 - **Relics**: Pyre destroys a consumable from every seat above; Limos & Harpax hit a random seat above
   (`RelicKind.RANDOM_RIVAL`); Katadesmos takes a joker slot from a selected joker.
 - Every seat starts with **$4**. Relics **share the consumable slot pool**.
@@ -151,62 +177,86 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
   disconnect handling (a dropped socket becomes `Action.PlayerLeft` in the log, so every seat learns of it at the
   same point in the same replay). **Missing: reconnect and kicking.**
 
-## Test index (31 harnesses)
+## Test index (33 harnesses)
 
 - **Model rules**: `MatchTests`, `RoundTests`, `SettlementTests`, `ShopTests`, `StandingsTests`,
   `PlayerStatsTests`, `HandEvaluatorTests`, `HandLevelsTests`, `TriggerTests`, `ActionTests`
 - **Content**: `JokerTests`, `TarotTests`, `PlanetTests`, `SpectralTests`, `RelicTests`, `TagTests`,
   `SinTests`, `BossBlindTests`, `BossBehaviorTests`, `StickerTests`, `LoadoutTests`, `LoadoutEffectTests`,
-  `FaceDownTests`
+  `FaceDownTests`, `PlayingCardTests` (pack/Magic-Trick playing cards + modifiers), `VoucherEffectTests` (the
+  newly-wired vouchers)
 - **Scoring**: `ScoringEventTests` (the animation timeline + its invariants)
 - **Determinism & transport**: `DeterminismTests`, `HostTests`, `NetTests`, `LobbyTests`, `DisconnectTests`
 - **Client-facing**: `SnapshotTests` (the information boundary), `EngineTests` (every `client.engine` class)
 
 ## What's next (recommended order)
 
-0. **Fix the two pre-existing `JokerTests` reds** (see Build & run) — 5-minute content fix, restores a green suite.
-1. **Eyeball the most recent client work** — the shop redesign, the enlarged joker/consumable top bar, and the new
-   joker textures all landed un-verified (no display here). See "Most recent session" below. Confirm the shop fills
-   cleanly (no bottom hole), tiles/price tags sit right, and textures fit unstretched before building more UI on top.
-2. **Finish the remaining 9 stub jokers** (listed under Current content state). The 5 cross-player ones each need a
+1. **Eyeball the large batch of un-verified client visuals** (no display here). Everything from this session is
+   compile-verified only: the **edition shimmers** (`EditionArt` intensities are guesses — foil blue, poly alpha,
+   negative navy are tunable constants), all the **textures** (playing cards + enhancement/seal, consumables,
+   packs, vouchers), the **collection** screen, the **ante-change banner** and **sin hover**, the **dev panel**,
+   and the earlier shop/top-bar redesign. Confirm they read right before building more UI on top.
+2. **Relics in the shop — DONE.** Relics now roll into the shop card row at a base ~14/114 share (like Tarots), a
+   `RELIC_WEIGHT` band in `CatalogShopPool`; Relic Merchant/Tycoon add `Run.relicWeightBonus` (+20/+40, like the
+   Tarot/Planet vouchers) so both are live. Buy/pricing already existed (`RelicCard` is a `MarketCard`, $5, sell
+   $2; `run.acquire`/`canAcquire` handle it — relics share the consumable slot pool). Covered by
+   `VoucherEffectTests`; `ShopTests`' base-row assertion now allows relics. **Still open here:** relics have **no
+   art** — a shop relic tile falls back to the labeled vector panel (`consumableFace`/`jokerTexture` miss the
+   name), so add **relic textures** (+ a `relicFace`/cell map in `Renderer`, mirroring `voucherFace`) and
+   **Myth-pack textures**; fill in the **voucher cell map** if the user hasn't (`Renderer.VOUCHER_CELL`); and wire
+   `Decks.png` card backs / `Stakes.png`.
+3. **Finish the remaining 9 stub jokers** (listed under Current content state). The 5 cross-player ones each need a
    new cross-seat event/mechanism — do them one at a time, tested, not as a batch (determinism is sensitive here).
    Vulture and Transparent Joker are the most self-contained starting points.
-3. **Assets:** the card sprite sheet (`src/main/resources/cards/deck.png`, 4 suit rows H/C/D/S × 13 rank cols
-   2→A) and pixel font (`src/main/resources/font/game.ttf`) are still optional drop-ins with fallbacks — see
-   `README-assets.md`. **Joker textures are now IMPLEMENTED** (see "Most recent session"), and the user has added
-   ~140 joker PNGs under `src/main/resources/sprites/joker/`. Remaining texture work, if wanted: extend the same
-   `Renderer.jokerTexture` + `imageFit` pattern to consumables/vouchers/relics/packs, and supply the deck sheet.
-   Editions stay canvas-drawn effects (Foil/Holo/Polychrome gradients + blend modes, Negative a precomputed
-   inverted variant), deliberately **not** textures.
 4. **Reconnect** — the log-replay architecture makes it feasible (send the log, replay, resume) but it is a real
    protocol design task. Kicking is the smaller sibling.
+5. **Wrath's per-round pack** still vanishes unopened on a *played* (won/lost) round — the pending-pack "Open"
+   prompt was scoped to *skipped* rounds. Extending it to the played-round barrier would close that.
 
-## Most recent session — what landed (client-only; compiled, NOT eyeballed, `mvn test` not re-run)
+## This session — what landed (model bits tested; client visuals compile-only, NOT eyeballed)
 
-**Joker textures — implemented.**
-- `Renderer.jokerTexture(displayName)` lazily loads `/sprites/joker/<Name>.png` and caches it (misses cached as
-  null, so the classpath is hit once per name). The key is the **display name with every non-alphanumeric char
-  stripped**, keeping capitalisation — `Half Joker` → `HalfJoker.png`, `Oops! All 6s` → `OopsAll6s.png`. This is
-  the naming the user's files use; it **supersedes the old "keyed by enum name" plan**. Folder has a `README.md`.
-- `Renderer.imageFit(img, x, y, w, h)` draws the texture **scaled to fit, preserving aspect (never stretched)**,
-  centered/letterboxed — the user explicitly required no stretching. (The folder `README.md`'s "Format" line still
-  says "stretched" — stale wording; the code fits without stretching.)
-- Wired at three draw sites, each falling back to the vector tile when no PNG exists: `Hud.drawJokerTile` (owned
-  jokers), `ShopScreen.draw` (shop-slot jokers, matched by label), `Overlays.pack` (Buffoon-pack options).
-- The user has dropped ~140 texture PNGs into the folder. **Do not delete them** — that folder is source-of-truth
-  content (see the working-conventions note about never mirroring a worktree onto main).
+**Textures & the atlas layer (all in `Renderer`, fed by `GameClient.loadAssets`).**
+- Per-joker PNGs via `jokerTexture(displayName)` — key = display name with non-alphanumerics stripped
+  (`Half Joker`→`HalfJoker.png`), folder now `sprites/jokers/` (plural). `imageFit` draws aspect-preserved, never
+  stretched. Vector tile is the fallback everywhere.
+- **Playing cards**: `cards.png` is a 13×4 grid, **transparent-backed**, so `Renderer.card(...)` draws a base first
+  (the enhancement's cell from `Enhancements.png`, or cell 0 for a plain card — Stone shows no rank/suit), then the
+  face, then the seal (`Seals.png`), then the edition. `card()` now takes enhancement/seal/edition ordinals.
+- **Consumable / pack / voucher atlases**: `planet/tarot/spectral` cells (name→cell maps, keyed by display name),
+  per-kind 2×2 pack sheets (size→cell), and `Vouchers.png`. `consumableFace` / `packFace` / `voucherFace` draw
+  them at the shop / pack / HUD tiles. **Cell maps are in `Renderer`** — enhancement/seal/planet/tarot/spectral are
+  correct; **`VOUCHER_CELL` is a placeholder (all cell 0)** the user is filling (`TODO(mapping)`).
+- **Editions are real** — `EditionArt` computes Balatro's foil-shader pattern (radial ripples + angular streak +
+  axis bands) into card-sized buffers rebuilt ~24Hz, blitted SCREEN-blended in `editionEffect`; Foil/Holo/Poly +
+  Negative (dark navy). `Renderer.clock(ui.now)` drives it.
+- **Plumbing**: an `edition` (and earlier `enhancement`/`seal`) ordinal is threaded through `CardFace`,
+  `HandCardView`, `DeckCardView`, `JokerView`, `ItemView`, `ShopItem`, `PackOption`, and `CardEntity`/`Reconciler`
+  — all with backward-compatible constructors so `EngineTests` compiles untouched.
 
-**Shop + top-bar layout redesign (Balatro-flavored; needs eyeballing).**
-- Top joker/consumable bar enlarged so tiles read big: `Ui.SLOT_H` 118→190, new `Ui.SLOT_TILE_W/H`=108×146;
-  `jokerRow`/`itemRow` sized to match. This intentionally lowers the center region (`cTop` grows).
-- `ShopScreen` fully rewritten to **fill the whole center region — no empty hole at the bottom** (a prior
-  "shrink the panel" attempt left a backdrop gap the user disliked). Now: a header (Next Round / Reroll) over two
-  **framed inset shelf rows** that split the remaining height evenly — the card shelf on top, Voucher + Booster
-  Packs side by side below. Tiles 116×156 centered per shelf, price tags centered above (shop `TileRow`s sized to
-  match). Balatry rolls more items than Balatro (up to 2 vouchers / 4 packs), so packs can still overlap when full.
-- Result/Selection screens use fixed, top-anchored panels, so the smaller center region doesn't break them.
+**Model content.**
+- `model.items.PlayingCards` — the shared roller for Standard-pack / Magic-Trick playing cards: independent
+  enhancement/seal/edition rolls (stackable), boosted odds under Illusion. `BoosterPack` STANDARD uses it;
+  `CatalogShopPool` adds a Magic-Trick playing-card band. Editions on played cards already score.
+- **11 stubbed vouchers implemented** (see Current content state); **Relic Merchant/Tycoon deferred**.
+- **Sins togglable** in the lobby (`MatchSetup.sinsEnabled` → wire form's 4th field → `MatchConfig`; off = `SinSelector.NONE`).
+  `Sin` gained `displayName()`/`description()`.
+- Fixed the two `JokerTests` reds → suite green.
 
-## Prior session — what landed (all model tests green)
+**Client UX (un-eyeballed).**
+- **Collection** screen: `Menu`'s main menu has a "Collection" button opening a paged grid of every joker (idle
+  sway/bob, hover tooltips via the shared `Overlays.tooltip`). Menu path now calls `overlays.tooltip(ui)`.
+- **Sin hover** (sidebar) + **`AnteBanner`** (old→new sin handover, slides/fades on ante change; triggered in
+  `onSnapshot` off `ante` increasing).
+- **Skip-granted (and Wrath) packs open on the skip screen**: the blind barrier holds for a skipped seat with a
+  pending pack (`MatchHost.allRoundsResolved`), and `Overlays.pendingPackPrompt` offers "Open" → `Action.OpenPack`
+  → the existing modal. `MatchSnapshot.pendingPacks` exposes them.
+- **Pack overlay** made shorter (its Use button was hidden behind the dealt hand) and the dealt hand + jokers +
+  consumables are now **drag-reorderable during a pack**.
+- **Shop + top-bar redesign**: `Ui.SLOT_H` 118→190 (+`SLOT_TILE_W/H` 108×146); `ShopScreen` rewritten to fill the
+  center region with framed inset shelves (card shelf; Voucher + Booster Packs), tiles 116×156, price tags centered.
+- **`DevPanel`** (`*`, gated by `BALATRY_DEV`) + expanded `Log` (new `DEV` category; phase/connect logging).
+
+## Earlier session — what landed (all model tests green)
 
 **New engine machinery** (reuse these before adding more):
 - **Triggers** (`Trigger.java`): `ON_CARD_DESTROYED`, `ON_PACK_OPENED`, `ON_PACK_SKIPPED`, `ON_LUCKY_TRIGGERED`,
@@ -263,8 +313,27 @@ information — fine for friends, unfixable for strangers without a server-autho
 - `Ui.regionOffsetY` is applied when a region is *registered*, so a screen drawing under a `gc.translate` (the
   menu slide) gets correct hitboxes for every region type. Don't patch hitbox lists after the fact.
 - `Ui`'s per-frame state (`tips`, `sourceRects`, the click registries) is cleared in `newFrame()`.
+- **A card modifier (enhancement/seal/edition) shown on a card touches ~9 places**: the `Renderer.card(...)` params,
+  `CardFace`/`HandCardView`/`DeckCardView`/`JokerView`/`ItemView`/`ShopItem`/`PackOption` records + their builders,
+  and `CardEntity`/`Reconciler.Desired`. Keep backward-compatible overloads on `CardEntity`/`Desired` or
+  `EngineTests` breaks. Editions are drawn by `editionEffect`, not `card()`'s texture path, so tile draws (jokers,
+  shop/pack faces) call it separately.
+- Texture atlas cell maps live in `Renderer` (`ENH_CELL`, `SEAL_CELL`, planet/tarot/spectral, pack size, `VOUCHER_CELL`).
+  Sheet order ≠ enum order (e.g. tarots swap Justice/Strength; spectrals shift by one and skip Exorcism/Black Hole).
+- `EditionArt` shares one animated buffer per edition across all cards; it's cheap but means every foil card shimmers
+  in phase. Tunable intensity constants are at the top of `EditionArt` and in `editionEffect`.
+- **`DevPanel` cheats mutate the local model directly** — single-player/host testing only; they never enter the
+  action log, so they desync multiplayer and won't survive a determinism replay. Gated behind `BALATRY_DEV`.
 
 **Model rules**
+- **Determinism when adding shop/pack rolls: gate new RNG so the *base* path is byte-identical.** `CatalogShopPool`
+  and `BoosterPack` only draw for a voucher/flag when it's active (e.g. edition rolls, Showman dedup, Omen Globe)
+  — with no voucher the stream is consumed exactly as before, which is why `DeterminismTests` stayed green. Follow
+  this whenever a new knob affects generation.
+- **Sins off = `SinSelector.NONE`** (returns null); `Sins.modifierFor(null)` is already `SinModifier.NONE`, and
+  `Match.getActiveSin()` is then null (snapshot shows "None"). The `Sin` enum's `toString()` is unchanged (still
+  the constant name), so `DeterminismTests`' string dumps are unaffected — only `displayName()`/`description()`
+  were added.
 - **Stakes are per-seat, so chip targets are too.** Ask `match.getCurrentTarget(playerId)`, never the no-arg form
   (that one is the White-stake baseline). Same for cash-out (`run.getStake().rewardFor(blind)`) and rerolls.
 - Stake target growth compounds **per ante above the first**, so ante 1 is identical at every stake by design.

@@ -47,6 +47,7 @@ public final class GameClient extends Application {
     // set the BALATRY_DEV env var (inherited by the forked app JVM) or -Dbalatry.dev=true.
     private static final boolean DEV = "true".equalsIgnoreCase(System.getenv("BALATRY_DEV")) || Boolean.getBoolean("balatry.dev");
     private final DevPanel dev = new DevPanel();
+    private final AnteBanner anteBanner = new AnteBanner();
     private MatchPhase lastPhase;   // for logging phase transitions
     private final Background background = new Background();   // the looping animated backdrop
     private MatchClient client;
@@ -101,6 +102,7 @@ public final class GameClient extends Application {
                 hand.advance(dt);
                 hud.advance(dt);
                 menu.advance(dt);
+                anteBanner.advance(dt);
                 fader.advance(dt);
                 background.advance(dt);
                 ui.jokerRow.advance(dt);
@@ -348,6 +350,12 @@ public final class GameClient extends Application {
         ui.s = snap;
         hand.reconcile(snap.hand(), Ui.W - 90, Ui.H * 0.55);
 
+        // A new ante took over: announce the sin handover (old -> new), unless sins are off.
+        if (previous != null && snap.ante() > previous.ante() && !"None".equals(snap.activeSin())) {
+            anteBanner.trigger(snap.ante(), previous.activeSin(), snap.activeSin(), snap.activeSinDesc());
+            Log.phase("ante " + previous.ante() + " (" + previous.activeSin() + ")", "ante " + snap.ante() + " (" + snap.activeSin() + ")");
+        }
+
         boolean newTimeline = !snap.lastPlay().isEmpty()
                 && (previous == null || !snap.lastPlay().equals(previous.lastPlay()));
         if (newTimeline) {
@@ -416,6 +424,7 @@ public final class GameClient extends Application {
             else overlays.tooltip(ui);
         }
 
+        if (anteBanner.active()) anteBanner.render(ui);   // the ante-change sin handover banner
         if (DEV) dev.render(ui, localRun());   // cheat overlay on top of everything but the fade
         drawFade();
     }
