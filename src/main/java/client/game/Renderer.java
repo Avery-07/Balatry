@@ -184,16 +184,12 @@ public final class Renderer {
     // --- voucher atlas (Vouchers.png, 8x4 = 32 cells) ---
     private final Atlas voucherAtlas = new Atlas();
 
-    // TODO(mapping): Vouchers.ordinal() -> cell in Vouchers.png. Right now EVERY voucher points at cell 0 (the first
-    // texture) as a placeholder. Edit this array to give each voucher its real cell — the order matches the Vouchers
-    // enum (see model/items/vouchers/Vouchers.java), the comment on each row names the eight entries, and -1 means
-    // "no art, keep the vector tile" (the sheet has 32 cells but the enum has 34, so at least two must be -1).
     private static final int[] VOUCHER_CELL = {
-            0, 8, 3, 11, 4, 12, 16, 22, // Overstock, Overstock Plus, Clearance Sale, Liquidation, Hone, Glow Up, Reroll Surplus, Reroll Glut
-            18, 24, 19, 25, 5, 13, 6, 14,   // Crystal Ball, Omen Globe, Telescope, Observatory, Grabber, Nacho Tong, Wasteful, Recyclomancy
-            1, 9, 2, 10, 17, 23, 7, 15,   // Tarot Merchant, Tarot Tycoon, Planet Merchant, Planet Tycoon, Seed Money, Money Tree, Blank, Antimatter
-            20, 26, 21, 27, 0, 0, 0, 0,   // Magic Trick, Illusion, Paint Brush, Palette, Sampler, Connoisseur, Relic Merchant, Relic Tycoon
-            0, 0                      // Showman, Encore
+            0, 8, 4, 12, 5, 13, 17, 25, // Overstock, Overstock Plus, Clearance Sale, Liquidation, Hone, Glow Up, Reroll Surplus, Reroll Glut
+            19, 27, 20, 28, 6, 14, 7, 15,   // Crystal Ball, Omen Globe, Telescope, Observatory, Grabber, Nacho Tong, Wasteful, Recyclomancy
+            1, 9, 2, 10, 18, 26, 16, 24,   // Tarot Merchant, Tarot Tycoon, Planet Merchant, Planet Tycoon, Seed Money, Money Tree, Blank, Antimatter
+            21, 29, 22, 30, 32, 33, 3, 11,   // Magic Trick, Illusion, Paint Brush, Palette, Sampler, Connoisseur, Relic Merchant, Relic Tycoon
+            23, 31                      // Showman, Encore
     };
 
     /** The voucher sheet (8x4). Each voucher's display name maps to a cell via {@link #VOUCHER_CELL}. */
