@@ -50,6 +50,10 @@ public final class VoucherEffectTests {
         checkInt("Tarot Merchant weight", r.getTarotWeightBonus(), 20);
         apply(Vouchers.TAROT_TYCOON, r);
         checkInt("Tarot Tycoon stacks on Merchant", r.getTarotWeightBonus(), 60);
+        apply(Vouchers.RELIC_MERCHANT, r);
+        checkInt("Relic Merchant weight", r.getRelicWeightBonus(), 20);
+        apply(Vouchers.RELIC_TYCOON, r);
+        checkInt("Relic Tycoon stacks on Merchant", r.getRelicWeightBonus(), 60);
         apply(Vouchers.HONE, r);   checkInt("Hone edition rate", r.getEditionRate(), 1);
         apply(Vouchers.GLOW_UP, r); checkInt("Glow Up edition rate", r.getEditionRate(), 2);
         apply(Vouchers.HONE, r);   checkInt("Hone never downgrades Glow Up", r.getEditionRate(), 2);
@@ -65,6 +69,12 @@ public final class VoucherEffectTests {
         apply(Vouchers.TAROT_MERCHANT, merch);
         apply(Vouchers.TAROT_TYCOON, merch);
         check("Tarot vouchers raise the shop's Tarot share", countTarots(merch) > plain);
+
+        check("Relics appear in the base shop", countRelics(new Run(2L)) > 0);
+        Run relicMerch = new Run(2L);
+        apply(Vouchers.RELIC_MERCHANT, relicMerch);
+        apply(Vouchers.RELIC_TYCOON, relicMerch);
+        check("Relic vouchers raise the shop's Relic share", countRelics(relicMerch) > countRelics(new Run(2L)));
     }
 
     private static int countTarots(Run run) {
@@ -74,6 +84,13 @@ public final class VoucherEffectTests {
             if (c instanceof ConsumableCard cc && cc.getSpec().getType() == ConsumableType.TAROT) tarots++;
         }
         return tarots;
+    }
+
+    private static int countRelics(Run run) {
+        int relics = 0;
+        for (int i = 0; i < 3000; i++)
+            if (CatalogShopPool.INSTANCE.roll(run, new Random(500L + i)) instanceof model.items.relics.RelicCard) relics++;
+        return relics;
     }
 
     private static void omenGlobe() {

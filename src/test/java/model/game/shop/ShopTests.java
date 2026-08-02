@@ -136,18 +136,19 @@ public final class ShopTests {
         checkInt("pack slots = 3", shop.getPackCount(), 3);
         checkInt("voucher slots = 2", shop.getVoucherCount(), 2);
 
-        // --- card row holds only jokers/tarots/planets (no playing cards), all priced ---
+        // --- card row holds only jokers/tarots/planets/relics (no playing cards), all priced ---
         boolean cardRowOk = true, priced = true;
         Random pool = new Random(99);
         for (int i = 0; i < 400; i++) {
             Card c = CatalogShopPool.INSTANCE.roll(pool);
             boolean kindOk = c instanceof JokerCard
+                    || c instanceof model.items.relics.RelicCard
                     || (c instanceof ConsumableCard cc
                     && (cc.getSpec().getType() == ConsumableType.TAROT || cc.getSpec().getType() == ConsumableType.PLANET));
             cardRowOk &= kindOk && !(c instanceof DeckCard);
             priced &= c.getShopValue() >= 0;
         }
-        check("card row is jokers/tarots/planets only", cardRowOk);
+        check("card row is jokers/tarots/planets/relics only", cardRowOk);
         check("card row items are priced", priced);
 
         // --- mirroring: same seed -> identical card, pack, and voucher rows ---

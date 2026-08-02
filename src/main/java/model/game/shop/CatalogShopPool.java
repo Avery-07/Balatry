@@ -6,6 +6,7 @@ import model.items.consumables.Spectrals;
 import model.items.consumables.Tarots;
 import model.items.jokers.JokerCard;
 import model.items.jokers.Jokers;
+import model.items.relics.Relics;
 import model.modifiers.Edition;
 import model.game.player.Run;
 import model.game.player.Sleeve;
@@ -13,11 +14,12 @@ import model.game.player.Sleeve;
 import java.util.random.RandomGenerator;
 
 /**
- * Catalog-backed {@link ShopPool} for the card row: Jokers (rarity-weighted), Tarots, and Planets, in a
- * base-game-style mix (no playing cards by default). Several vouchers bend this pool for their owner's shop:
- * Tarot/Planet Merchant &amp; Tycoon add appearance weight; Hone/Glow Up stamp editions onto shop jokers; Showman
- * lets a joker you already own appear; Encore favours owned jokers. With none of them the roll is byte-for-byte
- * what it always was (72/14/14 out of 100), so replays and unchanged seats are untouched.
+ * Catalog-backed {@link ShopPool} for the card row: Jokers (rarity-weighted), Tarots, Planets, and Relics
+ * (Balatry's multiplayer-facing cards), in a base-game-style mix (no playing cards by default). Several vouchers
+ * bend this pool for their owner's shop: Tarot/Planet/Relic Merchant &amp; Tycoon add appearance weight; Hone/Glow
+ * Up stamp editions onto shop jokers; Showman lets a joker you already own appear; Encore favours owned jokers.
+ * The base split is 72/14/14/14 (Joker/Tarot/Planet/Relic); the Merchant/Tycoon bonuses only add on top, so a shop
+ * with none of those vouchers still rolls the fixed base mix and replays stay seed-deterministic.
  *
  * <p>Two loadout choices also bend the Planet band: the Ghost deck opens it to Spectrals, the Celestial sleeve
  * closes it entirely. The follow-up roll is drawn either way, so stream use stays loadout-independent.
@@ -26,10 +28,11 @@ public final class CatalogShopPool implements ShopPool {
 
     public static final CatalogShopPool INSTANCE = new CatalogShopPool();
 
-    // card-row type split (out of 100 at the defaults; vouchers add to the tarot/planet weights)
+    // card-row type split (out of 114 at the defaults; vouchers add to the tarot/planet/relic weights)
     private static final int JOKER_WEIGHT = 72;
     private static final int TAROT_WEIGHT = 14;
     private static final int PLANET_WEIGHT = 14;
+    private static final int RELIC_WEIGHT = 14;
 
     /** Share of card-row rolls that become a playing card while Magic Trick is active (out of 100). */
     private static final int MAGIC_TRICK_CARD_WEIGHT = 20;
@@ -58,10 +61,12 @@ public final class CatalogShopPool implements ShopPool {
 
         int tarot  = TAROT_WEIGHT  + (run == null ? 0 : run.getTarotWeightBonus());
         int planet = PLANET_WEIGHT + (run == null ? 0 : run.getPlanetWeightBonus());
-        int roll = stream.nextInt(JOKER_WEIGHT + tarot + planet);
-        if (roll < JOKER_WEIGHT)         return joker(run, stream);
-        if (roll < JOKER_WEIGHT + tarot) return Tarots.random(stream).make();
-        return planetBand(run, stream);
+        int relic  = RELIC_WEIGHT  + (run == null ? 0 : run.getRelicWeightBonus());
+        int roll = stream.nextInt(JOKER_WEIGHT + tarot + planet + relic);
+        if (roll < JOKER_WEIGHT)                  return joker(run, stream);
+        if (roll < JOKER_WEIGHT + tarot)          return Tarots.random(stream).make();
+        if (roll < JOKER_WEIGHT + tarot + planet) return planetBand(run, stream);
+        return Relics.random(stream).make();
     }
 
     /**

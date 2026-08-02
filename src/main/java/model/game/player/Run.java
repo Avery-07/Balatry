@@ -81,6 +81,7 @@ public final class Run {
     private boolean illusion;         // Illusion: shop/pack playing cards roll their modifiers at boosted odds
     private int tarotWeightBonus;     // Tarot Merchant/Tycoon: extra shop-appearance weight for Tarots
     private int planetWeightBonus;    // Planet Merchant/Tycoon: extra shop-appearance weight for Planets
+    private int relicWeightBonus;     // Relic Merchant/Tycoon: extra shop-appearance weight for Relics
     private int editionRate;          // Hone (1) / Glow Up (2): shiny editions on shop jokers (0 = none)
     private boolean omenGlobe;        // Omen Globe: Spectral cards may appear in Arcana packs
     private boolean telescope;        // Telescope: a Celestial pack always includes your most-played hand's Planet
@@ -529,6 +530,8 @@ public final class Run {
     public void addTarotWeight(int n)  { tarotWeightBonus += n; }
     public int getPlanetWeightBonus()  { return planetWeightBonus; }
     public void addPlanetWeight(int n) { planetWeightBonus += n; }
+    public int getRelicWeightBonus()   { return relicWeightBonus; }
+    public void addRelicWeight(int n)  { relicWeightBonus += n; }
     public int getEditionRate()        { return editionRate; }
     public void setEditionRate(int n)  { editionRate = Math.max(editionRate, n); }   // never downgrade Glow Up back to Hone
     public boolean hasOmenGlobe()      { return omenGlobe; }
