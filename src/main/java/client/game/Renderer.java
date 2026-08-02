@@ -195,7 +195,7 @@ public final class Renderer {
     /** The voucher sheet (8x4). Each voucher's display name maps to a cell via {@link #VOUCHER_CELL}. */
     public void voucherSheet(Image img) {
         if (img == null || img.isError() || img.getWidth() <= 0) return;
-        loadAtlas(voucherAtlas, img, 8, 4);
+        loadAtlas(voucherAtlas, img, 8, 5);
         var v = model.items.vouchers.Vouchers.values();
         for (int i = 0; i < v.length; i++) {
             int cell = i < VOUCHER_CELL.length ? VOUCHER_CELL[i] : -1;
