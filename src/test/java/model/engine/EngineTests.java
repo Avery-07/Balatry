@@ -575,6 +575,18 @@ public final class EngineTests {
         int[] c = new int[a.length];
         flat.render(c, 0);
         check("warpSteps actually drives the turbulence", !java.util.Arrays.equals(a, c));
+
+        // The optimized path must not change the look: the parallel, precomputed render matches the single-threaded
+        // reference to within 8-bit rounding (the two differ only by floating-point reassociation).
+        PaintField pf = new PaintField(96, 60);
+        int[] ref = new int[96 * 60], par = new int[96 * 60];
+        pf.render(ref, 0.7);
+        pf.renderParallel(par, 0.7, pf.config());
+        int maxDiff = 0;
+        for (int i = 0; i < ref.length; i++)
+            for (int sh = 0; sh <= 16; sh += 8)
+                maxDiff = Math.max(maxDiff, Math.abs(((ref[i] >> sh) & 0xff) - ((par[i] >> sh) & 0xff)));
+        check("the parallel/precomputed path matches the reference within rounding", maxDiff <= 2);
     }
 
     private static void checkInt(String label, int actual, int expected) { check(label + " (" + actual + ")", actual == expected); }
