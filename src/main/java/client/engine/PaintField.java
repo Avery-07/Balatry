@@ -50,20 +50,24 @@ public final class PaintField {
     public int width()  { return w; }
     public int height() { return h; }
 
-    /** An immutable snapshot of the tuning knobs — taken on the caller's thread so a worker never reads them live. */
-    public record Config(int warpSteps, double spinSpeed, double paintSpeed, double spinAmount,
-                         double zoom, double contrast, int colour1, int colour2, int colour3) { }
+    /**
+     * An immutable snapshot of the per-pixel tuning knobs — taken on the caller's thread so a worker never reads them
+     * live. The animation <em>phase</em> ({@code spin}/{@code churn}) is not here: it is integrated frame-by-frame by
+     * the caller and passed in, so a speed change never retroactively rescales the elapsed phase (which would twirl).
+     */
+    public record Config(int warpSteps, double spinAmount, double zoom, double contrast,
+                         int colour1, int colour2, int colour3) { }
 
     /** Snapshots the current knobs; call on the thread that owns them (never mid-render on a worker). */
     public Config config() {
-        return new Config(warpSteps, spinSpeed, paintSpeed, spinAmount, zoom, contrast, colour1, colour2, colour3);
+        return new Config(warpSteps, spinAmount, zoom, contrast, colour1, colour2, colour3);
     }
 
     // --- reference path (single-threaded, field-driven): kept for callers and the unit tests ---
 
-    public void render(int[] out, double time) {
+    /** Renders at the given animation phase ({@code spin} = accumulated rotation, {@code churn} = accumulated warp). */
+    public void render(int[] out, double spin, double churn) {
         Config cfg = config();
-        double spin = time * cfg.spinSpeed(), churn = time * cfg.paintSpeed();
         double halfW = w * 0.5, halfH = h * 0.5;
         for (int py = 0; py < h; py++) {
             int index = py * w;
@@ -91,9 +95,8 @@ public final class PaintField {
      * tables first if {@code zoom}/{@code spinAmount} changed. Run this off the JavaFX thread, one at a time (the
      * tables and {@code out} assume a single in-flight render); the row split then uses the common ForkJoin pool.
      */
-    public void renderParallel(int[] out, double time, Config cfg) {
+    public void renderParallel(int[] out, double spin, double churn, Config cfg) {
         ensureTables(cfg);
-        double spin = time * cfg.spinSpeed(), churn = time * cfg.paintSpeed();
         IntStream.range(0, h).parallel().forEach(py -> {
             int row = py * w;
             for (int px = 0; px < w; px++) out[row + px] = shadeFast(row + px, spin, churn, cfg);

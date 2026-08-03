@@ -512,7 +512,7 @@ public final class GameClient extends Application {
      */
     private void paintBackground() {
         r.gc().save();
-        background.paint(r.gc(), background.time(), Ui.W, Ui.H);
+        background.paint(r.gc(), Ui.W, Ui.H);
         r.gc().restore();
         // Motes wear the backdrop's two main colours (transition-lerped), so they stay in palette as the state shifts.
         javafx.scene.paint.Color c1 = rgb(background.currentColour1()), c2 = rgb(background.currentColour2());

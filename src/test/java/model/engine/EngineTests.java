@@ -533,7 +533,7 @@ public final class EngineTests {
     private static void paintField() {
         PaintField f = new PaintField(64, 40);
         int[] a = new int[64 * 40], b = new int[64 * 40];
-        f.render(a, 0);
+        f.render(a, 0, 0);   // (spin, churn) phase = 0
 
         // Every pixel is a real, opaque colour.
         boolean opaque = true, finite = true;
@@ -549,16 +549,16 @@ public final class EngineTests {
         for (int argb : a) distinct.add(argb);
         check("the field has real variation", distinct.size() > 200);
 
-        // Animated: the same buffer a second later must differ.
-        f.render(b, 1.0);
+        // Animated: advancing the phase must change the frame.
+        f.render(b, 0.5, 2.0);
         int changed = 0;
         for (int i = 0; i < a.length; i++) if (a[i] != b[i]) changed++;
-        check("the field animates over time", changed > a.length / 10);
+        check("the field animates as the phase advances", changed > a.length / 10);
 
-        // Deterministic: the same time renders the same frame (so it can never shimmer at a fixed clock).
+        // Deterministic: the same phase renders the same frame (so it can never shimmer at a fixed phase).
         int[] again = new int[a.length];
-        f.render(again, 0);
-        check("the same instant renders identically", java.util.Arrays.equals(a, again));
+        f.render(again, 0, 0);
+        check("the same phase renders identically", java.util.Arrays.equals(a, again));
 
         // Smooth, not noise: neighbours are mostly close, which is what makes it read as paint rather than static.
         int harsh = 0;
@@ -573,15 +573,15 @@ public final class EngineTests {
         PaintField flat = new PaintField(64, 40);
         flat.warpSteps = 0;
         int[] c = new int[a.length];
-        flat.render(c, 0);
+        flat.render(c, 0, 0);
         check("warpSteps actually drives the turbulence", !java.util.Arrays.equals(a, c));
 
         // The optimized path must not change the look: the parallel, precomputed render matches the single-threaded
         // reference to within 8-bit rounding (the two differ only by floating-point reassociation).
         PaintField pf = new PaintField(96, 60);
         int[] ref = new int[96 * 60], par = new int[96 * 60];
-        pf.render(ref, 0.7);
-        pf.renderParallel(par, 0.7, pf.config());
+        pf.render(ref, 0.7, 0.7);
+        pf.renderParallel(par, 0.7, 0.7, pf.config());
         int maxDiff = 0;
         for (int i = 0; i < ref.length; i++)
             for (int sh = 0; sh <= 16; sh += 8)

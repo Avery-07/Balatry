@@ -32,6 +32,11 @@ public final class Background {
     private double time;
     private double sinceUpdate = Double.MAX_VALUE;
 
+    // The animation phase, integrated from the current speeds each frame (never phase = time * speed). Integrating
+    // means a speed change only bends the rate from that moment on — so the ante ramp can change spinSpeed without
+    // the accumulated phase jumping (which, after a long session, would show as an ugly sudden twirl).
+    private double spinPhase, churnPhase;
+
     // The worker: one daemon thread orchestrates renders (so it never blocks JVM shutdown); the row split inside
     // renderParallel fans out across the common ForkJoin pool.
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
@@ -49,7 +54,7 @@ public final class Background {
         this.updateHz = 20.0;
         this.currentTheme = BackgroundTheme.DEFAULT;
         this.targetTheme = BackgroundTheme.DEFAULT;
-        setResolution((int) (384 * 1.5));
+        setResolution((int) (384 * 2));
     }
 
     // =========================================================================
@@ -115,13 +120,18 @@ public final class Background {
                 applyThemeToField(currentTheme);
             }
         }
+
+        // Advance the phase by this frame's rotation/warp at the current (possibly mid-transition) speeds. Changing
+        // the speed changes only what we add from here on — the phase itself never jumps.
+        spinPhase  += dt * field.spinSpeed;
+        churnPhase += dt * field.paintSpeed;
     }
 
     /**
      * JavaFX thread: upload a finished frame if one is ready, kick a fresh render if it's time and none is running,
      * then blit. The compute never happens here — only the (cheap) pixel upload and the scaled draw.
      */
-    public void paint(GraphicsContext g, double time, double w, double h) {
+    public void paint(GraphicsContext g, double w, double h) {
         int[] ready = readyBuffer;
         if (ready != null) {
             image.getPixelWriter().setPixels(0, 0, bufferW, bufferH,
@@ -134,11 +144,11 @@ public final class Background {
             busy = true;
             final int[] target = (nextBuf == 0) ? bufA : bufB;
             nextBuf = 1 - nextBuf;
-            final double frameTime = time;
-            final PaintField.Config cfg = field.config();   // snapshot the knobs here (FX thread), so the worker never reads them live
+            final double spin = spinPhase, churn = churnPhase;   // snapshot the phase + knobs on the FX thread
+            final PaintField.Config cfg = field.config();        // so the worker never reads live state
             worker.submit(() -> {
                 try {
-                    field.renderParallel(target, frameTime, cfg);
+                    field.renderParallel(target, spin, churn, cfg);
                     readyBuffer = target;
                 } finally {
                     busy = false;
