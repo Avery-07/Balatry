@@ -239,6 +239,17 @@ public final class Renderer {
 
     public void fillRect(Color c, double x, double y, double w, double h) { g.setFill(c); g.fillRect(x, y, w, h); }
 
+    /** A filled square centred at ({@code cx},{@code cy}), rotated {@code angleDeg}, at {@code alpha} — a backdrop mote. */
+    public void square(double cx, double cy, double size, double angleDeg, Color color, double alpha) {
+        g.save();
+        g.setGlobalAlpha(alpha);
+        g.setFill(color);
+        g.translate(cx, cy);
+        g.rotate(angleDeg);
+        g.fillRect(-size / 2, -size / 2, size, size);
+        g.restore();
+    }
+
     public void panel(double x, double y, double w, double h, Color fill, Color border, double arc, double bw) {
         if (fill != null) { g.setFill(fill); g.fillRoundRect(x, y, w, h, arc, arc); }
         if (border != null) { g.setStroke(border); g.setLineWidth(bw); g.strokeRoundRect(x, y, w, h, arc, arc); }

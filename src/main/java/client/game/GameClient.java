@@ -50,6 +50,9 @@ public final class GameClient extends Application {
     private final AnteBanner anteBanner = new AnteBanner();
     private MatchPhase lastPhase;   // for logging phase transitions
     private final Background background = new Background();   // the looping animated backdrop
+    private final client.engine.Particles particles = new client.engine.Particles(52, Ui.W, Ui.H, 20260803L);   // floating motes over it
+    private javafx.scene.paint.Color particleTint = javafx.scene.paint.Color.web("#e8e2ff");   // recoloured per phase
+    private String bgKey = "";                                // the game-state key the current backdrop theme reflects
     private MatchClient client;
     private HostedMatch hosted;      // non-null when this client is the one hosting
     private boolean leaving;         // set while we tear our own connection down, so an involuntary-drop handler can tell the two apart
@@ -106,6 +109,7 @@ public final class GameClient extends Application {
                 anteBanner.advance(dt);
                 fader.advance(dt);
                 background.advance(dt);
+                particles.advance(dt);
                 ui.jokerRow.advance(dt);
                 ui.itemRow.advance(dt);
                 ui.shopSlotRow.advance(dt);
@@ -341,6 +345,10 @@ public final class GameClient extends Application {
             ui.showOptions = false;
             ui.showCollection = false;
             ui.confirmSurrender = false;
+            background.transitionTo(BackgroundTheme.DEFAULT, 1.0);   // back to the neutral menu field
+            bgKey = "";
+            particleTint = javafx.scene.paint.Color.web("#e8e2ff");
+            particles.speedScale = 1.0;
             menu.enterMode(Menu.Mode.MAIN);
             menu.lobby = null;
             menu.host = false;
@@ -368,6 +376,7 @@ public final class GameClient extends Application {
         MatchSnapshot previous = ui.s;
         ui.s = snap;
         hand.reconcile(snap.hand(), Ui.W - 90, Ui.H * 0.55);
+        updateBackground(snap);
 
         // A new ante took over: announce the sin handover (old -> new), unless sins are off.
         if (previous != null && snap.ante() > previous.ante() && !"None".equals(snap.activeSin())) {
@@ -384,6 +393,46 @@ public final class GameClient extends Application {
             ui.reelBaseScore = roundScore(previous);
             ui.reel.play(snap.lastPlay().size());
         }
+    }
+
+    /**
+     * Steers the backdrop and its motes to match the game state: each phase (and each blind kind) has its own
+     * {@link BackgroundTheme}, morphed to over ~1.2s when the state changes, and the motes are recoloured and — on
+     * a boss blind — stirred up. Keyed so a transition fires once per real change, not every frame.
+     */
+    private void updateBackground(MatchSnapshot s) {
+        boolean boss = s.phase() == MatchPhase.BLIND && "BOSS".equals(s.blind());
+        String key = s.phase() + (s.phase() == MatchPhase.BLIND ? "/" + s.blind() : "");
+        if (key.equals(bgKey)) return;
+        bgKey = key;
+        background.transitionTo(themeFor(s), 1.2);
+        particleTint = tintFor(s);
+        particles.speedScale = boss ? 1.8 : 1.0;
+    }
+
+    /** The backdrop theme for a game state. */
+    private static BackgroundTheme themeFor(MatchSnapshot s) {
+        return switch (s.phase()) {
+            case BLIND -> "BOSS".equals(s.blind()) ? BackgroundTheme.BOSS_PHASE
+                        : "BIG".equals(s.blind())  ? BackgroundTheme.BIG_BLIND
+                        :                            BackgroundTheme.SMALL_BLIND;
+            case SHOP     -> BackgroundTheme.SHOP;
+            case RESULT   -> BackgroundTheme.RESULT;
+            case FINISHED -> BackgroundTheme.FINISHED;
+            default       -> BackgroundTheme.DEFAULT;   // SELECTION and the pre-match lobby: the neutral field
+        };
+    }
+
+    /** The mote tint for a game state — a light wash that matches the phase's mood. */
+    private static javafx.scene.paint.Color tintFor(MatchSnapshot s) {
+        return switch (s.phase()) {
+            case BLIND -> "BOSS".equals(s.blind()) ? javafx.scene.paint.Color.web("#ff6a5a")
+                                                   : javafx.scene.paint.Color.web("#8ec6ff");
+            case SHOP     -> javafx.scene.paint.Color.web("#ffe08a");
+            case RESULT   -> javafx.scene.paint.Color.web("#a6ff9e");
+            case FINISHED -> javafx.scene.paint.Color.web("#d9c2ff");
+            default       -> javafx.scene.paint.Color.web("#e8e2ff");
+        };
     }
 
     /** The round score a snapshot carried, as a number; 0 outside a round or when unparseable. */
@@ -471,6 +520,8 @@ public final class GameClient extends Application {
         r.gc().save();
         background.paint(r.gc(), background.time(), Ui.W, Ui.H);
         r.gc().restore();
+        for (int i = 0; i < particles.count(); i++)   // floating motes over the backdrop, under all UI
+            r.square(particles.x(i), particles.y(i), particles.size(i), particles.angleDeg(i), particleTint, particles.alpha(i));
     }
 
     private void handleClick(double x, double y) {

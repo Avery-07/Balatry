@@ -8,6 +8,7 @@ import client.engine.Idle;
 import client.engine.Layout;
 import client.engine.Motion;
 import client.engine.PaintField;
+import client.engine.Particles;
 import client.engine.Reconciler;
 import client.engine.ScoreReel;
 import client.engine.Spring;
@@ -46,6 +47,7 @@ public final class EngineTests {
         idle();
         tileRow();
         scoreReel();
+        particles();
         paintField();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
@@ -433,6 +435,38 @@ public final class EngineTests {
         halted.advance(0.5);
         halted.stop();
         check("stop makes it idle immediately", !halted.playing() && halted.currentIndex() == -1);
+    }
+
+    /** The floating motes: they keep their count, spin over time, wrap so they never escape the field, and are seed-deterministic. */
+    private static void particles() {
+        double w = 400, h = 300;
+        Particles p = new Particles(50, w, h, 99L);
+        checkInt("the field holds its count", p.count(), 50);
+        double a0 = p.angleDeg(0);
+
+        for (int i = 0; i < 3000; i++) p.advance(0.05);   // ~150 seconds of drift and spin
+        boolean inBounds = true;
+        double m = Particles.MARGIN + 1e-6;
+        for (int i = 0; i < p.count(); i++)
+            if (p.x(i) < -m || p.x(i) > w + m || p.y(i) < -m || p.y(i) > h + m) inBounds = false;
+        check("particles stay within the wrapped field", inBounds);
+        check("particles spin over time", p.angleDeg(0) != a0);
+
+        // A big step (a lag spike) still lands in range — the wrap is modulo, not a single subtraction.
+        Particles jump = new Particles(10, w, h, 3L);
+        jump.speedScale = 50;
+        jump.advance(2.0);
+        boolean bounded = true;
+        for (int i = 0; i < jump.count(); i++)
+            if (jump.x(i) < -m || jump.x(i) > w + m || jump.y(i) < -m || jump.y(i) > h + m) bounded = false;
+        check("a huge step still wraps into range", bounded);
+
+        // Seed-deterministic: two fields with the same seed march identically.
+        Particles r1 = new Particles(20, w, h, 7L), r2 = new Particles(20, w, h, 7L);
+        for (int i = 0; i < 40; i++) { r1.advance(0.03); r2.advance(0.03); }
+        boolean same = true;
+        for (int i = 0; i < 20; i++) if (r1.x(i) != r2.x(i) || r1.angleDeg(i) != r2.angleDeg(i)) same = false;
+        check("the same seed is deterministic", same);
     }
 
     /**
