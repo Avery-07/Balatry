@@ -10,6 +10,8 @@ import client.engine.Motion;
 import client.engine.PaintField;
 import client.engine.Reconciler;
 import client.engine.ScoreReel;
+import client.engine.Spring;
+import client.engine.Squash;
 import client.engine.TileRow;
 import client.engine.Tween;
 
@@ -30,10 +32,14 @@ public final class EngineTests {
         easing();
         tween();
         motion();
+        motionVelocity();
+        spring();
+        squash();
         fanLayout();
         hitTest();
         reconcile();
         counter();
+        counterPop();
         flip();
         drag();
         fader();
@@ -85,6 +91,75 @@ public final class EngineTests {
         check("motion settles", m.settled());
         near("motion x settled", m.x(), 100);
         near("motion y settled", m.y(), -40);
+    }
+
+    /** Motion measures its own velocity each frame — the input squash & stretch reads to deform a moving card. */
+    private static void motionVelocity() {
+        Motion m = new Motion(0, 0, 1.0, Easing.LINEAR);
+        near("a still motion has no velocity", m.speed(), 0);
+        m.moveTo(100, 0);
+        m.advance(0.25);   // linear: 25px in 0.25s -> 100 px/s
+        near("velocity tracks horizontal travel", m.vx(), 100);
+        near("no vertical velocity on a horizontal move", m.vy(), 0);
+        m.advance(1.0);    // reaches the target
+        m.advance(0.1);    // a frame at rest
+        near("a settled motion reports zero velocity", m.speed(), 0);
+        m.snap(0, 0);      // park it so the next move is purely vertical
+        m.moveTo(0, 300);
+        m.advance(0.25);
+        check("a vertical move reads on vy, not vx", Math.abs(m.vy()) > 1 && Math.abs(m.vx()) < 1e-9);
+        m.snap(9, 9);
+        near("snap clears velocity", m.speed(), 0);
+    }
+
+    /** The damped spring: it settles exactly, an underdamped push overshoots, an overdamped one doesn't, and a big frame stays stable. */
+    private static void spring() {
+        Spring s = new Spring(0, 200, 8);
+        check("a fresh spring is settled at its value", s.settled() && s.value() == 0);
+        s.setTarget(10);
+        check("a new target unsettles it", !s.settled());
+        s.advance(3.0);
+        check("it reaches the target and settles exactly", s.settled() && s.value() == 10);
+
+        Spring under = new Spring(0, 200, 8);   // underdamped
+        under.push(1.0);
+        near("a push displaces the value at once", under.value(), 1.0);
+        double min = 1.0;
+        for (int i = 0; i < 600 && !under.settled(); i++) { under.advance(0.016); min = Math.min(min, under.value()); }
+        check("an underdamped push overshoots past its target", min < 0);
+        check("and then settles back to rest exactly", under.settled() && under.value() == 0);
+
+        Spring over = new Spring(0, 200, 60);   // overdamped
+        over.push(1.0);
+        double lo = 1.0;
+        for (int i = 0; i < 1200 && !over.settled(); i++) { over.advance(0.016); lo = Math.min(lo, over.value()); }
+        check("an overdamped spring never overshoots", lo >= -1e-6);
+
+        Spring big = new Spring(0, 260, 16);    // a huge frame must stay bounded, not explode
+        big.push(0.5);
+        big.advance(2.0);
+        check("a large frame stays finite and bounded", Double.isFinite(big.value()) && Math.abs(big.value()) < 1);
+
+        Spring snap = new Spring(5, 200, 8);
+        snap.push(3);
+        snap.snap(2);
+        check("snap kills any in-flight bounce", snap.settled() && snap.value() == 2);
+    }
+
+    /** Velocity-driven squash & stretch: none at rest, stretch along travel, squash across it, bounded and area-ish. */
+    private static void squash() {
+        near("no deformation at rest (x)", Squash.scaleX(0, 0), 1);
+        near("no deformation at rest (y)", Squash.scaleY(0, 0), 1);
+
+        double sx = Squash.scaleX(4000, 0), sy = Squash.scaleY(4000, 0);   // flat-out horizontally
+        check("moving horizontally stretches width", sx > 1);
+        check("moving horizontally squashes height", sy < 1);
+        check("moving vertically stretches height", Squash.scaleY(0, 4000) > 1);
+        check("moving vertically squashes width", Squash.scaleX(0, 4000) < 1);
+
+        check("the stretch is bounded", sx <= 1 + Squash.MAX + 1e-9 && sy >= 1 - Squash.MAX - 1e-9);
+        check("a saturated move roughly preserves area", Math.abs(sx * sy - 1) < 0.08);
+        near("direction of travel doesn't matter, only the axis", Squash.scaleX(-4000, 0), Squash.scaleX(4000, 0));
     }
 
     private static void fanLayout() {
@@ -193,6 +268,17 @@ public final class EngineTests {
         c.snap(0);
         near("snap jumps with no glide", c.displayed(), 0);
         near("snap kills the pop", c.popScale(), 1);
+    }
+
+    /** The pop is springy, not a flat decay: it thumps up, recoils a touch below rest, and settles back exactly. */
+    private static void counterPop() {
+        Counter c = new Counter(0, 0.001, Easing.LINEAR);   // value settles instantly, isolating the pop
+        c.retarget(10);
+        check("an increase thumps the readout up", c.popScale() > 1);
+        double minPop = c.popScale();
+        for (int i = 0; i < 400 && !c.settled(); i++) { c.advance(0.016); minPop = Math.min(minPop, c.popScale()); }
+        check("the thump recoils below rest (springy, not linear decay)", minPop < 1);
+        check("and settles back to exactly rest", c.settled() && c.popScale() == 1);
     }
 
     /** The card flip: face-up at rest, edge-on at the midpoint, showing its back past it. */

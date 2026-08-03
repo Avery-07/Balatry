@@ -11,10 +11,11 @@ public final class Easing {
 
     private Easing() { }
 
-    public static final DoubleUnaryOperator LINEAR         = Easing::linear;
-    public static final DoubleUnaryOperator EASE_OUT_CUBIC = Easing::easeOutCubic;
-    public static final DoubleUnaryOperator EASE_IN_OUT     = Easing::easeInOutQuad;
-    public static final DoubleUnaryOperator EASE_OUT_BACK   = Easing::easeOutBack;
+    public static final DoubleUnaryOperator LINEAR             = Easing::linear;
+    public static final DoubleUnaryOperator EASE_OUT_CUBIC     = Easing::easeOutCubic;
+    public static final DoubleUnaryOperator EASE_IN_OUT         = Easing::easeInOutQuad;
+    public static final DoubleUnaryOperator EASE_OUT_BACK       = Easing::easeOutBack;
+    public static final DoubleUnaryOperator EASE_OUT_BACK_SOFT  = Easing::easeOutBackSoft;
 
     public static double linear(double t) { return clamp01(t); }
 
@@ -33,6 +34,13 @@ public final class Easing {
     public static double easeOutBack(double t) {
         t = clamp01(t);
         double c1 = 1.70158, c3 = c1 + 1, u = t - 1;
+        return 1 + c3 * u * u * u + c1 * u * u;
+    }
+
+    /** {@link #easeOutBack} with a gentler overshoot (~5%) — the subtle settle bounce for a card or tile landing. */
+    public static double easeOutBackSoft(double t) {
+        t = clamp01(t);
+        double c1 = 0.9, c3 = c1 + 1, u = t - 1;
         return 1 + c3 * u * u * u + c1 * u * u;
     }
 

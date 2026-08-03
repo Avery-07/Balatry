@@ -48,7 +48,7 @@ public final class TileRow {
             int id = order.get(slot);
             Motion m = motions.get(id);
             if (m == null) {   // first sighting: spawn directly in place, no fly-in from (0,0)
-                m = new Motion(slotsX[slot], y, 0.25, Easing.EASE_OUT_CUBIC);
+                m = new Motion(slotsX[slot], y, 0.25, Easing.EASE_OUT_BACK_SOFT);   // a small settle bounce on landing
                 motions.put(id, m);
             }
             if (id != draggedId) m.moveTo(slotsX[slot], y);
@@ -72,6 +72,10 @@ public final class TileRow {
     public double x(int id) { Motion m = motions.get(id); return m == null ? 0 : m.x(); }
     public double y(int id) { Motion m = motions.get(id); return m == null ? 0 : m.y(); }
     public boolean isDragged(int id) { return id == draggedId; }
+
+    /** Squash &amp; stretch for a tile from its current velocity — 1 at rest; the caller scales the tile's w/h by these. */
+    public double stretchX(int id) { Motion m = motions.get(id); return m == null ? 1 : Squash.scaleX(m.vx(), m.vy()); }
+    public double stretchY(int id) { Motion m = motions.get(id); return m == null ? 1 : Squash.scaleY(m.vx(), m.vy()); }
 
     /** The tile under {@code (px,py)} by current animated positions, or -1. Topmost = latest in display order. */
     public int tileAt(double px, double py) {

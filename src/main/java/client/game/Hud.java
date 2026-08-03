@@ -221,9 +221,11 @@ final class Hud {
 
     private void drawJokerTile(Ui ui, MatchSnapshot.JokerView jv, int index, double tileW, double tileH, double bob) {
         Renderer r = ui.r;
-        // The trigger animation: a joker whose beat is live swells and lifts while its effect square floats.
+        // The trigger animation: a joker whose beat is live swells and lifts while its effect square floats;
+        // squash & stretch from the row's motion deforms it as it glides or springs home.
         double pop = ui.scorePop(jv.id());
-        double w = tileW * (1 + 0.22 * pop), h = tileH * (1 + 0.22 * pop);
+        double w = tileW * (1 + 0.22 * pop) * ui.jokerRow.stretchX(jv.id());
+        double h = tileH * (1 + 0.22 * pop) * ui.jokerRow.stretchY(jv.id());
         Layout.Rect rr = new Layout.Rect(ui.jokerRow.x(jv.id()) - w / 2,
                 ui.jokerRow.y(jv.id()) - h / 2 + bob - 10 * pop, w, h);
         ui.noteSourceRect(jv.id(), rr);
@@ -252,7 +254,8 @@ final class Hud {
 
     private void drawItemTile(Ui ui, MatchSnapshot.ItemView it, int index, double tileW, double tileH, double bob) {
         Renderer r = ui.r;
-        Layout.Rect rr = new Layout.Rect(ui.itemRow.x(it.id()) - tileW / 2, ui.itemRow.y(it.id()) - tileH / 2 + bob, tileW, tileH);
+        double w = tileW * ui.itemRow.stretchX(it.id()), h = tileH * ui.itemRow.stretchY(it.id());   // squash & stretch
+        Layout.Rect rr = new Layout.Rect(ui.itemRow.x(it.id()) - w / 2, ui.itemRow.y(it.id()) - h / 2 + bob, w, h);
         double sway = ui.itemRow.isDragged(it.id()) ? 0 : client.engine.Idle.swayDeg(ui.now, it.id(), 1.4);
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // a consumable shows its planet/tarot/spectral face; a relic keeps the tile
             if (!r.consumableFace(it.label(), rr.x(), rr.y(), rr.w(), rr.h()))

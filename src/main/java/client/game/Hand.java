@@ -64,7 +64,7 @@ final class Hand {
         }
         for (CardEntity e : cards)
             if (!wantedIds.contains(e.id())) beginExit(e, nextExit);
-        List<CardEntity> next = Reconciler.reconcile(cards, desired, spawnX, spawnY, 0.35, Easing.EASE_OUT_CUBIC);
+        List<CardEntity> next = Reconciler.reconcile(cards, desired, spawnX, spawnY, 0.35, Easing.EASE_OUT_BACK_SOFT);
         cards.clear(); cards.addAll(next);
         nextExit = Exit.DISCARDED;   // consumed; anything else that vanishes (a tarot ate it) slides out quietly
 
@@ -96,9 +96,9 @@ final class Hand {
             double pop = ui.scorePop(e.id());   // the trigger animation: this card's beat is live
             double size = 1 + 0.18 * pop;
             double cx = e.x(), cy = e.y() - 18 * pop;
-            ui.r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), cx, cy, CARD_W * size, CARD_H * size, 0, pop > 0.05, e.flipT());
-            ui.noteSourceRect(e.id(), new Layout.Rect(
-                    cx - CARD_W * size / 2, cy - CARD_H * size / 2, CARD_W * size, CARD_H * size));
+            double cw = CARD_W * size * e.stretchX(), ch = CARD_H * size * e.stretchY();   // squash & stretch from its motion
+            ui.r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), cx, cy, cw, ch, 0, pop > 0.05, e.flipT());
+            ui.noteSourceRect(e.id(), new Layout.Rect(cx - cw / 2, cy - ch / 2, cw, ch));
         }
     }
 
@@ -135,7 +135,8 @@ final class Hand {
             CardEntity e = exiting.get(i).card;
             double alpha = Math.max(0, 1 - exiting.get(i).age / EXIT_SECONDS);
             r.gc().setGlobalAlpha(alpha);
-            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), e.y(), CARD_W, CARD_H, 0, false, e.flipT());
+            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), e.y(),
+                    CARD_W * e.stretchX(), CARD_H * e.stretchY(), 0, false, e.flipT());   // a leaving card streaks as it flies
             r.gc().setGlobalAlpha(1);
         }
 
@@ -166,10 +167,10 @@ final class Hand {
             double pop = ui.scorePop(e.id());
             double size = 1 + 0.18 * pop;
             double drawY = e.y() + bob - 18 * pop;
-            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), drawY, CARD_W * size, CARD_H * size,
+            double cw = CARD_W * size * e.stretchX(), ch = CARD_H * size * e.stretchY();   // squash & stretch from its motion
+            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), drawY, cw, ch,
                     fan.get(k).rotationDeg() + sway, e.selected() || pop > 0.05, e.flipT());
-            ui.noteSourceRect(e.id(), new Layout.Rect(
-                    e.x() - CARD_W * size / 2, drawY - CARD_H * size / 2, CARD_W * size, CARD_H * size));
+            ui.noteSourceRect(e.id(), new Layout.Rect(e.x() - cw / 2, drawY - ch / 2, cw, ch));
             if (!e.showsBack())
                 ui.tip(new Layout.Rect(e.x() - CARD_W / 2, e.y() - CARD_H / 2, CARD_W, CARD_H),
                         Fmt.cardTip(e.label(), e.rank(), e.suit()));

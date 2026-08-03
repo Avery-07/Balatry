@@ -110,8 +110,9 @@ final class ShopScreen implements Screen {
         boolean held = row.isDragged(t.id());
         double bob = held ? 0 : client.engine.Idle.bobPx(ui.now, t.id(), 1.6);
         double sway = held ? 0 : client.engine.Idle.swayDeg(ui.now, t.id(), 1.4);
-        double tx = row.x(t.id()) - TILE_W / 2, ty = row.y(t.id()) - TILE_H / 2 + bob;
-        Layout.Rect rr = new Layout.Rect(tx, ty, TILE_W, TILE_H);
+        double sw = TILE_W * row.stretchX(t.id()), sh = TILE_H * row.stretchY(t.id());   // squash & stretch as it glides home
+        double tx = row.x(t.id()) - sw / 2, ty = row.y(t.id()) - sh / 2 + bob;
+        Layout.Rect rr = new Layout.Rect(tx, ty, sw, sh);
         // A shop tile shows its face when one exists — a playing card (Magic Trick), a joker PNG or a
         // planet/tarot/spectral cell (shopSlot), or a pack's art (shopPack); all fit, never stretched. Otherwise a tile.
         MatchSnapshot.CardFace cf = t.card();
@@ -136,8 +137,8 @@ final class ShopScreen implements Screen {
             r.panel(rr.centerX() - 28, ty - 16, 56, 24, PANEL, GOLD, 8, 2);
             r.textCenterBold("$" + t.price(), rr.centerX(), ty - 4, 13, ORANGE);
             if (!t.badge().isEmpty()) {   // the drawback strip: stickers/editions announce themselves pre-purchase
-                r.panel(tx, ty + TILE_H - 20, TILE_W, 20, Color.web("#000a"), null, 6, 0);
-                r.textCenter(t.badge(), rr.centerX(), ty + TILE_H - 10, 9, GOLD);
+                r.panel(tx, ty + rr.h() - 20, rr.w(), 20, Color.web("#000a"), null, 6, 0);
+                r.textCenter(t.badge(), rr.centerX(), ty + rr.h() - 10, 9, GOLD);
             }
         });
         if (t.enabled()) ui.selectables.add(new Ui.Sel(rr, t.kind(), t.slotIndex()));

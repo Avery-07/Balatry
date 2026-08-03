@@ -10,11 +10,12 @@ import java.util.function.DoubleUnaryOperator;
  */
 public final class Counter {
 
-    /** How hard a change thumps the readout, and how quickly the thump subsides (per second). */
-    private static final double POP_SPIKE = 0.45, POP_DECAY = 3.0;
+    /** How hard a change thumps the readout, and the spring that carries the thump back down — underdamped, so it
+     *  overshoots into a small recoil and bounces to rest instead of decaying flatly. */
+    private static final double POP_SPIKE = 0.42, POP_STIFFNESS = 260, POP_DAMPING = 16;
 
     private final Tween value;
-    private double pop;   // 0 at rest; spikes on an increase and decays
+    private final Spring pop = new Spring(0, POP_STIFFNESS, POP_DAMPING);   // 0 at rest; pushed up on an increase, springs back
 
     public Counter(double initial, double durationSeconds, DoubleUnaryOperator ease) {
         this.value = new Tween(initial, durationSeconds, ease);
@@ -27,23 +28,23 @@ public final class Counter {
      */
     public void retarget(double target) {
         if (target == value.target()) return;
-        if (target > value.target()) pop = POP_SPIKE;
+        if (target > value.target()) pop.push(POP_SPIKE);
         value.retarget(target);
     }
 
     /** Jumps straight to {@code v} with no glide and no pop — for entering a new screen, not for scoring. */
-    public void snap(double v) { value.snap(v); pop = 0; }
+    public void snap(double v) { value.snap(v); pop.snap(0); }
 
     public void advance(double dt) {
         value.advance(dt);
-        if (dt > 0) pop = Math.max(0, pop - POP_DECAY * dt);
+        pop.advance(dt);
     }
 
     /** The value the renderer should print right now (round it for display). */
     public double displayed() { return value.value(); }
 
-    /** The size multiplier for the readout, {@code >= 1}; 1 at rest. */
-    public double popScale() { return 1 + pop; }
+    /** The size multiplier for the readout; 1 at rest, above 1 on the thump, dipping a touch below on the recoil. */
+    public double popScale() { return 1 + pop.value(); }
 
-    public boolean settled() { return value.done() && pop == 0; }
+    public boolean settled() { return value.done() && pop.settled(); }
 }

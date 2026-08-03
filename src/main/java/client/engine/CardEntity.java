@@ -59,6 +59,11 @@ public final class CardEntity {
     public double y()        { return motion.y(); }
     public boolean settled() { return motion.settled(); }
 
+    // --- squash & stretch (velocity-driven): the renderer multiplies the card's width/height by these so it
+    //     stretches along its travel and squashes across it. Both are 1 while the card is at rest. ---
+    public double stretchX() { return Squash.scaleX(motion.vx(), motion.vy()); }
+    public double stretchY() { return Squash.scaleY(motion.vx(), motion.vy()); }
+
     public boolean selected()             { return selected; }
     public void setSelected(boolean s)    { this.selected = s; }
     public void toggleSelected()          { this.selected = !this.selected; }
