@@ -209,17 +209,17 @@ public enum Jokers {
                     run.createConsumable(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
                 }
             })),
-    EIGHT_BALL("8 Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> {
-                DeckCard c = scored(run);
-                if (c != null && countsAs(run, c, Rank.EIGHT) && run.roll(RngSource.TAROT_GENERATION, 1, 4))
-                    createEditioned(run, new ConsumableCard(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()));
-            })),
     CELESTIAL_7("Celestial 7", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
                 if (c != null && countsAs(run, c, Rank.SEVEN) && run.roll(RngSource.MISC, 1, 4))
                     createEditioned(run, new ConsumableCard(Planets.random(gen(run, RngSource.PLANET_GENERATION)).spec()));
+            })),
+    EIGHT_BALL("8 Ball", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
+            (run, self) -> {
+                DeckCard c = scored(run);
+                if (c != null && countsAs(run, c, Rank.EIGHT) && run.roll(RngSource.TAROT_GENERATION, 1, 4))
+                    createEditioned(run, new ConsumableCard(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()));
             })),
     CLOUD_9("Cloud 9", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
@@ -229,13 +229,6 @@ public enum Jokers {
             })),
     // endregion
     // region Jokers 036-040
-    SEVEN_ATE_NINE("7 Ate 9", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> cards = run.getScoring().getScoringCards();
-                int n = cards.size();
-                if (n >= 3 && countsAs(run, cards.get(n - 3), Rank.SEVEN) && countsAs(run, cards.get(n - 2), Rank.EIGHT))
-                    run.destroyDeckCards(List.of(cards.get(n - 1)));
-            })),
     WALKIE_TALKIE("Walkie Talkie", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && (countsAs(run, c, Rank.TEN) || countsAs(run, c, Rank.FOUR))) { run.getScoring().addChips(10); run.getScoring().addMult(4); } })),
     HIT_THE_ROAD("Hit the Road", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
@@ -244,10 +237,17 @@ public enum Jokers {
             (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.QUEEN) run.getScoring().addMult(13); })),
     BARON("Baron", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_HELD_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && c.getRank() == Rank.KING) run.getScoring().multiplyMult(x("1.5")); })),
-    // endregion
-    // region Jokers 041-045
     SCHOLAR("Scholar", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && countsAs(run, c, Rank.ACE)) { run.getScoring().addChips(20); run.getScoring().addMult(4); } })),
+    // endregion
+    // region Jokers 041-045
+    SEVEN_ATE_NINE("7 Ate 9", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                int n = cards.size();
+                if (n >= 3 && countsAs(run, cards.get(n - 3), Rank.SEVEN) && countsAs(run, cards.get(n - 2), Rank.EIGHT))
+                    run.destroyDeckCards(List.of(cards.get(n - 1)));
+            })),
     SCARY_FACE("Scary Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c)) run.getScoring().addChips(30); })),
     SMILEY_FACE("Smiley Face", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
@@ -348,6 +348,12 @@ public enum Jokers {
                     if (r != null) held.get(0).setRank(r);
                 }
             })),
+    RABBIT("Rabbit", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+            (run, self) -> {
+                List<DeckCard> cards = run.getScoring().getScoringCards();
+                if (run.getScoring().getHand().hasFourOfAKind() && !cards.isEmpty())
+                    run.addCardToHand(copyOf(cards.get(0)));
+            })),
     CHEETAH("Cheetah", Rarity.COMMON, 5, b -> b
             .state(self -> "Current bonus: +" + self.getCounter() + " Chips")
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
@@ -360,14 +366,6 @@ public enum Jokers {
                 List<DeckCard> held = run.getHeld();
                 if (run.getScoring().getHand().hasFlush() && !cards.isEmpty() && !held.isEmpty())
                     held.get(0).setSuit(cards.get(0).getSuit());
-            })),
-    BUTTERFLY("Butterfly", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> {
-                List<DeckCard> cards = run.getScoring().getScoringCards();
-                if (run.getScoring().getHand().type() == HandType.FULL_HOUSE && !cards.isEmpty()) {
-                    Enhancement[] all = Enhancement.values();
-                    cards.get(0).apply(all[gen(run, RngSource.MISC).nextInt(all.length)]);
-                }
             })),
     // endregion
     // region Jokers 066-070
@@ -383,11 +381,13 @@ public enum Jokers {
             (run, self) -> { if (run.getScoring().getHand().hasFlush()) run.getScoring().multiplyMult(x("2")); })),
     // endregion
     // region Jokers 071-075
-    RABBIT("Rabbit", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
+    BUTTERFLY("Butterfly", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
                 List<DeckCard> cards = run.getScoring().getScoringCards();
-                if (run.getScoring().getHand().hasFourOfAKind() && !cards.isEmpty())
-                    run.addCardToHand(copyOf(cards.get(0)));
+                if (run.getScoring().getHand().type() == HandType.FULL_HOUSE && !cards.isEmpty()) {
+                    Enhancement[] all = Enhancement.values();
+                    cards.get(0).apply(all[gen(run, RngSource.MISC).nextInt(all.length)]);
+                }
             })),
     SEANCE("Séance", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
