@@ -2,6 +2,7 @@ package client.game;
 
 import client.MatchSnapshot;
 import client.MatchViewModel;
+import client.engine.BackgroundPalette;
 import client.engine.CardEntity;
 import client.engine.TileRow;
 import debug.Log;
@@ -51,6 +52,7 @@ public final class GameClient extends Application {
     private MatchPhase lastPhase;   // for logging phase transitions
     private final Background background = new Background();   // the looping animated backdrop
     private final client.engine.Particles particles = new client.engine.Particles(52, Ui.W, Ui.H, 20260803L);   // floating motes over it
+    private final java.util.Random bgRng = new java.util.Random();   // the backdrop's palette RNG; cosmetic, so it stays client-local (the field never syncs)
     private String bgKey = "";                                // the game-state key the current backdrop theme reflects
     private MatchClient client;
     private HostedMatch hosted;      // non-null when this client is the one hosting
@@ -394,31 +396,38 @@ public final class GameClient extends Application {
     }
 
     /**
-     * Steers the backdrop and its motes to match the game state: each phase (and each blind kind) has its own
-     * {@link BackgroundTheme}, morphed to over ~1.2s when the state changes, and the motes are recoloured and — on
-     * a boss blind — stirred up. Keyed so a transition fires once per real change, not every frame.
+     * Steers the backdrop and its motes as the game state changes: every state change rolls a fresh semi-random
+     * palette (no per-phase moods, and a boss blind is no different from any other), morphed to over ~1.2s. Rising
+     * tension across the antes agitates the whole field — the swirl churns and the motes fly faster late in a run.
+     * Keyed so a change fires once per real transition, not every frame.
      */
     private void updateBackground(MatchSnapshot s) {
-        boolean boss = s.phase() == MatchPhase.BLIND && "BOSS".equals(s.blind());
         String key = s.phase() + (s.phase() == MatchPhase.BLIND ? "/" + s.blind() : "");
         if (key.equals(bgKey)) return;
         bgKey = key;
         background.transitionTo(themeFor(s), 1.2);
-        particles.speedScale = boss ? 1.8 : 1.0;
+        particles.speedScale = 1.0 + BackgroundPalette.tension(s.ante(), s.anteCount()) * 0.9;
     }
 
-    /** The backdrop theme for a game state. */
-    private static BackgroundTheme themeFor(MatchSnapshot s) {
-        return switch (s.phase()) {
-            case BLIND -> "BOSS".equals(s.blind()) ? BackgroundTheme.BOSS_PHASE
-                        : "BIG".equals(s.blind())  ? BackgroundTheme.BIG_BLIND
-                        :                            BackgroundTheme.SMALL_BLIND;
-            case SHOP     -> BackgroundTheme.SHOP;
-            case RESULT   -> BackgroundTheme.RESULT;
-            case FINISHED -> BackgroundTheme.FINISHED;
-            default       -> BackgroundTheme.DEFAULT;   // SELECTION and the pre-match lobby: the neutral field
-        };
+    /**
+     * A fresh backdrop for the current state: two wide-apart jewel-tone mains plus their darkened blend (from
+     * {@link client.engine.BackgroundPalette}), over {@code DEFAULT}'s structural knobs, with the swirl's speed and
+     * spiral scaled up by the ante's tension so late antes feel frantic.
+     */
+    private BackgroundTheme themeFor(MatchSnapshot s) {
+        int[] c = BackgroundPalette.roll(bgRng);
+        double t = BackgroundPalette.tension(s.ante(), s.anteCount());
+        BackgroundTheme base = BackgroundTheme.DEFAULT;
+        return new BackgroundTheme(
+                base.zoom(), base.warpSteps(),
+                lerp(0.020, 0.060, t),   // spinSpeed: the whole field whirls faster late-game
+                lerp(0.90, 2.40, t),     // paintSpeed: more churn late-game
+                lerp(0.20, 0.40, t),     // spinAmount: a tighter spiral late-game
+                base.contrast(), base.sharpenStrength(),
+                c[0], c[1], c[2]);
     }
+
+    private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
 
     /** The round score a snapshot carried, as a number; 0 outside a round or when unparseable. */
     private static double roundScore(MatchSnapshot snap) {

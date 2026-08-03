@@ -1,5 +1,6 @@
 package model.engine;
 
+import client.engine.BackgroundPalette;
 import client.engine.CardEntity;
 import client.engine.Counter;
 import client.engine.Easing;
@@ -48,6 +49,7 @@ public final class EngineTests {
         tileRow();
         scoreReel();
         particles();
+        backgroundPalette();
         paintField();
 
         System.out.println(failures == 0 ? "\nALL PASS" : "\n" + failures + " FAILURE(S)");
@@ -478,6 +480,50 @@ public final class EngineTests {
         for (int i = 0; i < 20; i++) if (r1.x(i) != r2.x(i) || r1.angleDeg(i) != r2.angleDeg(i)) same = false;
         check("the same seed is deterministic", same);
     }
+
+    /** The backdrop palette: the tension ramp, and — over many rolls — two distinct wide-apart mains and a darkest third. */
+    private static void backgroundPalette() {
+        near("tension is 0 at ante 1", BackgroundPalette.tension(1, 8), 0);
+        near("tension is 1 at the final ante", BackgroundPalette.tension(8, 8), 1);
+        check("tension rises through the middle",
+                BackgroundPalette.tension(4, 8) > 0 && BackgroundPalette.tension(4, 8) < 1);
+        check("tension is monotonic across antes", BackgroundPalette.tension(3, 8) < BackgroundPalette.tension(6, 8));
+        near("a beyond-final ante stays pinned at full", BackgroundPalette.tension(12, 8), 1);
+        near("a one-ante run has no ramp", BackgroundPalette.tension(1, 1), 0);
+
+        java.util.Random rng = new java.util.Random(42);
+        checkInt("a palette is three colours", BackgroundPalette.roll(rng).length, 3);
+        boolean valid = true, distinct = true, wideApart = true, thirdDarkest = true;
+        for (int i = 0; i < 500; i++) {
+            int[] c = BackgroundPalette.roll(rng);
+            for (int k = 0; k < 3; k++) if ((c[k] & ~0xffffff) != 0) valid = false;   // clean 0xRRGGBB, no stray bits
+            if (c[0] == c[1]) distinct = false;
+            double h1 = hueOf(c[0]), h2 = hueOf(c[1]);
+            double d = Math.abs(h1 - h2); d = Math.min(d, 360 - d);
+            if (d < BackgroundPalette.MIN_HUE_SEP - 2) wideApart = false;   // -2 tolerates hsb->rgb->hue rounding
+            if (lum(c[2]) >= lum(c[0]) || lum(c[2]) >= lum(c[1])) thirdDarkest = false;
+        }
+        check("palette colours are valid 0xRRGGBB", valid);
+        check("the two main colours are always distinct", distinct);
+        check("the two mains stay a wide hue apart", wideApart);
+        check("the third colour is the darkest (the shadow tone)", thirdDarkest);
+    }
+
+    /** Hue in degrees [0,360) of a 0xRRGGBB colour — for asserting the two mains are far apart on the wheel. */
+    private static double hueOf(int c) {
+        double r = ((c >> 16) & 0xff) / 255.0, g = ((c >> 8) & 0xff) / 255.0, b = (c & 0xff) / 255.0;
+        double max = Math.max(r, Math.max(g, b)), min = Math.min(r, Math.min(g, b)), d = max - min;
+        if (d < 1e-9) return 0;
+        double h;
+        if (max == r) h = ((g - b) / d) % 6;
+        else if (max == g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60; if (h < 0) h += 360;
+        return h;
+    }
+
+    /** A rough brightness proxy (channel sum) for ordering colours dark-to-light. */
+    private static int lum(int c) { return ((c >> 16) & 0xff) + ((c >> 8) & 0xff) + (c & 0xff); }
 
     /**
      * The animated backdrop. Nobody can see this from a headless sandbox, so these checks stand in for eyes:

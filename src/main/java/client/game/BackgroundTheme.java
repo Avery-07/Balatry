@@ -33,42 +33,7 @@ public record BackgroundTheme(
             );
     }
 
-    // Example of a secondary preset you can transition to
-    public static final BackgroundTheme BOSS_PHASE = new BackgroundTheme(
-            26.0, 6, 0.080, 2.5, 0.40, 2.8, 1.5,
-            0x990000, 0x550000, 0x110000
-    );
-
-    // --- Per-game-state presets (GameClient transitions between these as the phase changes). Tuned around DEFAULT's
-    //     structure; the calm phases spin slower and cooler, the tense ones faster and warmer. ---
-
-    /** Small blind: calm, cool blue. */
-    public static final BackgroundTheme SMALL_BLIND = new BackgroundTheme(
-            26.0, 5, 0.022, 0.9, 0.20, 2.1, 1.0,
-            0x0f3a70, 0x1c6fa0, 0x081226
-    );
-
-    /** Big blind: deeper blue with a touch more churn. */
-    public static final BackgroundTheme BIG_BLIND = new BackgroundTheme(
-            26.0, 5, 0.032, 1.2, 0.24, 2.2, 1.1,
-            0x123a75, 0x2060b0, 0x0a1020
-    );
-
-    /** Shop: settled green &amp; gold. */
-    public static final BackgroundTheme SHOP = new BackgroundTheme(
-            24.0, 5, 0.018, 0.8, 0.18, 2.0, 1.0,
-            0x1d5c2a, 0x7a5f10, 0x0a1a10
-    );
-
-    /** Blind cleared: celebratory green &amp; gold, a little livelier. */
-    public static final BackgroundTheme RESULT = new BackgroundTheme(
-            26.0, 5, 0.035, 1.3, 0.24, 2.2, 1.1,
-            0x2a6b1f, 0x8a6a12, 0x0e1a08
-    );
-
-    /** Match over: dim, regal purple &amp; gold. */
-    public static final BackgroundTheme FINISHED = new BackgroundTheme(
-            22.0, 5, 0.015, 0.7, 0.18, 2.0, 1.0,
-            0x3a1d5c, 0x6b5a12, 0x0a0818
-    );
+    // In-match backdrops are now rolled per state change by client.engine.BackgroundPalette (two wide-apart
+    // jewel-tone mains + a darkened blend) over DEFAULT's structural knobs, agitation scaled by the ante — so
+    // there are no fixed per-phase presets here any more. DEFAULT stays as the neutral menu/lobby field.
 }
