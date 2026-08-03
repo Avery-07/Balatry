@@ -16,6 +16,7 @@ public final class Particles {
     private final int n;
     private final double w, h;
     private final double[] x, y, vx, vy, ang, spin, size, alpha;
+    private final int[] colour;   // 0 or 1: which of the backdrop's two main colours this mote wears
 
     /** A global multiplier on drift and spin — 1 at rest, higher to stir the field up. */
     public double speedScale = 1.0;
@@ -26,6 +27,7 @@ public final class Particles {
         this.h = Math.max(1, height);
         x = new double[n]; y = new double[n]; vx = new double[n]; vy = new double[n];
         ang = new double[n]; spin = new double[n]; size = new double[n]; alpha = new double[n];
+        colour = new int[n];
         Random rng = new Random(seed);
         for (int i = 0; i < n; i++) {
             x[i] = rng.nextDouble() * w;
@@ -38,6 +40,7 @@ public final class Particles {
             spin[i] = (rng.nextDouble() - 0.5) * 80;            // deg/sec, either direction
             size[i] = 10 + rng.nextDouble() * 22;
             alpha[i] = 0.05 + rng.nextDouble() * 0.14;          // subtle: motes, not confetti
+            colour[i] = i & 1;                                  // split evenly between the backdrop's two main colours
         }
     }
 
@@ -65,4 +68,6 @@ public final class Particles {
     public double angleDeg(int i)  { return ang[i]; }
     public double size(int i)      { return size[i]; }
     public double alpha(int i)     { return alpha[i]; }
+    /** Which of the backdrop's two main colours this mote wears: 0 for colour1, 1 for colour2. */
+    public int colourIndex(int i)  { return colour[i]; }
 }

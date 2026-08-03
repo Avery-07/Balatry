@@ -452,6 +452,16 @@ public final class EngineTests {
         check("particles stay within the wrapped field", inBounds);
         check("particles spin over time", p.angleDeg(0) != a0);
 
+        // Each mote wears one of the backdrop's two main colours, and the field uses both.
+        boolean twoColours = true, sawZero = false, sawOne = false;
+        for (int i = 0; i < p.count(); i++) {
+            int c = p.colourIndex(i);
+            if (c != 0 && c != 1) twoColours = false;
+            sawZero |= c == 0; sawOne |= c == 1;
+        }
+        check("every mote wears colour 0 or 1", twoColours);
+        check("the field uses both main colours", sawZero && sawOne);
+
         // A big step (a lag spike) still lands in range — the wrap is modulo, not a single subtraction.
         Particles jump = new Particles(10, w, h, 3L);
         jump.speedScale = 50;

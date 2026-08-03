@@ -82,6 +82,10 @@ public final class Background {
         return time;
     }
 
+    /** The current (transition-lerped) theme's two main colours as 0xRRGGBB — what the floating motes are tinted with. */
+    public int currentColour1() { return currentTheme.colour1(); }
+    public int currentColour2() { return currentTheme.colour2(); }
+
 
     // =========================================================================
     // LIFECYCLE
