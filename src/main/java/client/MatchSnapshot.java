@@ -264,7 +264,7 @@ public record MatchSnapshot(
         String mult  = (r != null) ? r.getLastMult().toBigInteger().toString()  : "0";
 
         Standings standings = match.getStandings();
-        List<PlayerId> ranking = standings.ranking();
+        List<PlayerId> ranking = match.displayRanking();   // departed seats sink below everyone still in — leaving forfeits the win
 
         List<StandingView> table = new ArrayList<>();
         for (PlayerId id : ranking)

@@ -840,6 +840,18 @@ public final class Match {
     }
 
     /**
+     * The competition order the result screens present: seats still in the match first (by points, highest first),
+     * then everyone who left below them (also by points). Leaving forfeits your placing — a departed seat ranks
+     * below every active seat no matter how many points it banked, so whoever stays wins. Display-only: the
+     * points-pure {@link Standings#ranking()} and {@link #seatsAbove} still drive in-match mechanics.
+     */
+    public List<PlayerId> displayRanking() {
+        List<PlayerId> order = new ArrayList<>(standings.ranking());   // points order, highest first
+        order.sort((a, b) -> Integer.compare(departed.contains(a) ? 1 : 0, departed.contains(b) ? 1 : 0));   // stable: departed sink, order kept within each group
+        return order;
+    }
+
+    /**
      * Records that {@code id} has left. The seat forfeits any live round, is counted as having made its blind
      * choice, and is excluded from every barrier from here on, so the remaining players never wait on it. Its
      * standings entry is left alone: the points it earned while playing are real and still rank it.

@@ -31,6 +31,8 @@ public final class DisconnectTests {
         departureForfeitsTheRound();
         departedSeatsCannotAct();
         lastPlayerStandingEndsTheMatch();
+        leavingForfeitsTheWin();
+        leaverSinksBelowActiveSeats();
         departureIsDeterministic();
         socketDropReachesTheOtherClient();
 
@@ -100,6 +102,41 @@ public final class DisconnectTests {
         check("one leaving a two-player match ends it", host.getMatch().getPhase() == MatchPhase.FINISHED);
         checkInt("the survivor is the only active seat", host.getMatch().getActiveSeats().size(), 1);
         check("the survivor is not marked departed", !host.getMatch().hasDeparted(seats.get(0)));
+    }
+
+    /** Leaving forfeits the win: the seat that stays outranks a departed seat even one that banked more points. */
+    private static void leavingForfeitsTheWin() {
+        MatchHost host = twoSeatHost();
+        Match match = host.getMatch();
+        List<PlayerId> seats = match.getSeats();
+        PlayerId stayer = seats.get(0), leaver = seats.get(1);
+
+        match.getStandings().record(java.util.Map.of(leaver, 100L));   // the leaver is well ahead on points
+        check("the leaver leads on points", match.getStandings().getPoints(leaver) > match.getStandings().getPoints(stayer));
+
+        host.submit(new Action.PlayerLeft(leaver));
+        check("the two-player match ended", match.getPhase() == MatchPhase.FINISHED);
+
+        List<PlayerId> ranking = match.displayRanking();
+        check("the seat that stayed wins", ranking.get(0).equals(stayer));
+        check("the seat that left places last", ranking.get(ranking.size() - 1).equals(leaver));
+        check("points order is untouched for in-match mechanics", match.getStandings().ranking().get(0).equals(leaver));
+    }
+
+    /** In a bigger match a leaver sinks below everyone still in, while the active seats keep their points order. */
+    private static void leaverSinksBelowActiveSeats() {
+        MatchHost host = threeSeatHost();
+        Match match = host.getMatch();
+        List<PlayerId> seats = match.getSeats();
+        match.getStandings().record(java.util.Map.of(seats.get(2), 100L, seats.get(0), 50L, seats.get(1), 10L));
+
+        host.submit(new Action.PlayerLeft(seats.get(2)));   // the points leader leaves; two are still in
+        check("two still playing keeps the match live", match.getPhase() != MatchPhase.FINISHED);
+
+        List<PlayerId> ranking = match.displayRanking();
+        check("the top active seat ranks first", ranking.get(0).equals(seats.get(0)));
+        check("the other active seat ranks second", ranking.get(1).equals(seats.get(1)));
+        check("the leaver is last despite the most points", ranking.get(2).equals(seats.get(2)));
     }
 
     /** Departure is in the log, so a replay of that log has to reproduce the same match — the lockstep contract. */
