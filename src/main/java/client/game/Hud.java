@@ -298,13 +298,6 @@ final class Hud {
     private void drawDeck(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
 
-        // The seat's difficulty chip rides the top of the right rail (per-seat, so it is this seat's own stake).
-        double chip = Math.min(w - 8, 80), chipX = x + (w - chip) / 2, chipY = y + 4;
-        if (r.stakeFace(ui.s.stake(), chipX, chipY, chip, chip)) {
-            r.textCenter(ui.s.stake(), x + w / 2, chipY + chip + 6, 9, DIM);
-            ui.tip(new Layout.Rect(chipX, chipY, chip, chip), ui.s.stake());
-        }
-
         // The deck pile, at the bottom: the table's deck back drawn over the felt frame (falls back to the frame
         // alone when the sheet is absent). Hovering it opens the full deck view (GameClient checks deckRect).
         double cardH = 140, cardY = y + h - cardH - 24, bx = x + 5, bw = w - 10;
@@ -312,5 +305,10 @@ final class Hud {
         r.deckBackFace(ui.s.deckType(), bx + 2, cardY + 2, bw - 4, cardH - 4);   // no-op when the sheet isn't loaded
         r.textCenter(ui.s.deckRemaining() + " / " + ui.s.deckTotal(), x + w / 2, y + h - 12, 14, INK);
         ui.deckRect = new Layout.Rect(bx, cardY, bw, cardH);
+
+        // The seat's difficulty chip sits just on top of the deck (per-seat, so it is this seat's own stake).
+        double chip = Math.min(w - 20, 58), chipX = x + (w - chip) / 2, chipY = cardY - chip - 2;
+        if (r.stakeFace(ui.s.stake(), chipX, chipY, chip, chip))
+            ui.tip(new Layout.Rect(chipX, chipY, chip, chip), ui.s.stake());
     }
 }

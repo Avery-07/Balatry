@@ -22,7 +22,9 @@ import java.util.Set;
  */
 final class Hand {
 
-    static final double CARD_W = 90, CARD_H = 126;
+    // The hand only ever draws in-round and under the pack modal, so these size both of those contexts — bigger
+    // than the old 90x126 so the cards you actually play with read large (Balatro-scale).
+    static final double CARD_W = 108, CARD_H = 151;
     private static final double EXIT_SECONDS = 0.45;   // how long a leaving card stays visible while flying out
 
     /** Why the next batch of cards will leave the hand — it decides where they fly. */
