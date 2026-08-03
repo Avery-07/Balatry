@@ -208,6 +208,35 @@ public final class Renderer {
         return drawCell(voucherAtlas, key(label), x, y, w, h);
     }
 
+    // --- deck-back sheet (Decks.png, 4x3 = 12 cells; 10 decks in DeckType order) and stake-chip sheet
+    //     (Stakes.png, 5x2 = 10 cells; 8 stakes in Stake order — the last two cells are unused). Both are laid out
+    //     in enum order, so each entry maps straight to its own ordinal; the display name is the lookup key. ---
+    private final Atlas deckBacks = new Atlas(), stakeChips = new Atlas();
+
+    /** The deck-back sheet (4x3). The ten decks are laid out in DeckType order, so each maps to its own ordinal. */
+    public void deckSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(deckBacks, img, 4, 3);
+        for (model.items.DeckType d : model.items.DeckType.values()) deckBacks.cell.put(key(d.displayName()), d.ordinal());
+    }
+
+    /** Draws a deck's back art for its display name into (x,y,w,h) preserving aspect, or false if no sheet has it. */
+    public boolean deckBackFace(String deckName, double x, double y, double w, double h) {
+        return drawCell(deckBacks, key(deckName), x, y, w, h);
+    }
+
+    /** The stake-chip sheet (5x2). Eight stakes in Stake order map to their ordinals; the last two cells are unused. */
+    public void stakeSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(stakeChips, img, 5, 2);
+        for (model.game.Stake s : model.game.Stake.values()) stakeChips.cell.put(key(s.displayName()), s.ordinal());
+    }
+
+    /** Draws a stake's chip for its display name into (x,y,w,h) preserving aspect, or false if no sheet has it. */
+    public boolean stakeFace(String stakeName, double x, double y, double w, double h) {
+        return drawCell(stakeChips, key(stakeName), x, y, w, h);
+    }
+
     public void fillRect(Color c, double x, double y, double w, double h) { g.setFill(c); g.fillRect(x, y, w, h); }
 
     public void panel(double x, double y, double w, double h, Color fill, Color border, double arc, double bw) {

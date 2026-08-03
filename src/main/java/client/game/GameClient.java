@@ -560,6 +560,8 @@ public final class GameClient extends Application {
         loadSheet("/sprites/packs/SpectralPacks.png",  img -> r.packSheet(model.items.packs.PackKind.SPECTRAL, img));
         loadSheet("/sprites/packs/StandardPacks.png",  img -> r.packSheet(model.items.packs.PackKind.STANDARD, img));
         loadSheet("/sprites/vouchers/Vouchers.png",    r::voucherSheet);
+        loadSheet("/sprites/cards/Decks.png",          r::deckSheet);
+        loadSheet("/sprites/difficultyStake/Stakes.png", r::stakeSheet);
         try {
             var in = getClass().getResourceAsStream("/font/game.ttf");
             if (in != null) { Font f = Font.loadFont(in, 14); if (f != null) fontFamily = f.getFamily(); }

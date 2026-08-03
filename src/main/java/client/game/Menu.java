@@ -212,6 +212,7 @@ final class Menu {
         cycler(ui, x, y, w, "Stake", stake.displayName(),
                 () -> changeStake(cycle(Stake.values(), stake, -1)),
                 () -> changeStake(cycle(Stake.values(), stake, 1)));
+        r.stakeFace(stake.displayName(), x + 50, y + 21, 30, 30);   // the difficulty chip preview, inside the cycler panel
         r.textCenter(stake.description(), x + w / 2, y + 72, 11, FAINT);
         y += 100;
 
@@ -222,9 +223,11 @@ final class Menu {
             cycler(ui, x, y, w, "Deck", deck.displayName(),
                     () -> changeDeck(cycle(DeckType.values(), deck, -1)),
                     () -> changeDeck(cycle(DeckType.values(), deck, 1)));
+            r.deckBackFace(deck.displayName(), x + 50, y + 19, 26, 34);   // the deck-back preview, inside the cycler panel
         } else {
             r.textLeftBold("Deck", x, y, 12, FAINT);
             r.panel(x, y + 16, w, 40, Color.web("#1a1b1f"), EDGE, 8, 2);
+            r.deckBackFace(deck.displayName(), x + 12, y + 19, 26, 34);
             r.textCenterBold(deck.displayName(), x + w / 2, y + 36, 15, DIM);
             r.textCenter("the host picks the table's deck", x + w / 2, y + 74, 10, FAINT);
         }

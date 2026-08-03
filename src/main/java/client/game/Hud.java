@@ -294,10 +294,20 @@ final class Hud {
 
     private void drawDeck(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
-        double cardH = 140, cardY = y + h - cardH - 24;
-        r.panel(x + 5, cardY, w - 10, cardH, Color.web("#d3c3a2"), Color.web("#7a5a3a"), 8, 3);
+
+        // The seat's difficulty chip rides the top of the right rail (per-seat, so it is this seat's own stake).
+        double chip = Math.min(w - 8, 80), chipX = x + (w - chip) / 2, chipY = y + 4;
+        if (r.stakeFace(ui.s.stake(), chipX, chipY, chip, chip)) {
+            r.textCenter(ui.s.stake(), x + w / 2, chipY + chip + 6, 9, DIM);
+            ui.tip(new Layout.Rect(chipX, chipY, chip, chip), ui.s.stake());
+        }
+
+        // The deck pile, at the bottom: the table's deck back drawn over the felt frame (falls back to the frame
+        // alone when the sheet is absent). Hovering it opens the full deck view (GameClient checks deckRect).
+        double cardH = 140, cardY = y + h - cardH - 24, bx = x + 5, bw = w - 10;
+        r.panel(bx, cardY, bw, cardH, Color.web("#d3c3a2"), Color.web("#7a5a3a"), 8, 3);
+        r.deckBackFace(ui.s.deckType(), bx + 2, cardY + 2, bw - 4, cardH - 4);   // no-op when the sheet isn't loaded
         r.textCenter(ui.s.deckRemaining() + " / " + ui.s.deckTotal(), x + w / 2, y + h - 12, 14, INK);
-        // Hovering the pile opens the full deck view (GameClient checks this rect each frame).
-        ui.deckRect = new Layout.Rect(x + 5, cardY, w - 10, cardH);
+        ui.deckRect = new Layout.Rect(bx, cardY, bw, cardH);
     }
 }
