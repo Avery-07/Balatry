@@ -28,6 +28,9 @@ final class Ui {
     MatchViewModel vm;
     String status = "";
     boolean showRunInfo;
+    boolean showOptions;       // the in-game Options/pause modal (Collection + Surrender), opened from the sidebar
+    boolean showCollection;    // the joker collection grid, opened from within Options (shares the menu's system)
+    boolean confirmSurrender;  // Options → Surrender asks to confirm before it forfeits the match
 
     final List<Btn> buttons = new ArrayList<>();
     final List<Btn> devButtons = new ArrayList<>();    // dev-mode cheat controls; handled before anything else, any phase

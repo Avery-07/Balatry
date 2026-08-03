@@ -53,7 +53,7 @@ final class Menu {
 
     // --- collection overlay: every joker, paginated, drawn on top of the main menu with the same idle sway/bob ---
     private boolean showCollection;
-    private int collectionPage;
+    private final Collection collection = new Collection();   // the shared grid, reused verbatim in-game
     private double time;           // frame clock for the collection tiles' idle animation
 
     /** Set by GameClient: what the buttons actually do. */
@@ -109,7 +109,7 @@ final class Menu {
         ui.regionOffsetY = 0;
         ui.r.gc().restore();
         if (!status.isEmpty()) ui.r.textCenter(status, Ui.W / 2.0, Ui.H - 28, 13, status.startsWith("ERR") ? RED : DIM);
-        if (showCollection) renderCollection(ui);   // the modal sits on top, outside the slide, owning input
+        if (showCollection) collection.render(ui, time, () -> showCollection = false);   // the modal sits on top, outside the slide, owning input
     }
 
     /** The main menu is only identity and connection; the loadout is picked in the lobby, where others can see it. */
@@ -140,65 +140,7 @@ final class Menu {
 
         // Opens the collection modal (every joker, browsable) over the menu.
         ui.button(px, py + ph + 18, pw, 46, "Collection", PURPLE, INK,
-                () -> { showCollection = true; collectionPage = 0; }, true);
-    }
-
-    /**
-     * The collection: every joker, five-by-three across paged tiles, each carrying the same idle sway/bob the
-     * in-game tiles do. Drawn as a full-screen modal over the menu; it clears the menu's registered buttons so its
-     * own page/Back controls are the only live ones (nothing clicks through to the menu behind).
-     */
-    private void renderCollection(Ui ui) {
-        Renderer r = ui.r;
-        ui.buttons.clear();   // the modal owns input — drop the menu widgets behind it
-        r.gc().setFill(Color.web("#04060a", 0.74));
-        r.gc().fillRect(0, 0, Ui.W, Ui.H);
-
-        double pw = 1140, ph = 724, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
-        r.panel(px, py, pw, ph, Color.web("#141517"), EDGE, 16, 3);
-        r.textCenterBold("COLLECTION — Jokers", Ui.W / 2.0, py + 40, 30, ORANGE);
-
-        model.items.jokers.Jokers[] all = model.items.jokers.Jokers.values();
-        int cols = 5, rows = 3, perPage = cols * rows;
-        int pages = (all.length + perPage - 1) / perPage;
-        collectionPage = Math.max(0, Math.min(collectionPage, pages - 1));
-        int start = collectionPage * perPage;
-
-        double cardW = 120, cardH = 162, gapX = 44, gapY = 22;
-        double gridW = cols * cardW + (cols - 1) * gapX;
-        double gx = px + (pw - gridW) / 2, gy = py + 78;
-
-        for (int i = 0; i < perPage && start + i < all.length; i++) {
-            model.items.jokers.Jokers jk = all[start + i];
-            int seed = start + i;
-            double cx = gx + (i % cols) * (cardW + gapX) + cardW / 2;
-            double bob = client.engine.Idle.bobPx(time, seed, 1.8);
-            double sway = client.engine.Idle.swayDeg(time, seed, 1.4);
-            double baseTy = gy + (i / cols) * (cardH + gapY);   // the static tile, for a hover target that doesn't bob
-            double tx = cx - cardW / 2, ty = baseTy + bob;
-            r.rotated(cx, ty + cardH / 2, sway, () -> {
-                javafx.scene.image.Image tex = r.jokerTexture(jk.spec().getName());
-                if (tex != null) {
-                    r.imageFit(tex, tx, ty, cardW, cardH);
-                } else {   // no PNG yet: the same vector tile the HUD falls back to
-                    r.panel(tx, ty, cardW, cardH, Color.web("#c0392b"), Color.web("#0006"), 8, 2);
-                    r.textCenter(Fmt.shortName(jk.spec().getName()), cx, ty + cardH / 2, 11, INK);
-                }
-            });
-            // The same hover system every card uses: name + effect, drawn by Overlays.tooltip on the menu path.
-            String desc = jk.spec().getDescription();
-            ui.tip(new Layout.Rect(tx, baseTy, cardW, cardH),
-                    desc == null || desc.isEmpty() ? jk.spec().getName() : jk.spec().getName() + "\n" + desc);
-        }
-
-        // Page nav and Back.
-        double navY = py + ph - 108;
-        int lastPage = pages - 1;
-        ui.button(Ui.W / 2.0 - 170, navY, 44, 44, "◀", RED, INK, () -> collectionPage = Math.max(0, collectionPage - 1), true);
-        r.panel(Ui.W / 2.0 - 120, navY, 240, 44, RED, RED.darker(), 8, 2);
-        r.textCenterBold("Page " + (collectionPage + 1) + " / " + pages, Ui.W / 2.0, navY + 22, 18, INK);
-        ui.button(Ui.W / 2.0 + 126, navY, 44, 44, "▶", RED, INK, () -> collectionPage = Math.min(lastPage, collectionPage + 1), true);
-        ui.button(px + 40, py + ph - 52, pw - 80, 40, "Back", ORANGE, DARK, () -> showCollection = false, true);
+                () -> { showCollection = true; collection.open(); }, true);
     }
 
     private void renderLobby(Ui ui) {

@@ -52,6 +52,7 @@ public final class GameClient extends Application {
     private final Background background = new Background();   // the looping animated backdrop
     private MatchClient client;
     private HostedMatch hosted;      // non-null when this client is the one hosting
+    private boolean leaving;         // set while we tear our own connection down, so an involuntary-drop handler can tell the two apart
     private MatchViewModel vm;
     private String fontFamily = "Monospaced";
     private long lastNanos;
@@ -279,8 +280,21 @@ public final class GameClient extends Application {
      */
     private void onConnectionClosed(String reason) {
         Log.phase("CONNECTED", "CLOSED: " + reason);
-        if (client == null) return;             // we tore the connection down ourselves; nothing to report
-        if (inMatch()) { ui.status = reason; return; }
+        if (client == null || leaving) return;   // we tore the connection down ourselves; nothing to report
+        if (inMatch()) {
+            // An involuntary mid-match drop (the host surrendered / the server died). With no reconnect, resolve it
+            // locally as a forfeit by everyone we can no longer hear: mark the other seats departed so this seat is
+            // the last one standing and the finished screen reads VICTORY (Match.displayRanking sinks the departed).
+            var host = client.getLocalHost();
+            if (host != null && host.getMatch().getPhase() != MatchPhase.FINISHED) {
+                model.game.Match m = host.getMatch();
+                for (model.game.player.PlayerId id : new java.util.ArrayList<>(m.getActiveSeats()))
+                    if (!id.equals(client.getSeat())) m.markDeparted(id);
+                if (vm != null) vm.refresh();
+            }
+            ui.status = reason;
+            return;
+        }
         leaveLobby();
         menu.status = reason;
     }
@@ -315,6 +329,7 @@ public final class GameClient extends Application {
      * everyone else replays, so there is no separate "goodbye" message to get lost.
      */
     private void leaveLobby() {
+        leaving = true;   // set synchronously so an involuntary-drop callback racing the teardown knows this was us
         fader.start(() -> {
             shutdown();
             client = null;
@@ -323,11 +338,15 @@ public final class GameClient extends Application {
             ui.vm = null;
             ui.s = null;
             ui.status = "";
+            ui.showOptions = false;
+            ui.showCollection = false;
+            ui.confirmSurrender = false;
             menu.enterMode(Menu.Mode.MAIN);
             menu.lobby = null;
             menu.host = false;
             menu.seat = -1;
             menu.status = "";
+            leaving = false;
         });
     }
 
@@ -418,11 +437,13 @@ public final class GameClient extends Application {
             overlays.blindWait(ui);   // the irremovable modal — only once there is no pack left to open
         } else if (blindWait) {
             overlays.tooltip(ui);     // a pack is open (or waiting to be opened) at the barrier: keep its tooltips
-        } else {
+        } else if (!ui.showOptions) {
             // Hover layers, last so they sit above everything: the deck's contents, then any tooltip.
             if (ui.hovered(ui.deckRect)) overlays.deckContents(ui);
             else overlays.tooltip(ui);
         }
+        // The Options/pause modal sits above the table and its hover layers; it draws its own tooltip on top.
+        if (ui.showOptions) { overlays.options(ui, ui.now); overlays.tooltip(ui); }
 
         if (anteBanner.active()) anteBanner.render(ui);   // the ante-change sin handover banner
         if (DEV) dev.render(ui, localRun());   // cheat overlay on top of everything but the fade
@@ -461,6 +482,10 @@ public final class GameClient extends Application {
             return;
         }
         if (ui.s == null) return;
+        if (ui.showOptions) {   // the Options/pause modal owns input: only its own controls are live (it cleared the rest)
+            for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
+            return;
+        }
         if (ui.s.opening() != null) {   // pack modal (live even at the blind barrier): pick an option, select hand cards / a joker
             CardEntity e = hand.cardAt(x, y);
             if (e != null) {

@@ -116,7 +116,8 @@ final class Hud {
         r.textCenterBold("$" + whole(money.displayed()), ix + iw / 2, cy + hMoney / 2, 30 * money.popScale(), ORANGE);
         cy += hMoney + gap;
 
-        ui.button(ix, cy, 92, hAnte, "Options", ORANGE, DARK, () -> ui.status = "Options — not wired.", true);
+        ui.button(ix, cy, 92, hAnte, "Options", ORANGE, DARK,
+                () -> { ui.showOptions = true; ui.showCollection = false; ui.confirmSurrender = false; }, true);
         cell(r, ix + 102, cy, cellW, hAnte, "Ante", s.ante() + "/" + s.anteCount(), ORANGE);
         cell(r, ix + 102 + cellW + 10, cy, cellW, hAnte, "Round", String.valueOf(s.roundNumber()), ORANGE);
         cy += hAnte + gap;

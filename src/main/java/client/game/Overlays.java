@@ -18,6 +18,40 @@ import static client.game.Palette.*;
  */
 final class Overlays {
 
+    private final Collection collection = new Collection();   // the in-game view of the same joker grid the menu shows
+
+    /**
+     * The in-game Options/pause modal, opened from the sidebar Options button: Resume, Collection (the shared joker
+     * grid), and Surrender (forfeit → main menu, behind a confirm). A full-screen scrim gates the table behind it,
+     * and it clears the frame's buttons so only its own controls are live.
+     */
+    void options(Ui ui, double now) {
+        if (ui.showCollection) { collection.render(ui, now, () -> ui.showCollection = false); return; }
+
+        Renderer r = ui.r;
+        ui.buttons.clear();   // the modal owns input
+        ui.tips.clear();      // no background tooltip bleeds over the modal
+        r.gc().setFill(Color.web("#04060a", 0.7)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+
+        double pw = 420, ph = 312, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        r.panel(px, py, pw, ph, Color.web("#161719"), ORANGE, 16, 3);
+        r.textCenterBold("OPTIONS", px + pw / 2, py + 40, 26, ORANGE);
+
+        double bw = pw - 80, bx = px + 40;
+        if (!ui.confirmSurrender) {
+            r.textCenter("Match paused", px + pw / 2, py + 70, 12, DIM);
+            ui.button(bx, py + 92,  bw, 48, "Resume",     GREEN,  DARK, () -> ui.showOptions = false, true);
+            ui.button(bx, py + 150, bw, 48, "Collection", PURPLE, INK,  () -> { ui.showCollection = true; collection.open(); }, true);
+            ui.button(bx, py + 208, bw, 48, "Surrender",  RED,    INK,  () -> ui.confirmSurrender = true, true);
+        } else {
+            r.textCenter("Leave the match?", px + pw / 2, py + 92, 16, INK);
+            r.textCenter("You forfeit — the other players win.", px + pw / 2, py + 116, 12, DIM);
+            ui.button(bx, py + 140, bw, 48, "Leave to Main Menu", RED, INK,
+                    () -> { ui.showOptions = false; ui.confirmSurrender = false; ui.onLeaveMatch.run(); }, true);
+            ui.button(bx, py + 202, bw, 48, "Cancel", Color.web("#3a3d44"), INK, () -> ui.confirmSurrender = false, true);
+        }
+    }
+
     /** The contextual actions for the currently-selected shop/held item and the targeted joker. */
     void contextActions(Ui ui) {
         drawItemActions(ui);
