@@ -872,7 +872,15 @@ public enum Jokers {
                 List<JokerCard> theirs = leader.getJokers();
                 if (slot >= 0 && slot < theirs.size()) run.getScoring().retriggerJoker(theirs.get(slot));
             })),
-    ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b),
+    ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b.trait(JokerTrait.SEAT_COUPLING)
+            .on(Trigger.ON_BLIND_SETTLED, (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null || run.getPlayerId() == null) return;
+                int slot = run.getJokers().indexOf(self);
+                if (slot < 0) return;
+                for (PlayerId above : m.seatsAbove(run.getPlayerId()))   // debuff the same slot on each seat above, next round
+                    m.getRun(above).getAfflictions().armJokerDebuff(slot);
+            })),
     BLUEPRINT("Blueprint", Rarity.RARE, 10, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 List<JokerCard> js = run.getJokers();

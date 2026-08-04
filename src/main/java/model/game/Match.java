@@ -265,8 +265,6 @@ public final class Match {
 
         for (Player p : players.values()) sinModifier.onRoundSettled(p.run(), results.get(p.id()));
         lastResults = results;
-        // Every seat's jokers now see the complete settled results of this blind (Vulture counts opponent losses).
-        for (PlayerId id : getActiveSeats()) getRun(id).fire(model.game.scoring.Trigger.ON_BLIND_SETTLED);
         awardPoints(results);
         if (blind == Blind.BOSS)
             for (Player p : players.values())
@@ -275,6 +273,9 @@ public final class Match {
                         p.run().addMoney(SkipTag.INVESTMENT_PAYOUT);
         if (blind == Blind.BOSS)
             sinModifier.onAnteSettled(this);   // end-of-ante sin resolution (Gluttony's payout) before shops open
+        // With the blind fully settled and points awarded, every seat's jokers see the final results and standings:
+        // Vulture counts opponent losses, Transparent counts the round, Espionnage arms same-slot debuffs on seats above.
+        for (PlayerId id : getActiveSeats()) getRun(id).fire(model.game.scoring.Trigger.ON_BLIND_SETTLED);
         phase = MatchPhase.RESULT;
     }
 

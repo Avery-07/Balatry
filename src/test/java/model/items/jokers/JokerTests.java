@@ -504,6 +504,28 @@ public final class JokerTests {
         Run mimicRun2 = mm2.getRun(mm2.getSeats().get(1));
         mimicRun2.board().add(Jokers.THE_MIMIC.make());                      // leader (seat 0) has no jokers
         checkScore("The Mimic copies nothing without a same-slot joker", score(mimicRun2, kings()), 60);
+
+        // Espionnage: debuffs the same-slot joker of every player above in the standings, for their next round.
+        var em = model.game.Match.create(78L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        Run aboveRun = em.getRun(em.getSeats().get(0));   // stack a winning deck so this seat ranks above
+        aboveRun.resetDeck(List.of());
+        for (int i = 0; i < 16; i++) aboveRun.addCardToDeck(new DeckCard(Rank.ACE, Suit.SPADES));
+        em.start();
+        Run espRun = em.getRun(em.getSeats().get(1));     // Espionnage owner (will lose -> ranks below)
+        aboveRun.board().add(Jokers.JOKER.make());        // the above seat's slot-0 joker (the target)
+        espRun.board().add(Jokers.ESPIONNAGE.make());     // Espionnage at slot 0
+        var ar = aboveRun.getRound();
+        ar.play(new java.util.ArrayList<>(ar.getHand().subList(0, 5)));   // five Aces -> clears the 300 target
+        ar.finish();
+        var er = espRun.getRound();
+        er.play(new java.util.ArrayList<>(er.getHand().subList(0, 1)));   // token hand -> LOST
+        er.finish();
+        em.toResult();
+        check("the winner ranks above the Espionnage owner", em.getResult(em.getSeats().get(0)).cleared());
+        JokerCard target = aboveRun.getJokers().get(0);
+        check("the target joker is clean before its next round", !target.isDebuffed());
+        aboveRun.getAfflictions().beginRound(aboveRun.getJokers());   // the next round applies the armed debuff
+        check("Espionnage debuffs the above player's same-slot joker", target.isDebuffed());
     }
 
     private static long score(Run run, List<DeckCard> played) {
