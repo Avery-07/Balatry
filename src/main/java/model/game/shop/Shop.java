@@ -3,6 +3,7 @@ import model.game.player.Run;
 
 import model.items.Card;
 import model.items.jokers.JokerCard;
+import model.items.jokers.Jokers;
 import model.items.packs.BoosterPack;
 import model.items.vouchers.Voucher;
 import model.game.rng.Rng;
@@ -28,6 +29,7 @@ public final class Shop {
     private int negativeGrantsLeft;         // Negative Tag transforms not yet consumed
     private int purchasesThisRoll;          // buys since the last reroll (any row); capped by the setup
     private int totalPurchases;             // buys across the whole visit (any row); Sloth's empty-visit check
+    private boolean freeRerollUsed;         // Chaos the Clown: whether this visit's one free reroll has been spent
 
     /** Card-only shop (used directly by tests and simple callers). */
     public Shop(Run run, int shopIndex, int slotCount, ShopPool pool) {
@@ -83,8 +85,14 @@ public final class Shop {
      * The step is the seat's stake — $1 normally, $2 from the Orange Stake up.
      */
     public int rerollCost() {
+        if (hasFreeReroll()) return 0;
         int base = setup.isRerollsFromZero() ? 0 : run.getBaseRerollCost();
         return base + rerolls * run.getStake().rerollStep();
+    }
+
+    /** Chaos the Clown: the first reroll of each shop visit is free (until it is spent). */
+    private boolean hasFreeReroll() {
+        return !freeRerollUsed && run.ownsActiveJoker(Jokers.CHAOS_THE_CLOWN.spec());
     }
 
     /** Buys the card in {@code slotIndex}, charging the run and routing it into inventory. */
@@ -98,14 +106,24 @@ public final class Shop {
         slots.set(slotIndex, null);
         slotPrices.set(slotIndex, null);
         notifyPurchase(item, price);
+        if (cardRowEmptied()) run.fire(Trigger.ON_SHOP_EMPTIED);   // Scalper gains when the card row is bought out
         return item;
+    }
+
+    /** Whether the card row is now fully bought out (every slot null) — the signal Scalper reacts to. */
+    private boolean cardRowEmptied() {
+        if (slots.isEmpty()) return false;
+        for (Card c : slots) if (c != null) return false;
+        return true;
     }
 
     /** Rerolls the card row for a fresh, still-seeded set; the Bazaar deck refreshes the packs too. */
     public void reroll() {
+        boolean free = hasFreeReroll();
         int cost = rerollCost();
         if (run.getMoney() - cost < run.minBalance()) throw new IllegalStateException("cannot afford reroll " + cost);
         run.spend(cost);
+        if (free) freeRerollUsed = true;   // Chaos the Clown's one free reroll for this visit is now spent
         rerolls++;
         purchasesThisRoll = 0;   // a reroll grants a fresh purchase allowance (Lust's cap is per roll state)
         run.getStats().recordReroll();

@@ -37,6 +37,14 @@ public final class SettlementTests {
         BlindResult cap = rich.endRound(Blind.SMALL);
         checkInt("interest capped: 3+3+5", cap.moneyEarned(), 11);
 
+        // --- To the Moon: an extra $1 interest per $5 held, on top of the (capped) base, and uncapped ---
+        Run moon = standardRun(2L);
+        moon.board().add(model.items.jokers.Jokers.TO_THE_MOON.make());
+        moon.addMoney(100);
+        win(moon.beginRound(1L));
+        BlindResult mr = moon.endRound(Blind.SMALL);
+        checkInt("To the Moon: 3+3+5(cap)+20(extra)", mr.moneyEarned(), 31);
+
         // --- Gold card held at end of round pays $3 ---
         Run gold = new Run(3L);
         for (int i = 0; i < 7; i++) gold.addCardToDeck(new DeckCard(Rank.TWO, Suit.SPADES));

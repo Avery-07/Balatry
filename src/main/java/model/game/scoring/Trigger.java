@@ -9,6 +9,7 @@ public enum Trigger {
     ON_HELD_CARD,
     ON_SHOP_START,
     ON_SHOP_REROLL,
+    ON_SHOP_EMPTIED,     // the shop's card row was just bought out (Scalper)
     ON_SHOP_END,
     ON_PURCHASE_PRICING,
     ON_BOUGHT,

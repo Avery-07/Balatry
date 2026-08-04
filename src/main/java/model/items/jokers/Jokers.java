@@ -55,7 +55,12 @@ public enum Jokers {
             })),
     // endregion
     // region Jokers 006-010 (missing : Hiker)
-    HIKER("HIKER", Rarity.UNCOMMON, 5, b -> b),
+    HIKER("HIKER", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD, (run, self) -> {
+                DeckCard c = scored(run);
+                if (c == null) return;
+                c.addBonusChips(5);              // permanent: the card scores +5 more every future hand
+                run.getScoring().addChips(5);    // and the gain already counts on the hand it is earned
+            })),
     HALF_JOKER("Half Joker", Rarity.COMMON, 5, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (run.getScoring().getHand().playedCount() <= 3) run.getScoring().addMult(20); })),
     MYSTIC_SUMMIT("Mystic Summit", Rarity.COMMON, 5, b -> b
@@ -177,7 +182,12 @@ public enum Jokers {
                 int hits = run.getStats().getTimesTargeted();
                 if (hits > 0) run.getScoring().multiplyMult(onePlus("0.2", hits));
             })),
-    SCALPER("Scalper", Rarity.COMMON, 5, b -> b),
+    SCALPER("Scalper", Rarity.COMMON, 5, b -> b
+            .on(Trigger.ON_SHOP_EMPTIED, (run, self) -> self.addCounter(1))
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.1", self.getCounter()));
+            })
+            .state(card -> card.getCounter() == 0 ? null : "X" + onePlus("0.1", card.getCounter()).toPlainString() + " Mult")),
     GENERATIONAL_HATER("Generational Hater", Rarity.UNCOMMON, 8, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_BOSS_DEFEATED,
             (run, self) -> {
                 Match m = run.getMatch();
@@ -538,7 +548,7 @@ public enum Jokers {
             .state(self -> "Earns $" + (1 + 2 * self.getCounter()) + " at end of round")
             .on(Trigger.ON_ROUND_END, (run, self) -> run.addMoney(1 + 2 * self.getCounter()))
             .on(Trigger.ON_BOSS_DEFEATED, (run, self) -> self.addCounter(1))),
-    TO_THE_MOON("To the Moon", Rarity.UNCOMMON, 5, b -> b),
+    TO_THE_MOON("To the Moon", Rarity.UNCOMMON, 5, b -> b),   // passive: extra interest applied in RoundSettlement (checked by ownership)
     INVESTMENT("Investment", Rarity.COMMON, 5, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
                 int value = 0;
@@ -745,7 +755,7 @@ public enum Jokers {
     // region Jokers 146-150 (missing : Chaos The Clown)
     LUCHADOR("Luchador", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_SOLD,
             (run, self) -> run.disableBossForRound())),
-    CHAOS_THE_CLOWN("Chaos the Clown", Rarity.COMMON, 4, b -> b),
+    CHAOS_THE_CLOWN("Chaos the Clown", Rarity.COMMON, 4, b -> b),   // passive: the shop's first reroll is free while owned (handled in Shop)
     STUNTMAN("Stuntman", Rarity.RARE, 7, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addChips(250))
             .on(Trigger.ON_BOUGHT, (run, self) -> run.setHandSize(run.getHandSize() - 2))

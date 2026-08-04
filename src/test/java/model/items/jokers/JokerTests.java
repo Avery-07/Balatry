@@ -37,6 +37,7 @@ public final class JokerTests {
         handEvaluatorJokers();
         dyscalculiaRankJokers();
         chefOopsCopyrightJokers();
+        singleSeatStubs();
 
         boardInvariants();
 
@@ -384,6 +385,46 @@ public final class JokerTests {
         int before = ra.getMoney();
         ra.getJokers().get(0).trigger(Trigger.ON_ROUND_END, ra);
         check("Copyright pays $2 for a joker a rival also owns", ra.getMoney() - before == 2);
+    }
+
+    /** The single-seat stub jokers wired this session (To the Moon's interest is covered by SettlementTests). */
+    private static void singleSeatStubs() {
+        // Hiker: each scored card permanently gains +5 chips, counted the hand it is earned and stacking after.
+        Run hiker = new Run(0L);
+        hiker.board().add(Jokers.HIKER.make());
+        DeckCard hk1 = new DeckCard(Rank.KING, Suit.SPADES), hk2 = new DeckCard(Rank.KING, Suit.HEARTS);
+        List<DeckCard> pair = List.of(hk1, hk2);
+        checkScore("Hiker +5/card on the first hand", score(hiker, pair), 80);   // (10 + 20 + 5+5) x 2
+        checkInt("Hiker made the king +5 permanent", hk1.getBonusChips(), 5);
+        checkScore("Hiker stacks on the next hand", score(hiker, pair), 100);    // (10 + 20 + 10bonus + 5+5) x 2
+        checkInt("Hiker king now +10", hk1.getBonusChips(), 10);
+
+        ShopPool dollars = stream -> { DeckCard d = new DeckCard(Rank.TWO, Suit.SPADES); d.setShopValue(1); return d; };
+
+        // Scalper: gains X0.1 Mult each time the shop's card row is bought out.
+        Run scalp = new Run(0L);
+        JokerCard scalper = Jokers.SCALPER.make();
+        scalp.board().add(scalper);
+        scalp.addMoney(100 - scalp.getMoney());
+        Shop sshop = new Shop(scalp, 0, 3, dollars);
+        sshop.buy(0); sshop.buy(1);
+        checkInt("Scalper inert until the row empties", scalper.getCounter(), 0);
+        sshop.buy(2);   // the last card empties the row
+        checkInt("Scalper gains on emptying the shop", scalper.getCounter(), 1);
+        checkScore("Scalper X1.1 after one empty", score(scalp, kings()), 66);   // 60 x 1.1
+
+        // Chaos the Clown: the first reroll of each shop is free while owned.
+        Run chaos = new Run(0L);
+        chaos.board().add(Jokers.CHAOS_THE_CLOWN.make());
+        chaos.addMoney(100 - chaos.getMoney());
+        Shop cshop = new Shop(chaos, 0, 3, dollars);
+        checkInt("Chaos: first reroll is free", cshop.rerollCost(), 0);
+        int before = chaos.getMoney();
+        cshop.reroll();
+        checkInt("the free reroll cost nothing", before - chaos.getMoney(), 0);
+        check("Chaos: the second reroll is paid", cshop.rerollCost() > 0);
+        Run plain = new Run(0L); plain.addMoney(100 - plain.getMoney());
+        check("no Chaos -> the first reroll costs", new Shop(plain, 0, 3, dollars).rerollCost() > 0);
     }
 
     private static long score(Run run, List<DeckCard> played) {

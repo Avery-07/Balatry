@@ -141,6 +141,7 @@ public final class ScoringEngine {
     /** Applies one scored card's chips, enhancement, edition and seal to the session. */
     private void scoreScoredCard(ScoringSession s, Run run, DeckCard card, List<DeckCard> destroyed) {
         s.addChips(card.getRank().getChips());
+        if (card.getBonusChips() > 0) s.addChips(card.getBonusChips());   // Hiker's accumulated per-card chip bonus
 
         Enhancement e = card.getEnhancement();
         if (e != null) switch (e) {

@@ -4,6 +4,7 @@ import model.items.DeckCard;
 import model.items.consumables.ConsumableCard;
 import model.items.consumables.Tarots;
 import model.items.jokers.JokerCard;
+import model.items.jokers.Jokers;
 import model.game.Blind;
 import model.game.BossBlind;
 import model.game.scoring.Trigger;
@@ -61,6 +62,9 @@ public final class RoundSettlement {
             run.addMoney(reward + frugal + gold - rental);
         } else {
             int interest = interest(run.getMoney(), run.getInterestCap());   // on money held entering cash-out
+            // To the Moon: an extra $1 of interest per $5 held, on top of the (capped) base — a rate boost, uncapped.
+            if (run.ownsActiveJoker(Jokers.TO_THE_MOON.spec()) && run.getMoney() > 0)
+                interest += run.getMoney() / INTEREST_PER;
             int handsBonus = round.getHandsRemaining() * HAND_BONUS;
             run.addMoney(reward + handsBonus + interest + gold - rental);
         }

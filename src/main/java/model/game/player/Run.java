@@ -68,7 +68,7 @@ public final class Run {
     private int handSize = 8;
     private int baseHands = 4;
     private int baseDiscards = 3;
-    private int interestCap = 5;      // max $ of interest per round (raised by To the Moon / Seed Money)
+    private int interestCap = 5;      // max $ of base interest per round (raised by Seed Money / Money Tree; To the Moon adds uncapped extra)
     private int consumableSlots = 2;  // shared capacity for slot-consuming consumables and relics (NEGATIVE are free)
     private int shopSlots = 3;        // card slots offered per shop
     private int packSlots = 3;        // booster-pack slots offered per shop
@@ -172,6 +172,12 @@ public final class Run {
     public Board board() { return board; }
     /** Unmodifiable view of the joker board, in order (see {@link Board#view()}). */
     public List<JokerCard> getJokers()        { return board.view(); }
+
+    /** Whether this seat holds a non-debuffed joker of {@code spec} — how passive jokers (To the Moon, Chaos the Clown) are read where they act. */
+    public boolean ownsActiveJoker(model.items.jokers.JokerSpec spec) {
+        for (JokerCard j : board.view()) if (j.getSpec() == spec && !j.isDebuffed()) return true;
+        return false;
+    }
     /** Unmodifiable view of the consumable area; mutation goes through create/add/sell/useConsumable. */
     public List<ConsumableCard> getConsumables() { return Collections.unmodifiableList(consumables); }
     /** Unmodifiable view of the full deck; mutation goes through addCardToHand/addCardToDeck/destroyDeckCards/resetDeck. */

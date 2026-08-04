@@ -11,6 +11,7 @@ public final class DeckCard extends Card {
     private Suit suit;
     private Enhancement enhancement;
     private Seal seal;
+    private int bonusChips;   // a permanent, card-local chip bonus that stacks over the run (Hiker); added when the card scores
 
     public DeckCard(Rank rank, Suit suit) {
         this.rank = rank;
@@ -22,6 +23,10 @@ public final class DeckCard extends Card {
 
     public Rank getRank() { return rank; }
     public Suit getSuit() { return suit; }
+
+    /** A permanent chip bonus carried on this card (Hiker); scored on top of the rank's chips every time it plays. */
+    public int getBonusChips() { return bonusChips; }
+    public void addBonusChips(int n) { bonusChips += n; }
     public Enhancement getEnhancement() { return enhancement; }
     public Seal getSeal() { return seal; }
     public void setRank(Rank rank) { this.rank = rank; }   // intrinsic attribute, not a modifier
