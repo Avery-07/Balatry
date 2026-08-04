@@ -67,7 +67,7 @@ public final class BoosterPack extends Card {
         List<Card> options = new ArrayList<>();
         for (int i = 0; i < count; i++) options.add(generate(run, stream));
         // Telescope: a Celestial pack always offers your most-played hand's Planet (planted in the first slot).
-        if (kind == PackKind.CELESTIAL && run.hasTelescope() && !options.isEmpty()) {
+        if (kind == PackKind.CELESTIAL && run.shopMods().hasTelescope() && !options.isEmpty()) {
             HandType most = run.getStats().getMostPlayedHand();
             Planets p = most == null ? null : Planets.forHand(most);
             if (p != null && options.stream().noneMatch(c -> c instanceof ConsumableCard cc && cc.getSpec() == p.spec()))
@@ -88,14 +88,14 @@ public final class BoosterPack extends Card {
 
     private Card generate(Run run, RandomGenerator stream) {
         return switch (kind) {
-            case ARCANA    -> (run.hasOmenGlobe() && stream.nextInt(100) < OMEN_GLOBE_SPECTRAL_SHARE)
+            case ARCANA    -> (run.shopMods().hasOmenGlobe() && stream.nextInt(100) < OMEN_GLOBE_SPECTRAL_SHARE)
                     ? Spectrals.random(stream).make() : Tarots.random(stream).make();   // Omen Globe: Spectrals in Arcana packs
             case CELESTIAL -> Planets.random(stream).make();
             case BUFFOON   -> Jokers.weightedRandom(stream).make();
             case SPECTRAL  -> Spectrals.random(stream).make();
             case MYTH      -> Relics.random(stream).make();
             case STANDARD  -> {   // a real playing card, with rolled enhancement/seal/edition (Illusion boosts the odds)
-                DeckCard d = model.items.PlayingCards.rolled(stream, run.isIllusionActive());
+                DeckCard d = model.items.PlayingCards.rolled(stream, run.shopMods().isIllusionActive());
                 d.setShopValue(1);
                 yield d;
             }

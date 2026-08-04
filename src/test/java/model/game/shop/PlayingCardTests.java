@@ -78,7 +78,7 @@ public final class PlayingCardTests {
     private static void magicTrickAddsShopCards() {
         check("no playing cards in the shop without Magic Trick", countShopPlayingCards(new Run(3L)) == 0);
         Run trick = new Run(3L);
-        trick.setMagicTrickCards(true);
+        trick.shopMods().setMagicTrickCards(true);
         check("Magic Trick puts playing cards in the shop", countShopPlayingCards(trick) > 0);
     }
 
@@ -92,9 +92,9 @@ public final class PlayingCardTests {
     private static void vouchersWireTheFlags() {
         Run run = new Run(5L);
         Vouchers.MAGIC_TRICK.spec().getEffect().apply(run);
-        check("Magic Trick voucher enables shop playing cards", run.isMagicTrickActive() && !run.isIllusionActive());
+        check("Magic Trick voucher enables shop playing cards", run.shopMods().isMagicTrickActive() && !run.shopMods().isIllusionActive());
         Vouchers.ILLUSION.spec().getEffect().apply(run);
-        check("Illusion voucher turns on the boost (keeps Magic Trick)", run.isMagicTrickActive() && run.isIllusionActive());
+        check("Illusion voucher turns on the boost (keeps Magic Trick)", run.shopMods().isMagicTrickActive() && run.shopMods().isIllusionActive());
     }
 
     private static void deterministic() {

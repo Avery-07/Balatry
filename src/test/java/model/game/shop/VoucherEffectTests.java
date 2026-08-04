@@ -47,20 +47,20 @@ public final class VoucherEffectTests {
     private static void flags() {
         Run r = new Run(1L);
         apply(Vouchers.TAROT_MERCHANT, r);
-        checkInt("Tarot Merchant weight", r.getTarotWeightBonus(), 20);
+        checkInt("Tarot Merchant weight", r.shopMods().getTarotWeightBonus(), 20);
         apply(Vouchers.TAROT_TYCOON, r);
-        checkInt("Tarot Tycoon stacks on Merchant", r.getTarotWeightBonus(), 60);
+        checkInt("Tarot Tycoon stacks on Merchant", r.shopMods().getTarotWeightBonus(), 60);
         apply(Vouchers.RELIC_MERCHANT, r);
-        checkInt("Relic Merchant weight", r.getRelicWeightBonus(), 20);
+        checkInt("Relic Merchant weight", r.shopMods().getRelicWeightBonus(), 20);
         apply(Vouchers.RELIC_TYCOON, r);
-        checkInt("Relic Tycoon stacks on Merchant", r.getRelicWeightBonus(), 60);
-        apply(Vouchers.HONE, r);   checkInt("Hone edition rate", r.getEditionRate(), 1);
-        apply(Vouchers.GLOW_UP, r); checkInt("Glow Up edition rate", r.getEditionRate(), 2);
-        apply(Vouchers.HONE, r);   checkInt("Hone never downgrades Glow Up", r.getEditionRate(), 2);
-        apply(Vouchers.OMEN_GLOBE, r); check("Omen Globe flag", r.hasOmenGlobe());
-        apply(Vouchers.OBSERVATORY, r); check("Observatory keeps Telescope", r.hasTelescope() && r.hasObservatory());
-        apply(Vouchers.SHOWMAN, r); check("Showman flag", r.isShowman());
-        apply(Vouchers.ENCORE, r);  check("Encore flag", r.isEncore());
+        checkInt("Relic Tycoon stacks on Merchant", r.shopMods().getRelicWeightBonus(), 60);
+        apply(Vouchers.HONE, r);   checkInt("Hone edition rate", r.shopMods().getEditionRate(), 1);
+        apply(Vouchers.GLOW_UP, r); checkInt("Glow Up edition rate", r.shopMods().getEditionRate(), 2);
+        apply(Vouchers.HONE, r);   checkInt("Hone never downgrades Glow Up", r.shopMods().getEditionRate(), 2);
+        apply(Vouchers.OMEN_GLOBE, r); check("Omen Globe flag", r.shopMods().hasOmenGlobe());
+        apply(Vouchers.OBSERVATORY, r); check("Observatory keeps Telescope", r.shopMods().hasTelescope() && r.shopMods().hasObservatory());
+        apply(Vouchers.SHOWMAN, r); check("Showman flag", r.shopMods().isShowman());
+        apply(Vouchers.ENCORE, r);  check("Encore flag", r.shopMods().isEncore());
     }
 
     private static void shopWeights() {
@@ -127,7 +127,7 @@ public final class VoucherEffectTests {
         for (Rank r : new Rank[]{Rank.TWO, Rank.FOUR, Rank.SIX, Rank.EIGHT, Rank.TEN}) flush.add(new DeckCard(r, Suit.HEARTS));
 
         long without = score(run, flush);
-        run.setObservatory(true);
+        run.shopMods().setObservatory(true);
         long with = score(run, flush);
         check("Observatory adds the held Planet's hand Mult", with > without);
     }

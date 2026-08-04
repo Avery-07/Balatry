@@ -53,15 +53,15 @@ public final class CatalogShopPool implements ShopPool {
     public Card roll(Run run, RandomGenerator stream) {
         // Magic Trick: playing cards join the card row, rolling their modifiers at the same odds packs use (Illusion
         // boosts them). Rolled first and only when active, so a run without the voucher consumes the stream as before.
-        if (run != null && run.isMagicTrickActive() && stream.nextInt(100) < MAGIC_TRICK_CARD_WEIGHT) {
-            model.items.DeckCard card = model.items.PlayingCards.rolled(stream, run.isIllusionActive());
+        if (run != null && run.shopMods().isMagicTrickActive() && stream.nextInt(100) < MAGIC_TRICK_CARD_WEIGHT) {
+            model.items.DeckCard card = model.items.PlayingCards.rolled(stream, run.shopMods().isIllusionActive());
             card.setShopValue(1);
             return card;
         }
 
-        int tarot  = TAROT_WEIGHT  + (run == null ? 0 : run.getTarotWeightBonus());
-        int planet = PLANET_WEIGHT + (run == null ? 0 : run.getPlanetWeightBonus());
-        int relic  = RELIC_WEIGHT  + (run == null ? 0 : run.getRelicWeightBonus());
+        int tarot  = TAROT_WEIGHT  + (run == null ? 0 : run.shopMods().getTarotWeightBonus());
+        int planet = PLANET_WEIGHT + (run == null ? 0 : run.shopMods().getPlanetWeightBonus());
+        int relic  = RELIC_WEIGHT  + (run == null ? 0 : run.shopMods().getRelicWeightBonus());
         int roll = stream.nextInt(JOKER_WEIGHT + tarot + planet + relic);
         if (roll < JOKER_WEIGHT)                  return joker(run, stream);
         if (roll < JOKER_WEIGHT + tarot)          return Tarots.random(stream).make();
@@ -74,13 +74,13 @@ public final class CatalogShopPool implements ShopPool {
      * owned jokers unless Showman/Encore allow them through; then Hone/Glow Up may stamp an edition.
      */
     private static Card joker(Run run, RandomGenerator stream) {
-        if (run != null && run.isEncore() && !run.getJokers().isEmpty() && stream.nextInt(100) < ENCORE_OWNED_CHANCE) {
+        if (run != null && run.shopMods().isEncore() && !run.getJokers().isEmpty() && stream.nextInt(100) < ENCORE_OWNED_CHANCE) {
             JokerCard sample = run.getJokers().get(stream.nextInt(run.getJokers().size()));
             JokerCard copy = new JokerCard(sample.getSpec(), sample.getShopValue());
             applyEdition(copy, run, stream);
             return copy;
         }
-        boolean dedup = run != null && !run.isShowman() && !run.isEncore();
+        boolean dedup = run != null && !run.shopMods().isShowman() && !run.shopMods().isEncore();
         JokerCard jc = Jokers.weightedRandom(stream).make();
         for (int i = 0; dedup && i < DEDUP_TRIES && owns(run, jc); i++) jc = Jokers.weightedRandom(stream).make();
         applyEdition(jc, run, stream);
@@ -94,7 +94,7 @@ public final class CatalogShopPool implements ShopPool {
 
     /** Hone (rate 1) / Glow Up (rate 2): a chance to stamp a shiny edition (Foil/Holo/Poly) on a shop joker. */
     private static void applyEdition(JokerCard jc, Run run, RandomGenerator stream) {
-        int rate = run == null ? 0 : run.getEditionRate();
+        int rate = run == null ? 0 : run.shopMods().getEditionRate();
         if (rate <= 0 || stream.nextInt(100) >= (rate == 1 ? 20 : 35)) return;   // no roll at all when the voucher is absent
         int r = stream.nextInt(100);
         jc.apply(r < 60 ? Edition.FOIL : r < 90 ? Edition.HOLOGRAPHIC : Edition.POLYCHROME);

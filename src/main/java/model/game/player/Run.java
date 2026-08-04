@@ -78,17 +78,7 @@ public final class Run {
     private int shopDiscount;         // % off shop prices (Clearance Sale / Liquidation)
     private int packOptionBonus;      // extra options shown per booster pack (Sampler)
     private int packMegaPickBonus;    // extra cards kept from Mega packs (Connoisseur)
-    private boolean magicTrickCards;  // Magic Trick: playing cards may appear in the shop card row
-    private boolean illusion;         // Illusion: shop/pack playing cards roll their modifiers at boosted odds
-    private int tarotWeightBonus;     // Tarot Merchant/Tycoon: extra shop-appearance weight for Tarots
-    private int planetWeightBonus;    // Planet Merchant/Tycoon: extra shop-appearance weight for Planets
-    private int relicWeightBonus;     // Relic Merchant/Tycoon: extra shop-appearance weight for Relics
-    private int editionRate;          // Hone (1) / Glow Up (2): shiny editions on shop jokers (0 = none)
-    private boolean omenGlobe;        // Omen Globe: Spectral cards may appear in Arcana packs
-    private boolean telescope;        // Telescope: a Celestial pack always includes your most-played hand's Planet
-    private boolean observatory;      // Observatory: held Planets apply their hand's Mult when scoring
-    private boolean showman;          // Showman: the shop may offer items you already own (no de-duplication)
-    private boolean encore;           // Encore: the shop favours jokers/consumables you already own
+    private final ShopModifiers shopMods = new ShopModifiers();   // voucher-driven shop/pack appearance knobs (weights, edition rate, content flags)
     private Round round;              // non-null only during a blind
     private Shop shop;                // non-null only during a shop
     private ScoringSession scoring;   // non-null only during a hand
@@ -540,28 +530,8 @@ public final class Run {
     public void setPackOptionBonus(int n) { packOptionBonus = n; }
     public int getPackMegaPickBonus()  { return packMegaPickBonus; }
     public void setPackMegaPickBonus(int n) { packMegaPickBonus = n; }
-    public boolean isMagicTrickActive() { return magicTrickCards; }
-    public void setMagicTrickCards(boolean b) { magicTrickCards = b; }
-    public boolean isIllusionActive()  { return illusion; }
-    public void setIllusion(boolean b) { illusion = b; }
-    public int getTarotWeightBonus()   { return tarotWeightBonus; }
-    public void addTarotWeight(int n)  { tarotWeightBonus += n; }
-    public int getPlanetWeightBonus()  { return planetWeightBonus; }
-    public void addPlanetWeight(int n) { planetWeightBonus += n; }
-    public int getRelicWeightBonus()   { return relicWeightBonus; }
-    public void addRelicWeight(int n)  { relicWeightBonus += n; }
-    public int getEditionRate()        { return editionRate; }
-    public void setEditionRate(int n)  { editionRate = Math.max(editionRate, n); }   // never downgrade Glow Up back to Hone
-    public boolean hasOmenGlobe()      { return omenGlobe; }
-    public void setOmenGlobe(boolean b) { omenGlobe = b; }
-    public boolean hasTelescope()      { return telescope; }
-    public void setTelescope(boolean b) { telescope = b; }
-    public boolean hasObservatory()    { return observatory; }
-    public void setObservatory(boolean b) { observatory = b; }
-    public boolean isShowman()         { return showman; }
-    public void setShowman(boolean b)  { showman = b; }
-    public boolean isEncore()          { return encore; }
-    public void setEncore(boolean b)   { encore = b; }
+    /** The voucher-driven shop/pack appearance modifiers (weights, edition rate, content flags). */
+    public ShopModifiers shopMods() { return shopMods; }
 
     /** Whether {@code spec} has been redeemed on this run (used for upgrade prerequisites). */
     public boolean hasRedeemed(VoucherSpec spec) { return stats.hasRedeemed(spec); }

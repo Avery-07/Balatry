@@ -77,7 +77,7 @@ public final class ScoringEngine {
         }
 
         // Observatory: each held Planet whose hand matches the one just played applies that hand's Mult again.
-        if (run.hasObservatory() && hand != null) {
+        if (run.shopMods().hasObservatory() && hand != null) {
             long handMult = run.getHandLevels().multFor(hand.type());
             for (ConsumableCard consumable : run.getConsumables()) {
                 if (consumable.isDebuffed()) continue;
