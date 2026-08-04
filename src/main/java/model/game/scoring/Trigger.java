@@ -17,6 +17,7 @@ public enum Trigger {
     ON_SPEND,
     ON_EARN,
     ON_BOSS_DEFEATED,
+    ON_BLIND_SETTLED,    // every seat's blind result for the round is finalised (Vulture reads opponents' outcomes)
     ON_CARD_DESTROYED,   // a deck card was destroyed — the card is on Run#getDestroyedCard (Canio)
     ON_PACK_OPENED,      // a booster pack opening began (Hallucination)
     ON_PACK_SKIPPED,     // a booster pack opening was abandoned via Skip (Red Joker)

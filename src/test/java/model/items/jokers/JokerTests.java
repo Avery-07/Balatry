@@ -448,6 +448,21 @@ public final class JokerTests {
         int before2 = sa2.getMoney();
         score(sa2, kings());   // sa2 plays a Pair, no rival matches -> no pay
         check("Stargazing pays nothing when no rival matches", sa2.getMoney() - before2 == 0);
+
+        // Vulture: gains X0.25 Mult whenever an opponent fails a blind (counted once the results are settled).
+        var vm = model.game.Match.create(73L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        vm.start();   // blind selection off in defaults -> dealt straight into the blind
+        Run va = vm.getRun(vm.getSeats().get(0)), vb = vm.getRun(vm.getSeats().get(1));
+        JokerCard vulture = Jokers.VULTURE.make();
+        va.board().add(vulture);
+        for (Run r : List.of(va, vb)) {   // both finish with a token hand, well under target -> LOST
+            var round = r.getRound();
+            round.play(new java.util.ArrayList<>(round.getHand().subList(0, 1)));
+            round.finish();
+        }
+        vm.toResult();   // settles both, then fires ON_BLIND_SETTLED
+        checkInt("Vulture gains when an opponent fails a blind", vulture.getCounter(), 1);
+        checkScore("Vulture X1.25 after one opponent loss", score(va, kings()), 75);   // 60 x 1.25
     }
 
     private static long score(Run run, List<DeckCard> played) {

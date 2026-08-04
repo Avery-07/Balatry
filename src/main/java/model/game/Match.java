@@ -265,6 +265,8 @@ public final class Match {
 
         for (Player p : players.values()) sinModifier.onRoundSettled(p.run(), results.get(p.id()));
         lastResults = results;
+        // Every seat's jokers now see the complete settled results of this blind (Vulture counts opponent losses).
+        for (PlayerId id : getActiveSeats()) getRun(id).fire(model.game.scoring.Trigger.ON_BLIND_SETTLED);
         awardPoints(results);
         if (blind == Blind.BOSS)
             for (Player p : players.values())

@@ -200,7 +200,22 @@ public enum Jokers {
                 Sticker[] pool = { Sticker.ETERNAL, Sticker.PERISHABLE, Sticker.RENTAL, Sticker.STICKY, Sticker.DELAYED, Sticker.FLOATING, Sticker.FRAGILE };
                 theirs.get(g.nextInt(theirs.size())).apply(pool[g.nextInt(pool.length)]);
             })),
-    VULTURE("Vulture", Rarity.UNCOMMON, 7, b -> b),
+    VULTURE("Vulture", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SEAT_COUPLING)
+            .on(Trigger.ON_BLIND_SETTLED, (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                int failed = 0;
+                for (Player p : m.getPlayers()) {
+                    if (p.run() == run) continue;
+                    var r = m.getResult(p.id());
+                    if (r != null && r.outcome() == model.game.player.RoundOutcome.LOST) failed++;
+                }
+                if (failed > 0) self.addCounter(failed);
+            })
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.25", self.getCounter()));
+            })
+            .state(card -> card.getCounter() == 0 ? null : "X" + onePlus("0.25", card.getCounter()).toPlainString() + " Mult")),
     TRANSPARENT_JOKER("Transparent Joker", Rarity.UNCOMMON, 7, b -> b),
     // endregion
     // region Jokers 031-035
