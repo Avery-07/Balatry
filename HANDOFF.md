@@ -120,17 +120,25 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 
 ## Current content state
 
-- **Jokers: 165.** 17 stubs were implemented in the last session; **9 `b -> b` stubs remain**:
-  - **Cross-player (need cross-seat events/mechanisms, all `SEAT_COUPLING`):** Vulture (needs a reliable "an opponent
-    lost this blind" signal at settlement), Telescope (opponents' played hand types), Transparent Joker (sell-to-copy a
-    leader's joker — needs a joker-copy path + a rounds-owned counter), Espionnage (writes to *other* seats' boards —
-    riskiest for determinism), The Mimic (dynamic ability copy of the leader's same-slot joker, like Blueprint cross-seat).
-  - **Need a new hook each:** Hiker (a per-DeckCard permanent chip bonus — none exists yet), Scalper (a "shop emptied"
-    event), To the Moon (interest-rate change, not just the cap), Chaos the Clown (a free-reroll-per-shop mechanism).
-  - **Cross-seat pattern to copy** (see Robin Hood / Generational Hater / Copyright): `Match m = run.getMatch()` (guard
-    null), then `m.getRun(id)` / `m.getPlayers()` / `m.seatsAbove(id)` / `m.getStandings()`, fired at a settled trigger
-    (ON_ROUND_END, ON_BOSS_DEFEATED), and mark the joker `JokerTrait.SEAT_COUPLING`. Deterministic because the replay
-    order is fixed even though seats legitimately diverge.
+- **Jokers: 165 — all implemented (no `b -> b` stubs remain).** The last 9 were done this session, each tested:
+  - **Single-seat (new hooks added):** Hiker (per-`DeckCard` `bonusChips`, scored in `ScoringEngine`), Scalper
+    (`Trigger.ON_SHOP_EMPTIED`, fired from `Shop.buy`), To the Moon (extra $1 interest per $5 at settlement,
+    uncapped — in `RoundSettlement`, read by ownership), Chaos the Clown (first shop reroll free — in `Shop`, read
+    by ownership). To the Moon and Chaos are **passive**: their enum entries stay `b -> b` and the effect lives where
+    it acts, read via `Run.ownsActiveJoker(spec)`.
+  - **Cross-seat (all `SEAT_COUPLING`):** Stargazing (the old "Telescope"; $3 when a hand type matches a rival's last,
+    via `PlayerStats.getLastHandType`), Vulture (+X0.25 Mult per opponent who fails a blind — new
+    `Trigger.ON_BLIND_SETTLED`, fired for every active seat after `awardPoints` in `Match.toResult`), Transparent
+    Joker (after 2 rounds, sell-to-copy the leader's random joker; the copy is queued on `Run.queueJokerFromSale` and
+    placed by `Board.sell` once the sale frees the slot), The Mimic (registers a delegate on **every** trigger and
+    applies the leader's same-slot joker's effect for that trigger — copies the *whole* ability, e.g. Cloud 9's
+    end-of-round payout, not just `ON_HAND_PLAYED`), Espionnage (arms a same-slot joker debuff on every seat above,
+    reusing `Afflictions.armJokerDebuff` — the Katadesmos mechanism).
+  - **Cross-seat pattern** (see Robin Hood / Generational Hater / Copyright, and now the five above): `Match m =
+    run.getMatch()` (guard null), then `m.getRun(id)` / `m.getPlayers()` / `m.seatsAbove(id)` / `m.getStandings()`,
+    fired at a settled trigger (`ON_ROUND_END`, `ON_BOSS_DEFEATED`, `ON_BLIND_SETTLED`), and mark the joker
+    `JokerTrait.SEAT_COUPLING` (which also excludes it from `DeterminismTests`' mirror-asserted runs). Deterministic
+    because the replay order is fixed even though seats legitimately diverge; keep any RNG keyed and off the base path.
 - Every joker has a description (`Jokers.Descriptions`, keyed by ENUM name) and, where it carries a live variable, a
   `JokerSpec.state(...)` renderer. Rank-reading jokers must route rank checks through `countsAs(run, card, rank)` /
   `anyRank(run, card, predicate)` (Jokers.java) so **Dyscalculie** shifts them; face checks go through `run.isFaceCard(c)`
@@ -203,11 +211,12 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
    `VoucherEffectTests`; `ShopTests`' base-row assertion now allows relics. **Still open here:** relics have **no
    art** — a shop relic tile falls back to the labeled vector panel (`consumableFace`/`jokerTexture` miss the
    name), so add **relic textures** (+ a `relicFace`/cell map in `Renderer`, mirroring `voucherFace`) and
-   **Myth-pack textures**; fill in the **voucher cell map** if the user hasn't (`Renderer.VOUCHER_CELL`); and wire
-   `Decks.png` card backs / `Stakes.png`.
-3. **Finish the remaining 9 stub jokers** (listed under Current content state). The 5 cross-player ones each need a
-   new cross-seat event/mechanism — do them one at a time, tested, not as a batch (determinism is sensitive here).
-   Vulture and Transparent Joker are the most self-contained starting points.
+   **Myth-pack textures**; fill in the **voucher cell map** if the user hasn't (`Renderer.VOUCHER_CELL`).
+   (`Decks.png` card backs and `Stakes.png` are now wired — deck back on the pile, stake chip on the right rail.)
+3. **Stub jokers — DONE.** All 9 are implemented and tested (see Current content state). `Decks.png`/`Stakes.png`
+   are now wired too (deck-back on the pile + stake chip on the right rail, previews in the lobby cyclers). Relics
+   in the shop still lack art (item 2). Remaining texture gaps: **relic art** (+ a `relicFace`/cell map in
+   `Renderer`) and **Myth-pack art**; confirm the **voucher cell map** (`Renderer.VOUCHER_CELL`).
 4. **Reconnect** — the log-replay architecture makes it feasible (send the log, replay, resume) but it is a real
    protocol design task. Kicking is the smaller sibling.
 5. **Wrath's per-round pack** still vanishes unopened on a *played* (won/lost) round — the pending-pack "Open"
