@@ -1,6 +1,7 @@
 package client.game;
 
 import client.MatchSnapshot;
+import client.engine.Easing;
 import client.engine.Layout;
 import javafx.scene.paint.Color;
 import model.items.DeckCard;
@@ -422,6 +423,12 @@ final class Overlays {
         if (text.isEmpty()) return;
 
         double t = ui.reel.beatProgress();
+        // The chip pops in with an overshoot over the first third of the beat, holds, then fades out over the last
+        // ~45% — so it lands with a snap and lingers long enough to read, instead of appearing full-size and fading.
+        double in = Easing.easeOutBack(Easing.clamp01(t / 0.33));
+        double alpha = 1 - Easing.clamp01((t - 0.55) / 0.45);
+        if (alpha <= 0) return;
+
         // A card/joker beat anchors over its tile; an ownerless beat (base hand-type, sin transform, Plasma
         // balance) has no tile, so it lands on the chips×mult readout it reshapes. Only a wholly unplaceable
         // beat (no anchor registered this frame) falls back to centre-screen.
@@ -433,21 +440,32 @@ final class Overlays {
         // where below would collide with what sits under it — there the square rises above instead.
         boolean above = ownerless || (src != null && src.y() + src.h() > Ui.H - 200);
         double baseY = src == null ? Ui.H / 2.0 + 90
-                : (above ? src.y() - 26 : src.y() + src.h() + 22);
-        double cy = baseY - 18 * t;   // drifts as it fades
+                : (above ? src.y() - 30 : src.y() + src.h() + 26);
+        double cy = baseY - 16 * t;   // gentle rise as it settles/fades
 
-        Color fill = switch (e.kind()) {
-            case "CHIPS", "BASE" -> BLUE;
-            case "MULT", "XMULT" -> RED;
-            case "MONEY"         -> GOLD;
-            case "DESTROYED"     -> Color.web("#6b6f78");
-            default              -> PURPLE;   // RETRIGGER, BALANCE
-        };
-        double w = Math.max(58, text.length() * 8.0 + 16), h = 26;
-        r(ui).gc().setGlobalAlpha(Math.max(0, 1 - t * t));   // full early in the beat, gone by its end
-        r(ui).panel(cx - w / 2, cy - h / 2, w, h, fill, Color.web("#0009"), 8, 2);
-        r(ui).textCenterBold(text, cx, cy, 13, INK);
-        r(ui).gc().setGlobalAlpha(1);
+        // Kind styling: XMult is the payoff, so it is the biggest and boldest; chips the calm baseline.
+        Color fill;
+        double emphasis;
+        int font;
+        switch (e.kind()) {
+            case "XMULT"         -> { fill = RED;                 emphasis = 1.34; font = 17; }
+            case "MULT"          -> { fill = RED;                 emphasis = 1.12; font = 15; }
+            case "CHIPS", "BASE" -> { fill = BLUE;                emphasis = 1.00; font = 14; }
+            case "MONEY"         -> { fill = GOLD;                emphasis = 1.06; font = 14; }
+            case "DESTROYED"     -> { fill = Color.web("#6b6f78"); emphasis = 1.00; font = 13; }
+            default              -> { fill = PURPLE;             emphasis = 1.06; font = 14; }   // RETRIGGER, BALANCE
+        }
+        double scale = in * emphasis;
+        double w = (Math.max(60, text.length() * 8.4 + 20)) * scale, h = 30 * scale;
+        double x = cx - w / 2, y = cy - h / 2;
+
+        var g = r(ui).gc();
+        g.setGlobalAlpha(alpha * 0.32);
+        r(ui).panel(x - 7, y - 7, w + 14, h + 14, fill, null, 13, 0);          // soft glow halo
+        g.setGlobalAlpha(alpha);
+        r(ui).panel(x, y, w, h, fill, Color.web("#000a"), 9, 2.5);             // the chip
+        r(ui).textCenterBold(text, cx, cy, font * scale, INK);
+        g.setGlobalAlpha(1);
     }
 
     /** The words on an effect square. */

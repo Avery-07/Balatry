@@ -95,12 +95,18 @@ final class Hud {
                 ix + iw / 2, cy + hName / 2, 15, preview == null ? DIM : ORANGE);
         cy += hName + gap;
 
+        // Each box catches the beat that feeds it: the blue Chips box flares on a chip/base beat, the red Mult box
+        // on a mult/XMult beat — swelling and flashing brightest at the beat's start, so the eye ties the flying
+        // chip to the number climbing. The pulse is 0 outside the scoring reel.
+        double bp = ui.reel.playing() ? 1 - ui.reel.beatProgress() : 0;
+        String kind = beat == null ? "" : beat.kind();
+        double chipsPulse = (kind.equals("CHIPS") || kind.equals("BASE")) ? bp : 0;
+        double multPulse  = (kind.equals("MULT")  || kind.equals("XMULT")) ? bp : 0;
+
         double half = (iw - 30) / 2;
-        r.panel(ix, cy, half, hCM, BLUE, null, 8, 0);
-        r.textCenterBold(whole(chips.displayed()), ix + half / 2, cy + hCM / 2, 30 * chips.popScale(), INK);
+        readoutBox(r, ix, cy, half, hCM, BLUE, whole(chips.displayed()), chips.popScale(), chipsPulse);
         r.textCenterBold("X", ix + half + 15, cy + hCM / 2, 22, RED);
-        r.panel(ix + half + 30, cy, half, hCM, RED, null, 8, 0);
-        r.textCenterBold(whole(mult.displayed()), ix + half + 30 + half / 2, cy + hCM / 2, 30 * mult.popScale(), INK);
+        readoutBox(r, ix + half + 30, cy, half, hCM, RED, whole(mult.displayed()), mult.popScale(), multPulse);
         // The home for ownerless scoring beats (base hand-type, sin transform, Plasma balance): they land on the
         // chips×mult they reshape rather than dead-centre. Overlays.scoreEffect reads this when a beat has no card.
         ui.scoreAnchor = new Layout.Rect(ix, cy, iw, hCM);
@@ -180,6 +186,20 @@ final class Hud {
         r.panel(x, y, w, h, PANEL, EDGE, 8, 2);
         r.textCenter(k, x + w / 2, y + h * 0.30, 12, DIM);
         r.textCenterBold(v, x + w / 2, y + h * 0.66, 24, vc);
+    }
+
+    /**
+     * A chips/mult readout box. {@code pulse} (0..1) is how hard the box is catching its scoring beat right now: it
+     * swells, flashes its fill lighter, and gains a bright ring — so the box visibly reacts as the chip lands, on top
+     * of the number's own count-up thump ({@code popScale}).
+     */
+    private void readoutBox(Renderer r, double x, double y, double w, double h, Color base, String value, double popScale, double pulse) {
+        double grow = 4 * pulse;
+        double px = x - grow, py = y - grow, pw = w + 2 * grow, ph = h + 2 * grow;
+        Color fill = pulse > 0 ? base.interpolate(Color.WHITE, 0.28 * pulse) : base;
+        r.panel(px, py, pw, ph, fill, null, 8, 0);
+        if (pulse > 0.02) r.panel(px, py, pw, ph, null, Color.WHITE, 8, 2 + 2.5 * pulse);   // bright ring on the beat
+        r.textCenterBold(value, px + pw / 2, py + ph / 2, 30 * popScale, INK);
     }
 
     private void drawTopSlots(Ui ui, double x, double y, double w, double h) {
