@@ -38,6 +38,7 @@ public final class JokerTests {
         dyscalculiaRankJokers();
         chefOopsCopyrightJokers();
         singleSeatStubs();
+        crossSeatStubs();
 
         boardInvariants();
 
@@ -425,6 +426,28 @@ public final class JokerTests {
         check("Chaos: the second reroll is paid", cshop.rerollCost() > 0);
         Run plain = new Run(0L); plain.addMoney(100 - plain.getMoney());
         check("no Chaos -> the first reroll costs", new Shop(plain, 0, 3, dollars).rerollCost() > 0);
+    }
+
+    /** The cross-seat (SEAT_COUPLING) stub jokers, wired one at a time. */
+    private static void crossSeatStubs() {
+        // Stargazing: +$3 when the played hand type matches another player's last-played hand.
+        var m = model.game.Match.create(71L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        m.start();
+        Run sa = m.getRun(m.getSeats().get(0)), sb = m.getRun(m.getSeats().get(1));
+        sa.board().add(Jokers.STARGAZING.make());
+        sb.getStats().recordHandPlayed(model.game.scoring.HandType.PAIR);   // the rival's last hand was a Pair
+        int before = sa.getMoney();
+        score(sa, kings());   // sa plays a Pair -> matches the rival -> +$3
+        check("Stargazing pays $3 when a rival last played the same hand", sa.getMoney() - before == 3);
+
+        var m2 = model.game.Match.create(72L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        m2.start();
+        Run sa2 = m2.getRun(m2.getSeats().get(0)), sb2 = m2.getRun(m2.getSeats().get(1));
+        sa2.board().add(Jokers.STARGAZING.make());
+        sb2.getStats().recordHandPlayed(model.game.scoring.HandType.FLUSH);   // a different last hand
+        int before2 = sa2.getMoney();
+        score(sa2, kings());   // sa2 plays a Pair, no rival matches -> no pay
+        check("Stargazing pays nothing when no rival matches", sa2.getMoney() - before2 == 0);
     }
 
     private static long score(Run run, List<DeckCard> played) {

@@ -507,7 +507,15 @@ public enum Jokers {
             .state(self -> "Listed hand this round: " + handTypeName(self.getCounter()))
             .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(HandType.values().length)))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (run.getScoring().getHand().type().ordinal() == self.getCounter()) run.addMoney(4); })),
-    STARGAZING("Stargazing", Rarity.COMMON, 4, b -> b),
+    STARGAZING("Stargazing", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                var mine = run.getScoring().getHand().type();
+                for (Player p : m.getPlayers()) {
+                    if (p.run() == run) continue;
+                    if (p.run().getStats().getLastHandType() == mine) { run.addMoney(3); return; }
+                }
+            })),
     // endregion
     // region Jokers 101-105
     MAIL_IN_REBATE("Mail-In Rebate", Rarity.COMMON, 4, b -> b
