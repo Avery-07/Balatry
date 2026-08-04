@@ -55,6 +55,7 @@ public final class Run {
     private final Board board = new Board(this);   // the joker inventory and its invariants (slots, Eternal, sale)
     private final List<ConsumableCard> consumables = new ArrayList<>();
     private final List<RelicCard> relics = new ArrayList<>();   // held, single-use multiplayer cards
+    private final List<JokerCard> jokersQueuedFromSale = new ArrayList<>();   // Transparent Joker: copies to place once a sale frees a slot
     private final List<DeckCard> deck = new ArrayList<>();   // persistent; reshuffled each round
     private final BossState bossState = new BossState();     // boss-imposed state (Quartz, Pillar, Crimson Heart, flags)
     private final List<BoosterPack> pendingPacks = new ArrayList<>();   // granted, unopened packs (Wrath, pack tags); cleared at round end
@@ -177,6 +178,17 @@ public final class Run {
     public boolean ownsActiveJoker(model.items.jokers.JokerSpec spec) {
         for (JokerCard j : board.view()) if (j.getSpec() == spec && !j.isDebuffed()) return true;
         return false;
+    }
+
+    /** Queues a joker to place on the board once the current sale frees its slot (Transparent Joker's copy). */
+    public void queueJokerFromSale(JokerCard joker) { jokersQueuedFromSale.add(joker); }
+
+    /** Drains the sale-queued jokers (Board.sell calls this after the sold joker is removed); empty if none. */
+    public List<JokerCard> drainJokersQueuedFromSale() {
+        if (jokersQueuedFromSale.isEmpty()) return List.of();
+        List<JokerCard> out = List.copyOf(jokersQueuedFromSale);
+        jokersQueuedFromSale.clear();
+        return out;
     }
     /** Unmodifiable view of the consumable area; mutation goes through create/add/sell/useConsumable. */
     public List<ConsumableCard> getConsumables() { return Collections.unmodifiableList(consumables); }

@@ -79,6 +79,7 @@ public final class Board {
         }
         joker.trigger(Trigger.ON_SOLD, run);
         jokers.remove(index);
+        for (JokerCard queued : run.drainJokersQueuedFromSale()) add(queued);   // Transparent Joker's copy takes the freed slot
         int value = joker.getSellValue();
         run.addMoney(value);
         run.getStats().recordCardSold();

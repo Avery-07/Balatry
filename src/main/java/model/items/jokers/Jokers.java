@@ -216,7 +216,22 @@ public enum Jokers {
                 if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.25", self.getCounter()));
             })
             .state(card -> card.getCounter() == 0 ? null : "X" + onePlus("0.25", card.getCounter()).toPlainString() + " Mult")),
-    TRANSPARENT_JOKER("Transparent Joker", Rarity.UNCOMMON, 7, b -> b),
+    TRANSPARENT_JOKER("Transparent Joker", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SEAT_COUPLING)
+            .on(Trigger.ON_BLIND_SETTLED, (run, self) -> self.addCounter(1))   // rounds owned (every blind, win or lose)
+            .on(Trigger.ON_SOLD, (run, self) -> {
+                if (self.getCounter() < 2) return;                            // only after 2 rounds owned
+                Match m = run.getMatch();
+                if (m == null) return;
+                List<PlayerId> ranking = m.getStandings().ranking();          // the points leader
+                if (ranking.isEmpty()) return;
+                var leader = m.getRun(ranking.get(0));
+                if (leader == run) return;                                    // we are already leading — no one to copy
+                List<JokerCard> theirs = leader.getJokers();
+                if (theirs.isEmpty()) return;
+                JokerCard pick = theirs.get(gen(run, RngSource.MISC).nextInt(theirs.size()));
+                run.queueJokerFromSale(new JokerCard(pick.getSpec()));        // a fresh copy takes the slot the sale frees
+            })
+            .state(card -> "Owned " + card.getCounter() + " round" + (card.getCounter() == 1 ? "" : "s"))),
     // endregion
     // region Jokers 031-035
     FIBONACCI("Fibonacci", Rarity.UNCOMMON, 8, b -> b.on(Trigger.ON_SCORED_CARD,

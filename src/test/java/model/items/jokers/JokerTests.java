@@ -455,6 +455,8 @@ public final class JokerTests {
         Run va = vm.getRun(vm.getSeats().get(0)), vb = vm.getRun(vm.getSeats().get(1));
         JokerCard vulture = Jokers.VULTURE.make();
         va.board().add(vulture);
+        JokerCard transpRounds = Jokers.TRANSPARENT_JOKER.make();   // also counts the settled round
+        va.board().add(transpRounds);
         for (Run r : List.of(va, vb)) {   // both finish with a token hand, well under target -> LOST
             var round = r.getRound();
             round.play(new java.util.ArrayList<>(round.getHand().subList(0, 1)));
@@ -462,7 +464,31 @@ public final class JokerTests {
         }
         vm.toResult();   // settles both, then fires ON_BLIND_SETTLED
         checkInt("Vulture gains when an opponent fails a blind", vulture.getCounter(), 1);
+        checkInt("Transparent counts the settled round", transpRounds.getCounter(), 1);
         checkScore("Vulture X1.25 after one opponent loss", score(va, kings()), 75);   // 60 x 1.25
+
+        // Transparent Joker: after 2 rounds, selling it copies a random joker from the leading player into its slot.
+        var tm = model.game.Match.create(74L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        tm.start();
+        tm.getRun(tm.getSeats().get(0)).board().add(Jokers.JOKER.make());   // seat 0 leads on a points tie (stable order)
+        Run seller = tm.getRun(tm.getSeats().get(1));
+        JokerCard transp = Jokers.TRANSPARENT_JOKER.make();
+        seller.board().add(transp);
+        transp.setCounter(2);   // 2 rounds owned
+        seller.sellJoker(seller.getJokers().indexOf(transp));
+        check("Transparent copied the leader's joker on sale",
+                seller.getJokers().size() == 1 && seller.getJokers().get(0).getSpec() == Jokers.JOKER.spec());
+
+        // Before 2 rounds, selling copies nothing.
+        var tm2 = model.game.Match.create(75L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        tm2.start();
+        tm2.getRun(tm2.getSeats().get(0)).board().add(Jokers.JOKER.make());
+        Run seller2 = tm2.getRun(tm2.getSeats().get(1));
+        JokerCard transpEarly = Jokers.TRANSPARENT_JOKER.make();
+        seller2.board().add(transpEarly);
+        transpEarly.setCounter(1);
+        seller2.sellJoker(0);
+        check("Transparent copies nothing before 2 rounds", seller2.getJokers().isEmpty());
     }
 
     private static long score(Run run, List<DeckCard> played) {
