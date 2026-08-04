@@ -489,6 +489,21 @@ public final class JokerTests {
         transpEarly.setCounter(1);
         seller2.sellJoker(0);
         check("Transparent copies nothing before 2 rounds", seller2.getJokers().isEmpty());
+
+        // The Mimic: copies the ability of the leading player's joker in the same slot.
+        var mm = model.game.Match.create(76L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        mm.start();
+        mm.getRun(mm.getSeats().get(0)).board().add(Jokers.JOKER.make());   // leader's slot 0: +4 Mult
+        Run mimicRun = mm.getRun(mm.getSeats().get(1));
+        mimicRun.board().add(Jokers.THE_MIMIC.make());                       // Mimic at slot 0
+        checkScore("The Mimic copies the leader's same-slot joker", score(mimicRun, kings()), 180);   // 30 x (2+4)
+
+        // With no leader joker in that slot, the Mimic copies nothing.
+        var mm2 = model.game.Match.create(77L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        mm2.start();
+        Run mimicRun2 = mm2.getRun(mm2.getSeats().get(1));
+        mimicRun2.board().add(Jokers.THE_MIMIC.make());                      // leader (seat 0) has no jokers
+        checkScore("The Mimic copies nothing without a same-slot joker", score(mimicRun2, kings()), 60);
     }
 
     private static long score(Run run, List<DeckCard> played) {

@@ -860,7 +860,18 @@ public enum Jokers {
                 }
             })
     ),
-    THE_MIMIC("The Mimic", Rarity.RARE, 10, b -> b),
+    THE_MIMIC("The Mimic", Rarity.RARE, 10, b -> b.trait(JokerTrait.SEAT_COUPLING)
+            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
+                Match m = run.getMatch();
+                if (m == null) return;
+                List<PlayerId> ranking = m.getStandings().ranking();
+                if (ranking.isEmpty()) return;
+                var leader = m.getRun(ranking.get(0));
+                if (leader == run) return;                      // we lead — no one to mimic
+                int slot = run.getJokers().indexOf(self);        // apply the leader's same-slot joker to our scoring
+                List<JokerCard> theirs = leader.getJokers();
+                if (slot >= 0 && slot < theirs.size()) run.getScoring().retriggerJoker(theirs.get(slot));
+            })),
     ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b),
     BLUEPRINT("Blueprint", Rarity.RARE, 10, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
