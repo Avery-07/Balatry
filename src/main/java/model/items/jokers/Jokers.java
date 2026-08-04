@@ -860,18 +860,12 @@ public enum Jokers {
                 }
             })
     ),
-    THE_MIMIC("The Mimic", Rarity.RARE, 10, b -> b.trait(JokerTrait.SEAT_COUPLING)
-            .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
-                Match m = run.getMatch();
-                if (m == null) return;
-                List<PlayerId> ranking = m.getStandings().ranking();
-                if (ranking.isEmpty()) return;
-                var leader = m.getRun(ranking.get(0));
-                if (leader == run) return;                      // we lead — no one to mimic
-                int slot = run.getJokers().indexOf(self);        // apply the leader's same-slot joker to our scoring
-                List<JokerCard> theirs = leader.getJokers();
-                if (slot >= 0 && slot < theirs.size()) run.getScoring().retriggerJoker(theirs.get(slot));
-            })),
+    THE_MIMIC("The Mimic", Rarity.RARE, 10, b -> {
+                // Register the same delegate on every trigger so the copy is the WHOLE joker (Cloud 9's end-of-round
+                // payout, a scoring joker's mult, a shop reaction, ...) — not just its played-hand part.
+                for (Trigger t : Trigger.values()) b.on(t, (run, self) -> mimicCopy(run, self, t));
+                return b.trait(JokerTrait.SEAT_COUPLING);
+            }),
     ESPIONNAGE("Espionnage", Rarity.RARE, 8, b -> b.trait(JokerTrait.SEAT_COUPLING)
             .on(Trigger.ON_BLIND_SETTLED, (run, self) -> {
                 Match m = run.getMatch();
@@ -1174,6 +1168,28 @@ public enum Jokers {
 
     private static DeckCard scored(model.game.player.Run run) {
         return run.getScoring().getCurrentScoredCard();
+    }
+
+    /**
+     * The Mimic's delegate: acts as the leading player's joker in the same board slot, applying that joker's effect
+     * for {@code trigger} against this seat's run. Registered on every trigger, so it copies the whole ability.
+     * Skips a debuffed target or itself; a copied Mimic/Blueprint finds no matching slot on this board and fizzles,
+     * and no joker effect re-fires its own trigger, so there is no unbounded recursion.
+     */
+    private static void mimicCopy(model.game.player.Run run, JokerCard self, Trigger trigger) {
+        Match m = run.getMatch();
+        if (m == null) return;
+        List<PlayerId> ranking = m.getStandings().ranking();
+        if (ranking.isEmpty()) return;
+        var leader = m.getRun(ranking.get(0));
+        if (leader == run) return;                       // we lead — no one to mimic
+        int slot = run.getJokers().indexOf(self);
+        if (slot < 0) return;
+        List<JokerCard> theirs = leader.getJokers();
+        if (slot >= theirs.size()) return;
+        JokerCard copied = theirs.get(slot);
+        if (copied == self || copied.isDebuffed()) return;
+        copied.trigger(trigger, run);                    // be that joker, against this seat's run
     }
 
     private static boolean isSuit(ScoringSession s, Suit suit) {

@@ -490,13 +490,26 @@ public final class JokerTests {
         seller2.sellJoker(0);
         check("Transparent copies nothing before 2 rounds", seller2.getJokers().isEmpty());
 
-        // The Mimic: copies the ability of the leading player's joker in the same slot.
+        // The Mimic: copies the leading player's same-slot joker — its scoring ability...
         var mm = model.game.Match.create(76L, List.of("A", "B"), model.game.MatchConfig.defaults());
         mm.start();
         mm.getRun(mm.getSeats().get(0)).board().add(Jokers.JOKER.make());   // leader's slot 0: +4 Mult
         Run mimicRun = mm.getRun(mm.getSeats().get(1));
         mimicRun.board().add(Jokers.THE_MIMIC.make());                       // Mimic at slot 0
-        checkScore("The Mimic copies the leader's same-slot joker", score(mimicRun, kings()), 180);   // 30 x (2+4)
+        checkScore("The Mimic copies the leader's same-slot scoring joker", score(mimicRun, kings()), 180);   // 30 x (2+4)
+
+        // ...and its non-scoring ability too: Cloud 9 pays $1 per 9 in the deck at round end.
+        var mm3 = model.game.Match.create(79L, List.of("A", "B"), model.game.MatchConfig.defaults());
+        mm3.start();
+        mm3.getRun(mm3.getSeats().get(0)).board().add(Jokers.CLOUD_9.make());   // leader's slot 0: Cloud 9
+        Run mimicRun3 = mm3.getRun(mm3.getSeats().get(1));
+        mimicRun3.board().add(Jokers.THE_MIMIC.make());                          // Mimic at slot 0
+        mimicRun3.resetDeck(List.of());
+        mimicRun3.addCardToDeck(new DeckCard(Rank.NINE, Suit.SPADES));
+        mimicRun3.addCardToDeck(new DeckCard(Rank.NINE, Suit.HEARTS));
+        int cloudBefore = mimicRun3.getMoney();
+        mimicRun3.getJokers().get(0).trigger(Trigger.ON_ROUND_END, mimicRun3);   // the Mimic's ON_ROUND_END delegates to Cloud 9
+        checkInt("The Mimic copies Cloud 9's end-of-round payout ($1/nine)", mimicRun3.getMoney() - cloudBefore, 2);
 
         // With no leader joker in that slot, the Mimic copies nothing.
         var mm2 = model.game.Match.create(77L, List.of("A", "B"), model.game.MatchConfig.defaults());
