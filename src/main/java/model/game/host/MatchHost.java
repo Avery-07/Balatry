@@ -113,11 +113,10 @@ public final class MatchHost {
             var run = match.getRun(id);
             var round = run.getRound();
             if (round == null || round.getOutcome() == RoundOutcome.IN_PROGRESS) return false;
-            // A SKIPPED round still owes the seat the free pack its tag granted: hold the barrier until it is opened
-            // and picked, so the pack isn't discarded unopened when the round settles. (A played round's packs are
-            // out of scope — a skip is the only place we currently surface a pending pack to open.)
-            if (round.getOutcome() == RoundOutcome.SKIPPED
-                    && (run.getCurrentOpening() != null || !run.getPendingPacks().isEmpty())) return false;
+            // A resolved round may still owe the seat a free pack (Wrath's per-round pack, a skip tag's pack): hold the
+            // barrier until it is opened and picked, so the pack isn't discarded unopened when the round settles —
+            // whether the round was skipped or played out.
+            if (run.getCurrentOpening() != null || !run.getPendingPacks().isEmpty()) return false;
         }
         return true;
     }

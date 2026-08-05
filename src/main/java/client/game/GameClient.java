@@ -451,9 +451,9 @@ public final class GameClient extends Application {
         hud.render(ui);
         boolean blindWait = ui.atBlindBarrier();   // this seat is done with the blind, waiting on the others
         boolean packOpen = ui.s.opening() != null;
-        // A skipped round can still owe the seat the free pack its tag granted: the barrier waits for it, and the
-        // seat gets an "Open" gate here rather than the dead waiting popup.
-        boolean packToOpen = blindWait && ui.blindSkipped() && !packOpen && !ui.s.pendingPacks().isEmpty();
+        // A resolved round can still owe the seat a free pack (a skip tag's, or Wrath's per-round pack): the barrier
+        // waits for it, and the seat gets an "Open" gate here rather than the dead waiting popup — skipped or played.
+        boolean packToOpen = blindWait && !packOpen && !ui.s.pendingPacks().isEmpty();
         if (!packOpen) ui.packSel = -1;   // no pack open: drop any stale preview selection
         if (packOpen) {
             overlays.pack(ui);   // the pack panel sits up top until its picks are spent

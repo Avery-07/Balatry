@@ -17,6 +17,7 @@ public final class HostTests {
 
     public static void main(String[] args) {
         blindBarrier();
+        wrathPackHoldsPlayedBarrier();
         shopReadiness();
         rejectionHygiene();
         fullMatchReplay();
@@ -27,7 +28,7 @@ public final class HostTests {
 
     /** The blind phase advances by itself the moment the last seat's round resolves. */
     private static void blindBarrier() {
-        MatchHost host = MatchHost.create(300L, List.of("A", "B"));
+        MatchHost host = sinless(300L);   // pin sins off: this is the pure barrier, no random pack-granting sin
         host.start();
         Match m = host.getMatch();
         PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
@@ -43,9 +44,38 @@ public final class HostTests {
                 && m.getRun(a).getShop() != null);
     }
 
+    /** Wrath's per-round free pack holds the blind barrier on a PLAYED round too (not only a skip) until it is opened. */
+    private static void wrathPackHoldsPlayedBarrier() {
+        MatchHost host = new MatchHost(Match.create(310L, List.of("A", "B"),
+                MatchHost.networkedConfig().withSinSelector((ante, rng) -> model.game.Sin.WRATH)));
+        host.start();
+        Match m = host.getMatch();
+        PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
+        playInto(host);   // SELECTION -> BLIND; Wrath grants each seat a Mega Myth Pack at blind begin
+        check("Wrath granted a pending pack at blind begin", !m.getRun(a).getPendingPacks().isEmpty());
+
+        for (PlayerId id : List.of(a, b)) {   // play the round out (not skip), then finish -> a resolved, played round
+            var round = m.getRun(id).getRound();
+            List<Integer> idx = new ArrayList<>();
+            for (int i = 0; i < Math.min(5, round.getHand().size()); i++) idx.add(i);
+            host.submit(new Action.PlayHand(id, idx));
+            if (m.getRun(id).getRound() != null && m.getRun(id).getRound().getOutcome() == RoundOutcome.IN_PROGRESS)
+                host.submit(new Action.FinishRound(id));
+        }
+        check("both played rounds resolved, but the barrier holds for the unopened Wrath packs",
+                m.getPhase() == MatchPhase.BLIND);
+
+        host.submit(new Action.OpenPack(a, 0));
+        host.submit(new Action.SkipPack(a));
+        check("one seat clearing its pack is not enough", m.getPhase() == MatchPhase.BLIND);
+        host.submit(new Action.OpenPack(b, 0));
+        host.submit(new Action.SkipPack(b));
+        check("both packs resolved crosses to the result", m.getPhase() == MatchPhase.RESULT);
+    }
+
     /** Shop readiness: all seats ready advances; acting revokes; NotReady revokes; wrong phase rejects. */
     private static void shopReadiness() {
-        MatchHost host = MatchHost.create(301L, List.of("A", "B"));
+        MatchHost host = sinless(301L);
         host.start();
         Match m = host.getMatch();
         PlayerId a = m.getSeats().get(0), b = m.getSeats().get(1);
@@ -82,7 +112,7 @@ public final class HostTests {
 
     /** A rejected action never enters the log and never advances a barrier. */
     private static void rejectionHygiene() {
-        MatchHost host = MatchHost.create(302L, List.of("A", "B"));
+        MatchHost host = sinless(302L);
         host.start();
         PlayerId a = host.getMatch().getSeats().get(0);
         playInto(host);
@@ -120,20 +150,31 @@ public final class HostTests {
                 for (PlayerId id : m.getSeats()) host.submit(new Action.PlayBlind(id));
             } else if (m.getPhase() == MatchPhase.BLIND) {
                 for (PlayerId id : m.getSeats()) {
-                    var round = m.getRun(id).getRound();
-                    if (round == null || round.getOutcome() != RoundOutcome.IN_PROGRESS) continue;
-                    int cards = Math.min(5, round.getHand().size());
-                    List<Integer> indices = new ArrayList<>();
-                    for (int i = 0; i < cards; i++) indices.add(i);
-                    host.submit(new Action.PlayHand(id, indices));
-                    if (m.getRun(id).getRound() != null
-                            && m.getRun(id).getRound().getOutcome() == RoundOutcome.IN_PROGRESS)
-                        host.submit(new Action.FinishRound(id));
+                    var run = m.getRun(id);
+                    var round = run.getRound();
+                    if (round != null && round.getOutcome() == RoundOutcome.IN_PROGRESS) {
+                        int cards = Math.min(5, round.getHand().size());
+                        List<Integer> indices = new ArrayList<>();
+                        for (int i = 0; i < cards; i++) indices.add(i);
+                        host.submit(new Action.PlayHand(id, indices));
+                        if (run.getRound() != null && run.getRound().getOutcome() == RoundOutcome.IN_PROGRESS)
+                            host.submit(new Action.FinishRound(id));
+                    } else if (run.getCurrentOpening() != null) {
+                        host.submit(new Action.SkipPack(id));       // abandon a granted pack's picks
+                    } else if (!run.getPendingPacks().isEmpty()) {
+                        host.submit(new Action.OpenPack(id, 0));    // a Wrath/tag pack must be opened for the barrier to pass
+                    }
                 }
             } else if (m.getPhase() == MatchPhase.RESULT || m.getPhase() == MatchPhase.SHOP) {
                 for (PlayerId id : m.getSeats()) host.submit(new Action.ReadyForNext(id));
             }
         }
+    }
+
+    /** A host with sins pinned off — for tests of pure barrier/shop mechanics that should not ride a random sin. */
+    private static MatchHost sinless(long seed) {
+        return new MatchHost(Match.create(seed, List.of("A", "B"),
+                MatchHost.networkedConfig().withSinSelector(model.game.SinSelector.NONE)));
     }
 
     /** Every seat chooses to play, crossing SELECTION -> BLIND. */

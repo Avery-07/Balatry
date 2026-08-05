@@ -203,7 +203,10 @@ public final class DisconnectTests {
     private static MatchHost twoSeatHost()   { return startedHost(List.of("A", "B")); }
 
     private static MatchHost startedHost(List<String> names) {
-        MatchHost host = new MatchHost(Match.create(31L, names, MatchHost.networkedConfig()));
+        // Sins off: these tests exercise departure/barrier mechanics, not a random pack-granting sin (Wrath's
+        // per-round pack would otherwise hold the barrier and change what "resolved" means here).
+        MatchHost host = new MatchHost(Match.create(31L, names,
+                MatchHost.networkedConfig().withSinSelector(model.game.SinSelector.NONE)));
         host.start();
         return host;
     }
