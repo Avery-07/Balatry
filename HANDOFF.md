@@ -146,8 +146,9 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 - **Consumables / relics: fully implemented and described.** Targeted consumables declare `ConsumableSpec.minTargets`,
   enforced in `Run.useConsumable` (refused, card kept) and mirrored in the UI.
 - **Vouchers: all live.** `BLANK` is an intentional no-op (Antimatter's prerequisite).
-  The wiring uses per-run knobs on `Run` (`tarot/planet/relicWeightBonus`, `editionRate`, `omenGlobe`/`telescope`/
-  `observatory`/`showman`/`encore`, `magicTrickCards`/`illusion`): Tarot/Planet/Relic Merchant & Tycoon add shop
+  The appearance knobs now live on `ShopModifiers` (via `run.shopMods()`): `tarot/planet/relicWeightBonus`,
+  `editionRate`, `omenGlobe`/`telescope`/`observatory`/`showman`/`encore`, `magicTrickCards`/`illusion`. The
+  structural knobs (`shopSlots`, `baseRerollCost`, `handSize`, `interestCap`, …) stay on `Run`. Tarot/Planet/Relic Merchant & Tycoon add shop
   appearance weight (read in `CatalogShopPool`), Hone/Glow Up stamp editions on shop jokers, Omen Globe puts
   Spectrals in Arcana packs, Telescope plants your most-played Planet in a Celestial pack, Observatory adds a held
   Planet's Mult in scoring (`ScoringEngine` Phase C), **Showman** removes the new own-item shop de-duplication,
@@ -199,30 +200,79 @@ card: position, selection, flip, drag), `Reconciler` (diff a snapshot into retai
 
 ## What's next (recommended order)
 
-1. **Eyeball the large batch of un-verified client visuals** (no display here). Everything from this session is
-   compile-verified only: the **edition shimmers** (`EditionArt` intensities are guesses — foil blue, poly alpha,
-   negative navy are tunable constants), all the **textures** (playing cards + enhancement/seal, consumables,
-   packs, vouchers), the **collection** screen, the **ante-change banner** and **sin hover**, the **dev panel**,
-   and the earlier shop/top-bar redesign. Confirm they read right before building more UI on top.
-2. **Relics in the shop — DONE.** Relics now roll into the shop card row at a base ~14/114 share (like Tarots), a
-   `RELIC_WEIGHT` band in `CatalogShopPool`; Relic Merchant/Tycoon add `Run.relicWeightBonus` (+20/+40, like the
-   Tarot/Planet vouchers) so both are live. Buy/pricing already existed (`RelicCard` is a `MarketCard`, $5, sell
-   $2; `run.acquire`/`canAcquire` handle it — relics share the consumable slot pool). Covered by
-   `VoucherEffectTests`; `ShopTests`' base-row assertion now allows relics. **Still open here:** relics have **no
-   art** — a shop relic tile falls back to the labeled vector panel (`consumableFace`/`jokerTexture` miss the
-   name), so add **relic textures** (+ a `relicFace`/cell map in `Renderer`, mirroring `voucherFace`) and
-   **Myth-pack textures**; fill in the **voucher cell map** if the user hasn't (`Renderer.VOUCHER_CELL`).
-   (`Decks.png` card backs and `Stakes.png` are now wired — deck back on the pile, stake chip on the right rail.)
-3. **Stub jokers — DONE.** All 9 are implemented and tested (see Current content state). `Decks.png`/`Stakes.png`
-   are now wired too (deck-back on the pile + stake chip on the right rail, previews in the lobby cyclers). Relics
-   in the shop still lack art (item 2). Remaining texture gaps: **relic art** (+ a `relicFace`/cell map in
-   `Renderer`) and **Myth-pack art**; confirm the **voucher cell map** (`Renderer.VOUCHER_CELL`).
-4. **Reconnect** — the log-replay architecture makes it feasible (send the log, replay, resume) but it is a real
-   protocol design task. Kicking is the smaller sibling.
-5. **Wrath's per-round pack** still vanishes unopened on a *played* (won/lost) round — the pending-pack "Open"
-   prompt was scoped to *skipped* rounds. Extending it to the played-round barrier would close that.
+1. **Eyeball the VERY large batch of un-verified client visuals** (no display here — an entire session of client
+   work is compile-only). Highest-value next step; confirm before building more UI on top:
+   - **Editions**, just reworked per-effect (`EditionArt` + `Renderer.editionEffect`): Foil = rotating clock-hand
+     streak (SCREEN); Holographic = triangular-grid hue, static (OVERLAY); Polychrome = smooth flowing hue
+     (OVERLAY); Negative = near-white DIFFERENCE = a real photo-negative. All intensities/alphas are tunable
+     constants. **Caveat: Poly/Holo are OVERLAY colourisations, not literal per-pixel hue rotation** — a true
+     rotation needs each editioned card rendered OFF-SCREEN first (cards draw under rotation transforms, so their
+     pixels can't be read back cheaply). Offer that refactor if the user wants literal hue rotation.
+   - **Animation juice**: squash & stretch (`client.engine.Squash` + `Motion` velocity), springy pops
+     (`client.engine.Spring` behind `Counter`), soft settle bounce (`Easing.EASE_OUT_BACK_SOFT`). Tunables:
+     `Squash.MAX`/`REF_SPEED`, the `Counter` spring params.
+   - **Background**: floating square motes (`client.engine.Particles`, tinted with the palette's two mains); a
+     per-state-change semi-random palette (`client.engine.BackgroundPalette`: two wide-apart jewel mains + a
+     darkened blend); ante-driven agitation (swirl + mote speed). `PaintField`/`Background` now render OFF the FX
+     thread, parallel + precomputed, with the animation phase integrated (a mid-run speed change no longer twirls).
+   - **Scoring**: punchier pop-in effect chips (kind-styled, XMult biggest) + the chips/mult HUD boxes flare on
+     their beat.
+   - **In-game Options overlay** (sidebar Options → Collection + Surrender) and the leaver-loses standings.
+   - Plus the still-unverified earlier pile: textures, decks/stakes art, relic shop tiles, collection screen,
+     ante banner, sin hover, dev panel, shop/top-bar redesign.
+2. **Textures still missing**: **relic art** (+ a `relicFace`/cell map in `Renderer`, mirroring `voucherFace`) and
+   **Myth-pack art** — a relic in the shop / a Myth pack falls back to a labelled vector tile. Confirm the
+   **voucher cell map** (`Renderer.VOUCHER_CELL`) is filled. (`Decks.png`/`Stakes.png` are wired.)
+3. **Reconnect** (+ kicking) — the log-replay architecture makes it feasible (send the log, replay, resume) but it
+   is a real protocol task. Not started.
+4. **Optional maintainability**: `MatchSnapshot.of(...)` is a ~40-arg positional constructor (a builder / sub-records
+   would kill the "duplicate an arg" footgun that recurs whenever a snapshot field is added). Further `Run`
+   god-object slicing was deliberately stopped after `ShopModifiers` — the rest is low-value or genuinely core
+   run parameters (loadout, economy) that belong on `Run`.
 
-## This session — what landed (model bits tested; client visuals compile-only, NOT eyeballed)
+## This session — what landed (model tested; client visuals compile-only, NOT eyeballed)
+
+All committed to `master`. **33 harnesses green** throughout. Highlights (each committed separately):
+
+**Content — the last 9 stub jokers, all implemented and tested** (per-joker detail under Current content state):
+Hiker, Scalper, To the Moon, Chaos the Clown (single-seat), then Stargazing, Vulture, Transparent Joker, The
+Mimic, Espionnage (cross-seat, `SEAT_COUPLING`). New reusable hooks:
+- `Trigger.ON_SHOP_EMPTIED` — fired from `Shop.buy` when the card row is bought out (Scalper).
+- `Trigger.ON_BLIND_SETTLED` — fired for every active seat in `Match.toResult` AFTER `awardPoints`, once all
+  results/standings are final (Vulture/Transparent/Espionnage). A reliable post-settlement signal, unlike
+  ON_ROUND_END (which fires mid-settlement, on won rounds only).
+- `Run.ownsActiveJoker(spec)` — passive jokers read by ownership (To the Moon in `RoundSettlement`, Chaos in `Shop`).
+- `Run.queueJokerFromSale` + `Board.sell` drain — Transparent's copy takes the slot the sale frees.
+- `DeckCard.bonusChips` — Hiker's permanent per-card chip bonus, scored in `ScoringEngine`.
+- The Mimic registers a delegate on EVERY trigger → copies the leader's same-slot joker's WHOLE ability (Cloud 9's
+  end-of-round payout, etc.), depth-guarded via `ScoringSession.retriggerJoker`.
+
+**Relics in the shop + decks/stakes**: a `RELIC_WEIGHT` band in `CatalogShopPool` (~14/114, like Tarots) + Relic
+Merchant/Tycoon (`ShopModifiers.relicWeightBonus`). `Decks.png`/`Stakes.png` wired (deck back on the pile, stake
+chip on the right rail, previews in the lobby cyclers).
+
+**Client (ALL compile-only, not eyeballed):**
+- In-game **Options overlay** (sidebar Options → Collection [`client.game.Collection`, shared with the menu] +
+  Surrender). **Leaving/surrendering loses**: `Match.displayRanking()` sinks departed seats below everyone still
+  in; a mid-match disconnect resolves locally as a win for the last seat standing.
+- **Animation juice**: `client.engine.Spring` (damped spring) + `client.engine.Squash` (velocity→stretch); `Motion`
+  now tracks velocity; cards/tiles squash & stretch; `Counter` pops via a spring; `Easing.EASE_OUT_BACK_SOFT`.
+- **Background**: `client.engine.Particles` (square spinning motes, palette-tinted); `client.engine.BackgroundPalette`
+  (per-state semi-random palette: two wide-apart jewel mains + darkened blend; ante-driven agitation; boss no longer
+  special). `PaintField`/`Background` render OFF the FX thread, parallel + precomputed, phase integrated.
+- **Scoring**: kind-styled pop-in effect chips + chips/mult HUD boxes flare on their beat.
+- **Editions reworked** per effect (see What's next item 1 for the four looks + the poly/holo caveat).
+
+**Fixes / maintainability:**
+- **Wrath's per-round pack** now surfaces on PLAYED rounds too (`MatchHost.allRoundsResolved` and the `GameClient`
+  pending-pack prompt no longer scoped to skips). Barrier/disconnect tests pin sins off.
+- **Joker descriptions** de-duplicated into the enum constructor (the string-keyed `Descriptions.MAP` is gone —
+  the wrong-key bug class with it).
+- **`ShopModifiers`** extracted off `Run` (voucher appearance knobs: weights, edition rate, Omen Globe, Telescope,
+  Observatory, Showman, Encore, Magic Trick, Illusion → `run.shopMods()`). First slice of the Run god-object
+  breakup; deliberately stopped there (see What's next item 4).
+
+## Previous session — textures, atlas & Balatry model content (model bits tested; client compile-only)
 
 **Textures & the atlas layer (all in `Renderer`, fed by `GameClient.loadAssets`).**
 - Per-joker PNGs via `jokerTexture(displayName)` — key = display name with non-alphanumerics stripped
