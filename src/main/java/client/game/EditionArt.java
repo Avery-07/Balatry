@@ -55,20 +55,22 @@ final class EditionArt {
                 double ax = u - 0.5, ay = v - 0.5;
                 double r = clamp(Math.hypot(ax, ay) * 2.0, 0, 1);   // 0 centre -> 1 edge
 
-                // FOIL — a narrow lighter streak sweeping around like a clock hand, brighter toward the edge.
+                // FOIL — a lighter streak sweeping around like a clock hand, brighter toward the edge. A wider,
+                // brighter beam than a pin-thin one so it actually reads as it sweeps.
                 double beam = t * 0.9;                               // the hand's rotation
                 double da = angleDiff(Math.atan2(ay, ax), beam);
-                double streak = Math.pow(Math.max(0, Math.cos(da)), 8);
-                double fi = clamp(streak * (0.22 + 0.9 * r), 0, 1);
-                fBuf[py * W + px] = argb(255, fi * 0.35, fi * 0.6, fi);
+                double streak = Math.pow(Math.max(0, Math.cos(da)), 4);
+                double fi = clamp(streak * (0.45 + 1.15 * r), 0, 1);
+                fBuf[py * W + px] = argb(255, fi * 0.6, fi * 0.82, fi);
 
                 // POLYCHROME — a smooth non-uniform hue that flows with time.
                 double ph = u * 0.6 + v * 0.35 + 0.15 * Math.sin((u + v) * 6.0 + t) + t * 0.10;
-                pBuf[py * W + px] = hsb(ph, 0.85, 0.6, 255);
+                pBuf[py * W + px] = hsb(ph, 0.95, 0.78, 255);
 
-                // NEGATIVE — a bright, slowly drifting field; DIFFERENCE flips the card toward its complement.
+                // NEGATIVE — a NEAR-WHITE, slowly drifting field: DIFFERENCE against it flips the card toward its
+                // complement (a photo-negative), the faint hue giving it just a tint rather than a colour wash.
                 double nh = u * 0.5 + v * 0.4 + t * 0.06;
-                nBuf[py * W + px] = hsb(nh, 0.30, 0.95, 255);
+                nBuf[py * W + px] = hsb(nh, 0.10, 1.0, 255);
             }
         }
         foil.getPixelWriter().setPixels(0, 0, W, H, fmt, fBuf, 0, W);
@@ -81,7 +83,7 @@ final class EditionArt {
         for (int py = 0; py < H; py++) {
             for (int px = 0; px < W; px++) {
                 double u = (px + 0.5) / W, v = (py + 0.5) / H;
-                hBuf[py * W + px] = hsb(triangleHue(u, v), 0.8, 0.7, 255);
+                hBuf[py * W + px] = hsb(triangleHue(u, v), 0.9, 0.85, 255);
             }
         }
         holo.getPixelWriter().setPixels(0, 0, W, H, PixelFormat.getIntArgbInstance(), hBuf, 0, W);

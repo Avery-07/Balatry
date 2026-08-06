@@ -360,9 +360,9 @@ public final class Renderer {
         clipRoundRect(x, y, w, h, arc);
         switch (edition) {
             case 0 -> { g.setGlobalBlendMode(BlendMode.SCREEN);  g.drawImage(editions.foil(), x, y, w, h); }   // FOIL
-            case 1 -> { g.setGlobalBlendMode(BlendMode.OVERLAY); g.setGlobalAlpha(0.75); g.drawImage(editions.holo(), x, y, w, h); }  // HOLOGRAPHIC
-            case 2 -> { g.setGlobalBlendMode(BlendMode.OVERLAY); g.setGlobalAlpha(0.7);  g.drawImage(editions.poly(), x, y, w, h); }  // POLYCHROME
-            case 3 -> { g.setGlobalBlendMode(BlendMode.DIFFERENCE); g.setGlobalAlpha(0.9); g.drawImage(editions.neg(), x, y, w, h); } // NEGATIVE (near-complement)
+            case 1 -> { g.setGlobalBlendMode(BlendMode.OVERLAY); g.setGlobalAlpha(0.95); g.drawImage(editions.holo(), x, y, w, h); }  // HOLOGRAPHIC
+            case 2 -> { g.setGlobalBlendMode(BlendMode.OVERLAY); g.setGlobalAlpha(0.9);  g.drawImage(editions.poly(), x, y, w, h); }  // POLYCHROME
+            case 3 -> { g.setGlobalBlendMode(BlendMode.DIFFERENCE); g.drawImage(editions.neg(), x, y, w, h); } // NEGATIVE: full DIFFERENCE = photo-negative
             default -> { }
         }
         g.restore();
