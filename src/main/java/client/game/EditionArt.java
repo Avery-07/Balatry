@@ -5,14 +5,21 @@ import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
 
 /**
- * The animated shimmer for card editions, computed the way Balatro's own {@code foil} shader does: a per-pixel
- * pattern of overlapping radial ripples, an angular streak, and two axis-aligned bands, combined into a single
- * intensity {@code maxfac}. That intensity drives three small (card-sized) buffers rebuilt a few times a second on
- * the frame clock — Foil (blue-shifted, exactly as the shader tints it), Holographic (the same pattern mapped to a
- * rainbow hue), and Polychrome (a smooth flowing spectrum). {@link Renderer} blits the right buffer over each card
- * with a SCREEN blend, so the pattern lightens the art without a fragment shader (JavaFX Canvas has none).
+ * Per-edition overlay patterns, one small (card-sized) buffer each, rebuilt a few times a second on the frame clock
+ * and blitted over each card by {@link Renderer#editionEffect} with an edition-specific blend. JavaFX Canvas has no
+ * fragment shader and cards are drawn under rotation transforms (so their pixels can't be cheaply read back), so
+ * each effect is expressed as a pattern-over-the-card blend rather than a true per-pixel transform of the art:
  *
- * <p>Reference: the community Godot port of Balatro's foil shader (CC0), godotshaders.com/shader/balatro-foil-card-effect.
+ * <ul>
+ *   <li><b>Foil</b> — a lighter foil-blue streak sweeping from centre to edge like a clock hand; SCREEN (additive).</li>
+ *   <li><b>Holographic</b> — a non-uniform hue laid out in a triangular grid, static (no animation); OVERLAY.</li>
+ *   <li><b>Polychrome</b> — a smooth, spatially-varying hue that flows over time; OVERLAY.</li>
+ *   <li><b>Negative</b> — a bright, gently drifting field blitted with DIFFERENCE, which flips the card toward its
+ *       near-complement (so it reads as an inverted card rather than a tint).</li>
+ * </ul>
+ *
+ * Poly/Holo are OVERLAY colourisations (they read as a shifting hue) rather than a literal hue rotation of the art;
+ * a true rotation would need the card rendered off-screen first (see the class note).
  */
 final class EditionArt {
 
@@ -22,60 +29,76 @@ final class EditionArt {
     private final WritableImage foil = new WritableImage(W, H);
     private final WritableImage holo = new WritableImage(W, H);
     private final WritableImage poly = new WritableImage(W, H);
-    private final int[] fBuf = new int[W * H], hBuf = new int[W * H], pBuf = new int[W * H];
+    private final WritableImage neg  = new WritableImage(W, H);
+    private final int[] fBuf = new int[W * H], hBuf = new int[W * H], pBuf = new int[W * H], nBuf = new int[W * H];
     private double nextBuild = -1;
+    private boolean holoBuilt;   // Holographic is static — build its buffer once
 
     Image foil() { return foil; }
     Image holo() { return holo; }
     Image poly() { return poly; }
+    Image neg()  { return neg; }
 
-    /** Rebuilds the buffers if enough frame time has passed since the last (throttled to {@link #REBUILD_HZ}). */
+    /** Rebuilds the animated buffers if enough frame time has passed since the last (throttled to {@link #REBUILD_HZ}). */
     void ensure(double t) {
+        if (!holoBuilt) { buildHolo(); holoBuilt = true; }
         if (t < nextBuild) return;
         nextBuild = t + 1.0 / REBUILD_HZ;
         build(t);
     }
 
     private void build(double t) {
+        var fmt = PixelFormat.getIntArgbInstance();
         for (int py = 0; py < H; py++) {
             for (int px = 0; px < W; px++) {
                 double u = (px + 0.5) / W, v = (py + 0.5) / H;
-                double ax = u - 0.5, ay = v - 0.5;   // adjusted_uv, the shader's centred coords
-                double m = pattern(ax, ay, u, v, t);
+                double ax = u - 0.5, ay = v - 0.5;
+                double r = clamp(Math.hypot(ax, ay) * 2.0, 0, 1);   // 0 centre -> 1 edge
 
-                double fi = clamp(m * 0.16, 0, 1);   // Foil: the shader boosts blue hard, r/g gently
-                fBuf[py * W + px] = argb(255, fi * 0.30, fi * 0.55, Math.min(1, fi * 1.5));
+                // FOIL — a narrow lighter streak sweeping around like a clock hand, brighter toward the edge.
+                double beam = t * 0.9;                               // the hand's rotation
+                double da = angleDiff(Math.atan2(ay, ax), beam);
+                double streak = Math.pow(Math.max(0, Math.cos(da)), 8);
+                double fi = clamp(streak * (0.22 + 0.9 * r), 0, 1);
+                fBuf[py * W + px] = argb(255, fi * 0.35, fi * 0.6, fi);
 
-                double hi = clamp(m * 0.15, 0, 0.95);   // Holographic: same pattern, rainbow hue
-                hBuf[py * W + px] = hsb(m * 0.10 + u * 0.5 + t * 0.15, 0.85, hi, 255);
+                // POLYCHROME — a smooth non-uniform hue that flows with time.
+                double ph = u * 0.6 + v * 0.35 + 0.15 * Math.sin((u + v) * 6.0 + t) + t * 0.10;
+                pBuf[py * W + px] = hsb(ph, 0.85, 0.6, 255);
 
-                // Polychrome: a smooth diagonal spectrum flowing on the clock, independent of the ripple.
-                pBuf[py * W + px] = hsb(u * 0.55 + v * 0.35 + t * 0.12, 0.9, 0.85, 150);
+                // NEGATIVE — a bright, slowly drifting field; DIFFERENCE flips the card toward its complement.
+                double nh = u * 0.5 + v * 0.4 + t * 0.06;
+                nBuf[py * W + px] = hsb(nh, 0.30, 0.95, 255);
             }
         }
-        var fmt = PixelFormat.getIntArgbInstance();
         foil.getPixelWriter().setPixels(0, 0, W, H, fmt, fBuf, 0, W);
-        holo.getPixelWriter().setPixels(0, 0, W, H, fmt, hBuf, 0, W);
         poly.getPixelWriter().setPixels(0, 0, W, H, fmt, pBuf, 0, W);
+        neg.getPixelWriter().setPixels(0, 0, W, H, fmt, nBuf, 0, W);
     }
 
-    /** The foil shader's {@code maxfac}: overlapping radial ripples + an angular streak + two axis bands. */
-    private static double pattern(double ax, double ay, double u, double v, double t) {
-        double l90 = Math.hypot(90 * ax, 90 * ay);
-        double l113 = Math.hypot(113.1121 * ax, 113.1121 * ay);
-        double fac = clamp(2 * Math.sin((l90 + t * 2) + 3 * (1 + 0.8 * Math.cos(l113 - t * 3.121))) - 1 - Math.max(5 - l90, 0), 0, 1);
+    /** HOLOGRAPHIC — a non-uniform hue per triangle of a triangular grid; static, so built once. */
+    private void buildHolo() {
+        for (int py = 0; py < H; py++) {
+            for (int px = 0; px < W; px++) {
+                double u = (px + 0.5) / W, v = (py + 0.5) / H;
+                hBuf[py * W + px] = hsb(triangleHue(u, v), 0.8, 0.7, 255);
+            }
+        }
+        holo.getPixelWriter().setPixels(0, 0, W, H, PixelFormat.getIntArgbInstance(), hBuf, 0, W);
+    }
 
-        double rx = Math.cos(t * 0.1221), ry = Math.sin(t * 0.3512);
-        double lauv = Math.hypot(ax, ay), lrot = Math.hypot(rx, ry);
-        double angle = lauv < 1e-6 ? 0 : (rx * ax + ry * ay) / (lrot * lauv);
-        double l20 = Math.hypot(20 * ax, 20 * ay);
-        double fac2 = clamp(5 * Math.cos(t * 0.3 + angle * Math.PI * (2.2 + 0.9 * Math.sin(t * 1.65))) - 4 - Math.max(2 - l20, 0), 0, 1);
+    /** A scrambled-but-fixed hue that is constant within each triangle of a triangular tiling of the card. */
+    private static double triangleHue(double u, double v) {
+        int n = 5;
+        double gx = u * n, gy = v * n;
+        int cx = (int) gx, cy = (int) gy;
+        int tri = (gx - cx) + (gy - cy) < 1.0 ? 0 : 1;   // the cell's lower-left vs upper-right triangle
+        return cx * 0.17 + cy * 0.11 + tri * 0.37;        // wraps in hsb; adjacent triangles differ
+    }
 
-        double fac3 = 0.3 * clamp(2 * Math.sin(t * 5 + u * 3 + 3 * (1 + 0.5 * Math.cos(t * 7))) - 1, -1, 1);
-        double fac4 = 0.3 * clamp(2 * Math.sin(t * 6.66 + v * 3.8 + 3 * (1 + 0.5 * Math.cos(t * 3.414))) - 1, -1, 1);
-
-        double top = Math.max(Math.max(fac, Math.max(fac2, Math.max(fac3, Math.max(fac4, 0)))), 0);
-        return Math.max(top + 2.2 * (fac + fac2 + fac3 + fac4), 0);
+    /** Signed smallest angle from {@code b} to {@code a}, in radians, wrapped to [-pi, pi]. */
+    private static double angleDiff(double a, double b) {
+        return Math.atan2(Math.sin(a - b), Math.cos(a - b));
     }
 
     private static double clamp(double x, double lo, double hi) { return Math.max(lo, Math.min(hi, x)); }
@@ -86,7 +109,7 @@ final class EditionArt {
 
     private static int ch(double v) { return (int) (clamp(v, 0, 1) * 255 + 0.5); }
 
-    /** {@code h} wraps to [0,1); s,v,alpha in [0,1] / [0,255]. A small inline HSV→RGB (per-pixel, so no allocation). */
+    /** {@code h} wraps to [0,1); s,v in [0,1], alpha in [0,255]. A small inline HSV→RGB (per-pixel, no allocation). */
     private static int hsb(double h, double s, double v, int alpha) {
         double hh = (h - Math.floor(h)) * 6.0;
         int i = (int) hh;

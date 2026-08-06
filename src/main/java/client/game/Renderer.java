@@ -346,11 +346,12 @@ public final class Renderer {
     private final EditionArt editions = new EditionArt();
 
     /**
-     * Paints an edition's shimmer inside the card/tile silhouette at (x,y,w,h), clipped to the rounded shape so it
-     * never bleeds into the transparent corners. Foil/Holographic/Polychrome blit {@link EditionArt}'s animated
-     * pattern buffers (the real Balatro foil math) with a SCREEN blend so the pattern lightens the art; Negative
-     * darkens the card toward navy and adds a faint sheen. Animated on the frame {@link #clock}; a no-op for -1.
-     * Public so tile draws (jokers, consumables, shop/pack items) lay it over their texture the same way.
+     * Paints an edition's effect inside the card/tile silhouette at (x,y,w,h), clipped to the rounded shape so it
+     * never bleeds into the transparent corners. Each edition blits an {@link EditionArt} pattern with its own blend:
+     * Foil is a SCREEN (additive) rotating streak; Holographic and Polychrome are OVERLAY colourisations (a static
+     * triangular hue, and a smooth flowing hue); Negative is a DIFFERENCE blit that flips the card toward its
+     * near-complement. Animated on the frame {@link #clock} (Holographic excepted); a no-op for -1. Public so tile
+     * draws (jokers, consumables, shop/pack items) lay it over their texture the same way.
      */
     public void editionEffect(int edition, double x, double y, double w, double h, double arc) {
         if (edition < 0) return;
@@ -358,17 +359,10 @@ public final class Renderer {
         g.save();
         clipRoundRect(x, y, w, h, arc);
         switch (edition) {
-            case 0 -> { g.setGlobalBlendMode(BlendMode.SCREEN); g.drawImage(editions.foil(), x, y, w, h); }   // FOIL
-            case 1 -> { g.setGlobalBlendMode(BlendMode.SCREEN); g.drawImage(editions.holo(), x, y, w, h); }   // HOLOGRAPHIC
-            case 2 -> { g.setGlobalBlendMode(BlendMode.SCREEN); g.setGlobalAlpha(0.9); g.drawImage(editions.poly(), x, y, w, h); }  // POLYCHROME
-            case 3 -> {                                                                                        // NEGATIVE: dark navy + faint sheen
-                g.setGlobalBlendMode(BlendMode.MULTIPLY);
-                g.setFill(Color.web("#4a4f7a"));
-                g.fillRect(x, y, w, h);
-                g.setGlobalBlendMode(BlendMode.SCREEN);
-                g.setGlobalAlpha(0.5);
-                g.drawImage(editions.foil(), x, y, w, h);
-            }
+            case 0 -> { g.setGlobalBlendMode(BlendMode.SCREEN);  g.drawImage(editions.foil(), x, y, w, h); }   // FOIL
+            case 1 -> { g.setGlobalBlendMode(BlendMode.OVERLAY); g.setGlobalAlpha(0.75); g.drawImage(editions.holo(), x, y, w, h); }  // HOLOGRAPHIC
+            case 2 -> { g.setGlobalBlendMode(BlendMode.OVERLAY); g.setGlobalAlpha(0.7);  g.drawImage(editions.poly(), x, y, w, h); }  // POLYCHROME
+            case 3 -> { g.setGlobalBlendMode(BlendMode.DIFFERENCE); g.setGlobalAlpha(0.9); g.drawImage(editions.neg(), x, y, w, h); } // NEGATIVE (near-complement)
             default -> { }
         }
         g.restore();
