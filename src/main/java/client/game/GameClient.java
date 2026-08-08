@@ -473,6 +473,10 @@ public final class GameClient extends Application {
         if (packToOpen) overlays.pendingPackPrompt(ui);   // the "Open" gate for a free skip/Wrath pack, over the barrier
         if (!ui.status.isEmpty()) r.textLeft(ui.status, Ui.PAD + 8, Ui.H - 20, 12, Palette.DIM);
         if (ui.showRunInfo) overlays.runInfo(ui);
+        // The two Envy shop modals are mutually exclusive; both reset when the phase leaves the shop.
+        if (ui.s.inShop() && ui.showEnvySwap) overlays.envySwap(ui);
+        else if (ui.s.inShop() && ui.showEnvyLog) overlays.envyLog(ui);
+        else { ui.showEnvyLog = false; ui.showEnvySwap = false; }
 
         // The scoring reel: the played cards stand centre-screen and the acting card's effect square floats.
         if (hand.hasStaged()) hand.renderStaged(ui, cx, cTop + cH * 0.34, cW);
@@ -562,6 +566,14 @@ public final class GameClient extends Application {
         if (ui.showRunInfo) {
             for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
             ui.showRunInfo = false; return;
+        }
+        if (ui.showEnvySwap) {   // the Envy swap modal owns input; a click off any control cancels
+            for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
+            ui.showEnvySwap = false; return;
+        }
+        if (ui.showEnvyLog) {   // the Envy modal owns input: Copy stays open, a click off any control closes it
+            for (Ui.Btn b : ui.buttons) if (b.rect().contains(x, y)) { b.action().run(); return; }
+            ui.showEnvyLog = false; return;
         }
         if (ui.s.phase() == MatchPhase.BLIND) {
             CardEntity e = hand.cardAt(x, y);

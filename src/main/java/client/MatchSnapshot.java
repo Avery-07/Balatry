@@ -92,7 +92,8 @@ public record MatchSnapshot(
         int blindDoneCount,        // still-playing seats whose round has resolved (the blind barrier's progress tally)
         ResultView lastResult,     // this seat's most recent blind outcome (null before the first)
         List<StandingView> standings,   // every seat, ranked; for the end-of-match summary
-        List<OpponentView> opponents
+        List<OpponentView> opponents,
+        SinView sin                // the active sin's interactive state (never null; sub-fields empty when unused)
 ) {
 
     /**
@@ -110,6 +111,44 @@ public record MatchSnapshot(
 
     /** The only opponent state that crosses the information boundary: identity, points, ranking. */
     public record OpponentView(int seat, String name, long points, int rank) { }
+
+    /**
+     * Pride's per-seat state: the round score-multiplier bet. {@code choosing} is true during SELECTION (Pride
+     * active), when the client offers the {@code options} and {@code choice} is this seat's recorded pick (-1 for
+     * none yet — the no-gamble x1 default). Once the round is dealt, {@code multiplier} is the locked-in bet and
+     * {@code thresholdMet} whether the round reached target × it. Null on the snapshot unless Pride is active.
+     */
+    public record PrideView(boolean choosing, List<String> options, int choice, String multiplier, boolean thresholdMet) { }
+
+    /**
+     * The active sin's interactive state, gathered so the snapshot carries one sin field rather than one per sin.
+     * Each sub-field is populated only for the sin in play: {@code pride} is null unless Pride is active;
+     * {@code gluttonyGauge} is the communal payout pool in dollars, or -1 when Gluttony is not active;
+     * {@code auction} is Pride's blind shop-phase legendary auction, or null when none is running;
+     * {@code envyLog} is Envy's public shop-purchase log (empty unless Envy is active in the shop);
+     * {@code envyRivals} lists each rival's jokers for Envy's swap — the one place opponent jokers cross the
+     * boundary, and only while Envy is active in the shop (empty otherwise).
+     */
+    public record SinView(PrideView pride, int gluttonyGauge, AuctionView auction,
+                          List<EnvyPurchaseView> envyLog, List<RivalJokersView> envyRivals) { }
+
+    /** A rival's board for Envy's swap: their seat, name, and jokers (each a slot, name and edition ordinal). */
+    public record RivalJokersView(int seat, String name, List<RivalJokerView> jokers) { }
+    public record RivalJokerView(int slot, String name, int edition) { }
+
+    /**
+     * Pride's blind, all-pay legendary auction (shop phase). {@code jokerName} is the joker on the block; {@code
+     * myBid} is only <em>this</em> seat's own total paid so far ({@code step} per click) — rivals' totals never
+     * cross the boundary, so the auction stays blind.
+     */
+    public record AuctionView(String jokerName, int myBid, int step) { }
+
+    /**
+     * One entry of Envy's shop-purchase log — intentionally public (that is the sin): {@code buyerName} bought
+     * {@code itemLabel}, copyable by anyone else for {@code copyCost} (twice what they paid). {@code mine} flags
+     * this seat's own purchases, which cannot be copied.
+     */
+    public record EnvyPurchaseView(int logIndex, String buyerName, boolean mine, String itemLabel, int copyCost) { }
 
     /**
      * One card in hand: a stable {@code id} (for cross-frame animation) plus rank/suit ordinals for sorting.
@@ -299,6 +338,51 @@ public record MatchSnapshot(
             if (shop != null) shopView = buildShop(shop, run);
         }
 
+        // The active sin's interactive state, gathered into one SinView. Pride: the round-multiplier bet — only Pride's
+        // modifier returns a round choice, so a non-null one means Pride is active (chooser during SELECTION, locked bet
+        // during a round). Gluttony: the communal gauge, shown while it is the active sin.
+        PrideView pride = null;
+        model.game.sins.SinChoice sinChoice = match.getSinModifier().roundChoice();
+        if (sinChoice != null)
+            pride = new PrideView(match.getPhase() == MatchPhase.SELECTION, sinChoice.options(),
+                    match.pendingSinChoice(me), prideMultiplierLabel(run.getSinState().getPrideMultiplier()),
+                    run.getSinState().isPrideThresholdMet());
+        int gluttonyGauge = match.getActiveSin() == model.game.Sin.GLUTTONY ? match.getSinTableState().getGluttonyGauge() : -1;
+        AuctionView auction = null;
+        if (match.getActiveSin() == model.game.Sin.PRIDE && inShop) {
+            model.items.jokers.JokerCard legendary = match.getSinTableState().getPrideLegendary();
+            if (legendary != null)   // blind: only this seat's own total crosses the boundary
+                auction = new AuctionView(legendary.getSpec().getName(),
+                        match.getSinTableState().getPrideBids().getOrDefault(me, 0),
+                        model.game.sins.PrideModifier.BID_STEP);
+        }
+        List<EnvyPurchaseView> envyLog = List.of();
+        if (match.getActiveSin() == model.game.Sin.ENVY && inShop) {
+            List<model.game.sins.SinTableState.EnvyPurchase> log = match.getSinTableState().getEnvyLog();
+            List<EnvyPurchaseView> views = new ArrayList<>();
+            for (int i = 0; i < log.size(); i++) {   // openly visible — Envy publishes every buy
+                model.game.sins.SinTableState.EnvyPurchase e = log.get(i);
+                views.add(new EnvyPurchaseView(i, match.getPlayer(e.buyer()).name(), e.buyer().equals(me),
+                        nameOf(e.item()), e.pricePaid() * 2));
+            }
+            envyLog = views;
+        }
+        // Envy's swap needs to show rival jokers — the sole, sin-scoped relaxation of the opponent info boundary.
+        List<RivalJokersView> envyRivals = List.of();
+        if (match.getActiveSin() == model.game.Sin.ENVY && inShop) {
+            List<RivalJokersView> rivals = new ArrayList<>();
+            for (PlayerId id : match.getSeats()) {
+                if (id.seat() == me.seat() || match.hasDeparted(id)) continue;
+                List<RivalJokerView> js = new ArrayList<>();
+                List<JokerCard> board = match.getRun(id).getJokers();
+                for (int s = 0; s < board.size(); s++)
+                    js.add(new RivalJokerView(s, board.get(s).getSpec().getName(), editionOf(board.get(s))));
+                rivals.add(new RivalJokersView(id.seat(), match.getPlayer(id).name(), js));
+            }
+            envyRivals = rivals;
+        }
+        SinView sin = new SinView(pride, gluttonyGauge, auction, envyLog, envyRivals);
+
         return new MatchSnapshot(
                 me.seat(),
                 match.getPlayer(me).name(),
@@ -352,7 +436,13 @@ public record MatchSnapshot(
                 blindDoneCount,
                 lastResult,
                 table,
-                opponents);
+                opponents,
+                sin);
+    }
+
+    /** A Pride multiplier as a compact label: 1 → "×1", 1.5 → "×1.5", 2 → "×2" (trailing zeros stripped). */
+    private static String prideMultiplierLabel(java.math.BigDecimal m) {
+        return "×" + m.stripTrailingZeros().toPlainString();
     }
 
     /**

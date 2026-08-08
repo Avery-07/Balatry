@@ -28,6 +28,9 @@ final class Ui {
     MatchViewModel vm;
     String status = "";
     boolean showRunInfo;
+    boolean showEnvyLog;       // the Envy "rivals' buys" modal (shop only), listing copyable purchases
+    boolean showEnvySwap;      // the Envy joker-swap modal (shop only): pick a rival joker to trade for
+    int envySwapFrom = -1;     // which of this seat's jokers the pending swap trades away
     boolean showOptions;       // the in-game Options/pause modal (Collection + Surrender), opened from the sidebar
     boolean showCollection;    // the joker collection grid, opened from within Options (shares the menu's system)
     boolean confirmSurrender;  // Options → Surrender asks to confirm before it forfeits the match

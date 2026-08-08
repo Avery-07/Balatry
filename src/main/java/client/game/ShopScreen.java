@@ -33,6 +33,11 @@ final class ShopScreen implements Screen {
         // Header: the leave-shop barrier and the reroll, sized to sit above the shelves.
         Waiting.button(ui, ix, cy, 176, 50, "Next Round");
         ui.button(ix + 190, cy, 150, 50, "Reroll $" + shop.rerollCost(), GREEN, INK, () -> ui.vm.rerollShop(), true);
+        MatchSnapshot.AuctionView auction = ui.s.sin().auction();   // Pride's blind legendary auction fills the header's right
+        if (auction != null) drawAuction(ui, ix + 350, cy, iw - 350, 50, auction);
+        long copyable = ui.s.sin().envyLog().stream().filter(e -> !e.mine()).count();   // Envy: rivals' buys, copyable
+        if (copyable > 0)
+            ui.button(ix + 350, cy, 240, 50, "Rivals' buys (" + copyable + ")", PURPLE, INK, () -> ui.showEnvyLog = true, true);
         cy += 66;
 
         // The two shelf rows split everything below the header evenly, so the panel fills top to bottom — no
@@ -65,6 +70,23 @@ final class ShopScreen implements Screen {
                     MatchSnapshot.ShopItem p = shop.packs().get(i);
                     return p == null ? null : new Tile(p.id(), p.label(), p.price(), PURPLE, true, "shopPack", "", p.tooltip(), i, p.card(), p.edition());
                 });
+    }
+
+    /**
+     * Pride's blind, all-pay legendary auction, tucked into the header beside Reroll. Shows the joker on the block
+     * and only this seat's own running total (the auction is blind — rivals' bids never appear); the button pays one
+     * {@code step} increment, spent immediately. A tie or a full board at close means the joker is simply lost.
+     */
+    private void drawAuction(Ui ui, double px, double py, double pw, double ph, MatchSnapshot.AuctionView a) {
+        Renderer r = ui.r;
+        r.panel(px, py, pw, ph, Color.web("#2a1c38"), PURPLE, 8, 2);
+        double bw = 96, bh = 34, bx = px + pw - bw - 8, by = py + (ph - bh) / 2;
+        r.textLeftBold("Pride auction — " + a.jokerName(), px + 12, py + 9, 12, GOLD);
+        r.textLeft("your bid $" + a.myBid() + "  (blind)", px + 12, py + 28, 11, INK);
+        ui.button(bx, by, bw, bh, "Bid +$" + a.step(), ORANGE, DARK, () -> ui.vm.prideBid(a.step()), true);
+        ui.tip(new Layout.Rect(px, py, pw - bw - 12, ph),
+                a.jokerName() + "\nBlind all-pay auction: each $" + a.step()
+                        + " is spent at once. Highest total wins; a tie wins nobody.");
     }
 
     /** Everything one shelf tile needs to draw and register itself; {@code slotIndex} is the MODEL's slot. */

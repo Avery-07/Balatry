@@ -14,15 +14,18 @@ import model.game.shop.ShopSetup;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 /** Pride: at round start each player picks a score multiplier (x1 / x1.5 / x2 / x3) applied to their points if
  * their round score reaches {@code target x multiplier}; and each shop phase auctions a table-rolled legendary
- * joker — highest standing bid at close wins and pays, ties (among valid leaders) mean nobody wins, an
- * insolvent or full-boarded leader is skipped for the next-highest. Losers pay nothing. */
+ * joker as a blind, all-pay auction — each seat pays in ${@value #BID_STEP} increments (spent immediately, never
+ * refunded), nobody sees anyone else's total, and the single highest total at close takes the joker (a tie leaves
+ * it unclaimed; a full-boarded winner simply loses the joker, having already paid). */
 public final class PrideModifier implements SinModifier {
+
+    /** The fixed dollar increment of one blind-auction bid. */
+    public static final int BID_STEP = 5;
 
     /** Option index -> multiplier; mirrors {@link #CHOICE} option order. x1 is the no-gamble default. */
     private static final List<BigDecimal> MULTIPLIERS =
@@ -31,6 +34,9 @@ public final class PrideModifier implements SinModifier {
     static final SinChoice CHOICE = new SinChoice(Sin.PRIDE,
             "Pride: choose a score multiplier (higher = harder target, bigger payoff)",
             List.of("x1", "x1.5", "x2", "x3"));
+
+    @Override
+    public SinChoice roundChoice() { return CHOICE; }
 
     @Override
     public void onRoundBegin(Run run) {
@@ -57,25 +63,18 @@ public final class PrideModifier implements SinModifier {
         SinTableState table = match.getSinTableState();
         JokerCard legendary = table.getPrideLegendary();
         if (legendary == null) return;
-        Map<PlayerId, Integer> bids = table.getPrideBids();
-        List<Integer> amounts = bids.values().stream().distinct().sorted(Comparator.reverseOrder()).toList();
-        outer:
-        for (int amount : amounts) {
-            List<PlayerId> valid = new ArrayList<>();
-            for (Map.Entry<PlayerId, Integer> e : bids.entrySet()) {
-                if (e.getValue() != amount) continue;
-                Run run = match.getRun(e.getKey());
-                if (run.getMoney() - amount >= run.minBalance() && run.canAcquire(legendary)) valid.add(e.getKey());
+        Map<PlayerId, Integer> totals = table.getPrideBids();   // total already paid per seat (all-pay)
+        int top = totals.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        if (top > 0) {
+            List<PlayerId> leaders = new ArrayList<>();
+            for (Map.Entry<PlayerId, Integer> e : totals.entrySet()) if (e.getValue() == top) leaders.add(e.getKey());
+            if (leaders.size() == 1) {           // a single highest payer wins; a tie leaves the joker unclaimed
+                Run winner = match.getRun(leaders.get(0));
+                if (winner.canAcquire(legendary)) winner.acquire(legendary);
+                // else: no board room — the joker is lost, and the all-pay bid is not refunded
             }
-            if (valid.size() > 1) break;         // a tie among valid leaders: the joker is too proud to be shared
-            if (valid.size() == 1) {
-                Run winner = match.getRun(valid.get(0));
-                winner.spend(amount);
-                winner.acquire(legendary);
-                break outer;
-            }                                    // nobody valid at this amount: consider the next-highest
         }
-        table.clearPrideAuction();
+        table.clearPrideAuction();               // the money was spent as each bid landed; nothing to charge here
     }
 
     @Override

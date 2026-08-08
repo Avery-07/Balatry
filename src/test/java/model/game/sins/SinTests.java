@@ -704,7 +704,7 @@ public final class SinTests {
         checkThrows("copying is shop-phase only", () -> m.envyCopyPurchase(b, 0));
     }
 
-    /** Pride: the table-rolled legendary goes to the highest valid standing bid; ties mean nobody wins. */
+    /** Pride: a blind, all-pay auction — bids are spent immediately and the single highest total wins; a tie awards nobody. */
     private static void prideAuction() {
         Match m = Match.create(102L, List.of("A", "B"),
                 MatchConfig.defaults().withSinSelector((ante, rng) -> Sin.PRIDE));
@@ -726,38 +726,26 @@ public final class SinTests {
                 .getSpec().getName().equals(legendary.getSpec().getName()));
 
         checkThrows("cannot bid more than you have", () -> m.prideBid(a, 1000));
-        m.prideBid(a, 12);
-        m.prideBid(b, 8);
-        int moneyA = m.getRun(a).getMoney(), moneyB = m.getRun(b).getMoney(), boardA = m.getRun(a).board().size();
+        int moneyA0 = m.getRun(a).getMoney(), moneyB0 = m.getRun(b).getMoney(), boardA = m.getRun(a).board().size();
+        m.prideBid(a, 5); m.prideBid(a, 5);   // A pays $10 total across two $5 increments
+        m.prideBid(b, 5);                       // B pays $5
+        checkInt("each bid is spent the moment it is placed (all-pay)", moneyA0 - m.getRun(a).getMoney(), 10);
+        checkInt("the eventual loser has also already paid", moneyB0 - m.getRun(b).getMoney(), 5);
         m.nextBlind();
-        checkInt("the winner pays the bid", moneyA - m.getRun(a).getMoney(), 12);
-        checkInt("the winner boards the legendary", m.getRun(a).board().size(), boardA + 1);
-        checkInt("losers pay nothing", m.getRun(b).getMoney(), moneyB);
+        checkInt("the single highest total takes the legendary", m.getRun(a).board().size(), boardA + 1);
+        checkInt("the loser is never refunded", m.getRun(b).getMoney(), moneyB0 - 5);
         check("the auction is consumed", m.getSinTableState().getPrideLegendary() == null);
 
-        // A tie among valid leaders: the joker is too proud to be shared.
+        // A tie at the top awards nobody — but both have still paid (all-pay).
         for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
         m.toShop();
-        m.prideBid(a, 7);
-        m.prideBid(b, 7);
         int sizeA = m.getRun(a).board().size(), sizeB = m.getRun(b).board().size();
-        int tMoneyA = m.getRun(a).getMoney(), tMoneyB = m.getRun(b).getMoney();
+        int preA = m.getRun(a).getMoney(), preB = m.getRun(b).getMoney();
+        m.prideBid(a, 5); m.prideBid(b, 5);   // equal totals
         m.nextBlind();
-        check("a tie awards nobody and charges nobody",
-                m.getRun(a).board().size() == sizeA && m.getRun(b).board().size() == sizeB
-                        && m.getRun(a).getMoney() == tMoneyA && m.getRun(b).getMoney() == tMoneyB);
-
-        // An insolvent leader is skipped and the next-highest wins.
-        for (PlayerId id : m.getSeats()) m.getRun(id).getRound().finish();
-        m.toShop();
-        int allIn = m.getRun(a).getMoney();
-        m.prideBid(a, allIn);
-        m.prideBid(b, 3);
-        m.getRun(a).getShop().reroll();   // A dips below the bid
-        int wMoneyB = m.getRun(b).getMoney(), wBoardB = m.getRun(b).board().size();
-        m.nextBlind();
-        checkInt("the insolvent leader is skipped; next-highest pays", wMoneyB - m.getRun(b).getMoney(), 3);
-        checkInt("and boards the legendary", m.getRun(b).board().size(), wBoardB + 1);
+        check("a tie awards nobody", m.getRun(a).board().size() == sizeA && m.getRun(b).board().size() == sizeB);
+        check("but the tied bids were still spent",
+                m.getRun(a).getMoney() == preA - 5 && m.getRun(b).getMoney() == preB - 5);
     }
 
     private static void checkInt(String label, int actual, int expected) {

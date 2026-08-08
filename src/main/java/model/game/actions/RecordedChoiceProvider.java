@@ -21,6 +21,12 @@ public final class RecordedChoiceProvider implements SinChoiceProvider {
     /** Records {@code option} as {@code id}'s answer to the next choice asked of them. */
     public void record(PlayerId id, int option) { answers.put(id, option); }
 
+    /** {@code id}'s recorded-but-not-yet-consumed answer, or -1 if none — a read-only peek for the snapshot. */
+    public int peek(PlayerId id) {
+        Integer a = answers.get(id);
+        return a != null ? a : -1;
+    }
+
     @Override
     public int choose(Run run, SinChoice request) {
         Integer answer = answers.remove(run.getPlayerId());

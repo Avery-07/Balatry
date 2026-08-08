@@ -71,10 +71,10 @@ public final class SinTableState {
     public JokerCard getPrideLegendary() { return prideLegendary; }
     public void setPrideLegendary(JokerCard joker) { prideLegendary = joker; }
 
-    /** Sets or replaces {@code id}'s standing bid. */
-    public void recordPrideBid(PlayerId id, int amount) { prideBids.put(id, amount); }
+    /** Adds {@code amount} to {@code id}'s total paid into the auction (all-pay: the money is already spent). */
+    public void addPrideBid(PlayerId id, int amount) { prideBids.merge(id, amount, Integer::sum); }
 
-    /** Every standing bid, in first-bid order. */
+    /** Each seat's total paid so far, in first-bid order (a blind auction — never shown to rivals). */
     public Map<PlayerId, Integer> getPrideBids() { return Collections.unmodifiableMap(prideBids); }
 
     public void clearPrideAuction() { prideLegendary = null; prideBids.clear(); }

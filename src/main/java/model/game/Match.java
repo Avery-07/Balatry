@@ -653,6 +653,11 @@ public final class Match {
         };
     }
 
+    /** {@code id}'s recorded-but-unconsumed sin choice, or -1 if none/not action-driven — read-only, for the snapshot. */
+    public int pendingSinChoice(PlayerId id) {
+        return sinChoiceProvider instanceof RecordedChoiceProvider recorded ? recorded.peek(id) : -1;
+    }
+
     /** Records {@code id}'s answer for the next sin choice; requires an action-driven choice provider. */
     public void recordSinChoice(PlayerId id, int option) {
         getRun(id);
@@ -734,17 +739,24 @@ public final class Match {
         return out;
     }
 
-    /** Pride: sets or raises {@code id}'s standing bid on this shop phase's legendary; resolved at phase end. */
+    /**
+     * Pride: pays {@code amount} into this shop phase's blind legendary auction and adds it to {@code id}'s running
+     * total. All-pay — the money leaves now, win or lose — so a bid cannot be taken back; the highest total at phase
+     * end takes the joker ({@link model.game.sins.PrideModifier#onShopPhaseEnd}). Rivals never see the totals.
+     */
     public void prideBid(PlayerId id, int amount) {
         if (activeSin != Sin.PRIDE)
             throw new IllegalStateException("bidding is a Pride mechanic; active sin is " + activeSin);
         if (phase != MatchPhase.SHOP)
             throw new IllegalStateException("bids can only be placed during the shop; phase is " + phase);
+        if (sinTableState.getPrideLegendary() == null)
+            throw new IllegalStateException("no legendary is up for auction");
         if (amount < 1) throw new IllegalArgumentException("a bid must be at least $1");
         Run run = getRun(id);
         if (run.getMoney() - amount < run.minBalance())
             throw new IllegalStateException("cannot bid " + amount + " with " + run.getMoney());
-        sinTableState.recordPrideBid(id, amount);
+        run.spend(amount);                       // all-pay: spent immediately, whether or not this seat wins
+        sinTableState.addPrideBid(id, amount);   // accumulate the seat's total paid
     }
 
     /**

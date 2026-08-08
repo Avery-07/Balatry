@@ -118,15 +118,29 @@ final class Overlays {
         return out;
     }
 
-    /** The targeted joker's Sell button (the same joker selection is what Katadesmos reads). */
+    /** The targeted joker's Sell button (the same joker selection is what Katadesmos reads), plus Gluttony's Eat. */
     private void drawJokerActions(Ui ui) {
         if (ui.jokerTarget < 0) return;
         Ui.Sel sel = null;
         for (Ui.Sel se : ui.jokerSel) if (se.index() == ui.jokerTarget) { sel = se; break; }
         if (sel == null) { ui.jokerTarget = -1; return; }
         Layout.Rect rr = sel.rect();
-        ui.button(rr.centerX() - 34, rr.y() + rr.h() + 8, 68, 30, "Sell", RED, INK,
-                () -> { ui.vm.sellJoker(ui.jokerTarget); ui.jokerTarget = -1; }, true);
+        boolean gluttony = "Gluttony".equals(ui.s.activeSin());          // under Gluttony a joker can be eaten for cash
+        boolean envySwap = "Envy".equals(ui.s.activeSin()) && ui.s.inShop()   // under Envy it can be swapped with a rival's
+                && !ui.s.sin().envyRivals().isEmpty();
+        // Sell is always offered; Gluttony adds Eat and Envy adds Swap. Lay the 1-2 buttons out centred as a row.
+        java.util.List<Ui.Act> acts = new java.util.ArrayList<>();
+        acts.add(new Ui.Act("Sell", RED, INK, () -> { ui.vm.sellJoker(ui.jokerTarget); ui.jokerTarget = -1; }));
+        if (gluttony) acts.add(new Ui.Act("Eat", Color.web("#7a4a2a"), INK,
+                () -> { ui.vm.gluttonyEat(ui.jokerTarget); ui.jokerTarget = -1; }));
+        if (envySwap) acts.add(new Ui.Act("Swap", PURPLE, INK,
+                () -> { ui.envySwapFrom = ui.jokerTarget; ui.showEnvySwap = true; }));
+        double bw = 68, gap = 8, by = rr.y() + rr.h() + 8;
+        double rowW = acts.size() * bw + (acts.size() - 1) * gap, bx = rr.centerX() - rowW / 2;
+        for (Ui.Act a : acts) {
+            ui.button(bx, by, bw, 30, a.label(), a.color(), a.text(), a.run(), true);
+            bx += bw + gap;
+        }
     }
 
     /**
@@ -289,6 +303,73 @@ final class Overlays {
         r.textCenterBold("Open", bx + bw / 2, by + bh / 2, 16, DARK);
         int idx = next.index();
         ui.packButtons.add(new Ui.Btn(new Layout.Rect(bx, by, bw, bh), () -> ui.vm.openPack(idx)));
+    }
+
+    /**
+     * Envy's "rivals' buys" modal (shop only): every purchase this phase, each rival's copyable for twice what they
+     * paid. It owns input — clears the frame's buttons so only its Copy/Close controls are live — and copying keeps
+     * the modal open (buy several); a click outside any control closes it.
+     */
+    void envyLog(Ui ui) {
+        Renderer r = ui.r;
+        ui.buttons.clear();
+        ui.tips.clear();
+        List<MatchSnapshot.EnvyPurchaseView> log = ui.s.sin().envyLog();
+        r.gc().setFill(Color.web("#04060a", 0.74)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+        double pw = 560, ph = 470, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        r.panel(px, py, pw, ph, Color.web("#161018"), PURPLE, 14, 3);
+        r.textCenterBold("Envy — rivals' purchases", Ui.W / 2.0, py + 34, 22, ORANGE);
+        r.textCenter("Copy any rival's buy for double what they paid.", Ui.W / 2.0, py + 60, 12, DIM);
+
+        double rowY = py + 84, rowH = 44;
+        for (MatchSnapshot.EnvyPurchaseView e : log) {
+            if (rowY > py + ph - 66) break;   // keep rows inside the panel (a shop rarely fills it)
+            r.panel(px + 20, rowY, pw - 40, rowH - 6, Color.web("#211826"), EDGE, 8, 1);
+            r.textLeftBold(e.buyerName() + (e.mine() ? "  (you)" : ""), px + 32, rowY + 7, 13, e.mine() ? DIM : INK);
+            r.textLeft(e.itemLabel(), px + 32, rowY + 23, 12, GOLD);
+            if (!e.mine()) {
+                double bw = 116, bh = 30, bx = px + pw - 20 - bw - 6, by = rowY + (rowH - 6 - bh) / 2;
+                int idx = e.logIndex();
+                ui.button(bx, by, bw, bh, "Copy $" + e.copyCost(), ORANGE, DARK, () -> ui.vm.envyCopy(idx), true);
+            }
+            rowY += rowH;
+        }
+        ui.button(px + 40, py + ph - 46, pw - 80, 34, "Close", RED, INK, () -> ui.showEnvyLog = false, true);
+    }
+
+    /**
+     * Envy's joker-swap modal (shop only): the seat's selected joker ({@link Ui#envySwapFrom}) is traded for whichever
+     * rival joker is clicked. Every rival's board is shown — the sin-scoped window into opponent jokers — grouped by
+     * player. Owns input like the other modals; a click off any control cancels.
+     */
+    void envySwap(Ui ui) {
+        Renderer r = ui.r;
+        ui.buttons.clear();
+        ui.tips.clear();
+        r.gc().setFill(Color.web("#04060a", 0.74)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
+        double pw = 620, ph = 470, px = (Ui.W - pw) / 2, py = (Ui.H - ph) / 2;
+        r.panel(px, py, pw, ph, Color.web("#161018"), PURPLE, 14, 3);
+        r.textCenterBold("Envy — swap a joker with a rival", Ui.W / 2.0, py + 34, 22, ORANGE);
+        r.textCenter("Trade your selected joker for one of theirs.", Ui.W / 2.0, py + 60, 12, DIM);
+
+        double jbw = 150, jbh = 34, y = py + 86;
+        for (MatchSnapshot.RivalJokersView rival : ui.s.sin().envyRivals()) {
+            if (y > py + ph - 84) break;
+            r.textLeftBold(rival.name(), px + 24, y, 13, GOLD);
+            y += 22;
+            if (rival.jokers().isEmpty()) { r.textLeft("(no jokers)", px + 36, y, 11, FAINT); y += 26; continue; }
+            double jx = px + 36;
+            for (MatchSnapshot.RivalJokerView j : rival.jokers()) {
+                if (jx + jbw > px + pw - 24) { jx = px + 36; y += jbh + 6; }
+                int seat = rival.seat(), slot = j.slot();
+                ui.button(jx, y, jbw, jbh, Fmt.shortName(j.name()), Color.web("#2b2c30"), INK,
+                        () -> { ui.vm.envySwap(ui.envySwapFrom, seat, slot); ui.showEnvySwap = false; ui.jokerTarget = -1; }, true);
+                ui.tip(new Layout.Rect(jx, y, jbw, jbh), j.name());
+                jx += jbw + 8;
+            }
+            y += jbh + 12;
+        }
+        ui.button(px + 40, py + ph - 46, pw - 80, 34, "Cancel", RED, INK, () -> ui.showEnvySwap = false, true);
     }
 
     /** A pack option's hover text: name, effect, and what a targeted pick still needs. */

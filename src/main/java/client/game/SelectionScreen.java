@@ -18,10 +18,16 @@ final class SelectionScreen implements Screen {
     @Override
     public void render(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
+        // Pride's pre-round multiplier bet sits in a bar above the blinds while choosing (SELECTION); the blinds
+        // shift down to make room. The choice is consumed when the round deals, so it must be set here, before Select.
+        MatchSnapshot.PrideView pride = ui.s.sin().pride();
+        double topH = 0;
+        if (pride != null && pride.choosing()) { drawPrideChooser(ui, x, y, w, pride); topH = 88; }
+        double ry = y + topH, rh = h - topH;
         List<MatchSnapshot.BlindOption> blinds = ui.s.blinds();
         int n = Math.max(1, blinds.size());
-        double gap = 18, tw = (w - gap * (n - 1)) / n, th = Math.min(h, 470);
-        double ty = y + (h - th) / 2;
+        double gap = 18, tw = (w - gap * (n - 1)) / n, th = Math.min(rh, 470);
+        double ty = ry + (rh - th) / 2;
         for (int i = 0; i < blinds.size(); i++) {
             MatchSnapshot.BlindOption b = blinds.get(i);
             double tx = x + i * (tw + gap);
@@ -50,6 +56,28 @@ final class SelectionScreen implements Screen {
                 r.textCenterBold("Skipped", mc, my + 10, 16, RED);   // read-only backdrop behind the waiting popup
                 if (b.skipTag() != null) r.textCenter("Tag: " + b.skipTag(), mc, my + 36, 12, GOLD);
             }
+        }
+    }
+
+    /**
+     * Pride's bet bar: a row of multiplier options above the blinds. Clicking one submits it; a higher multiplier
+     * means a harder target (target × it) but a bigger points payout if the round reaches it. The recorded pick lights
+     * up. Unset is the no-gamble ×1 default, so a player who ignores it and just Selects the blind is never punished.
+     */
+    private void drawPrideChooser(Ui ui, double x, double y, double w, MatchSnapshot.PrideView pride) {
+        Renderer r = ui.r;
+        double barW = Math.min(w, 720), bx = x + (w - barW) / 2, bh = 72;
+        r.panel(bx, y, barW, bh, javafx.scene.paint.Color.web("#2a1c38"), PURPLE, 12, 3);
+        r.textCenterBold("Pride — bet your score multiplier", bx + barW / 2, y + 16, 14, GOLD);
+        List<String> opts = pride.options();
+        int n = Math.max(1, opts.size());
+        double gap = 10, ow = (barW - 32 - gap * (n - 1)) / n, oy = y + 30, oh = 30;
+        for (int i = 0; i < opts.size(); i++) {
+            double ox = bx + 16 + i * (ow + gap);
+            boolean sel = pride.choice() == i;
+            int idx = i;
+            ui.button(ox, oy, ow, oh, opts.get(i), sel ? ORANGE : javafx.scene.paint.Color.web("#3a2c4a"),
+                    sel ? DARK : INK, () -> ui.vm.submitSinChoice(idx), true);
         }
     }
 }

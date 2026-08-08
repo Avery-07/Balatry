@@ -129,7 +129,12 @@ final class Hud {
         cy += hAnte + gap;
 
         r.panel(ix, cy, iw, hSin, Color.web("#2a1030"), PURPLE, 8, 2);
-        r.textCenter("Ante sin — " + s.activeSin(), ix + iw / 2, cy + hSin / 2, 12, Color.web("#ecd7f5"));
+        // Once a round is dealt under Pride, the seat's locked multiplier bet rides on the sin line.
+        MatchSnapshot.PrideView pride = s.sin().pride();
+        String sinLabel = "Ante sin — " + s.activeSin();
+        if (pride != null && !pride.choosing()) sinLabel += "  (bet " + pride.multiplier() + ")";
+        if (s.sin().gluttonyGauge() >= 0) sinLabel += "  (gauge " + Fmt.dollars(s.sin().gluttonyGauge()) + ")";
+        r.textCenter(sinLabel, ix + iw / 2, cy + hSin / 2, 12, Color.web("#ecd7f5"));
         // Hover the sin to read its effect.
         if (!s.activeSinDesc().isEmpty())
             ui.tip(new Layout.Rect(ix, cy, iw, hSin), s.activeSin() + "\n" + s.activeSinDesc());

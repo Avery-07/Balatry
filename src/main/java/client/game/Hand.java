@@ -67,6 +67,9 @@ final class Hand {
         }
         for (CardEntity e : cards)
             if (!wantedIds.contains(e.id())) beginExit(e, nextExit);
+        // Stage the just-played cards left-to-right by where they sat on screen, so the scoring reel sweeps them in
+        // the same order the model scores — the submitted (visual) order, which a manual reorder or sort can change.
+        if (nextExit == Exit.PLAYED) staged.sort(java.util.Comparator.comparingDouble(CardEntity::x));
         List<CardEntity> next = Reconciler.reconcile(cards, desired, spawnX, spawnY, 0.35, Easing.EASE_OUT_BACK_SOFT);
         cards.clear(); cards.addAll(next);
         nextExit = Exit.DISCARDED;   // consumed; anything else that vanishes (a tarot ate it) slides out quietly

@@ -47,6 +47,9 @@ public interface SinModifier {
     /** How many copies of the blind's tag a skip grants (Sloth: 2). */
     default int tagsPerSkip() { return 1; }
 
+    /** The choice this sin asks each player before a round is dealt (Pride's multiplier), or null if it asks none. */
+    default SinChoice roundChoice() { return null; }
+
     /** The inert sin: no ante is modified. Used as the default and whenever a sin has no model behaviour yet. */
     SinModifier NONE = new SinModifier() { };
 }

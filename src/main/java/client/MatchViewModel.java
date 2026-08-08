@@ -71,6 +71,11 @@ public final class MatchViewModel {
         submit(new Action.PlayBlind(client.getSeat()));
     }
 
+    /** Record this seat's answer to the active sin's pre-round choice (Pride's multiplier bet), before the deal. */
+    public void submitSinChoice(int optionIndex) {
+        submit(new Action.SubmitSinChoice(client.getSeat(), optionIndex));
+    }
+
     // --- blind-phase gestures ----------------------------------------------
 
     /** Play the selected hand cards (1-5). */
@@ -111,6 +116,26 @@ public final class MatchViewModel {
     /** Reorders the board, moving the joker at {@code from} to position {@code to}. */
     public void moveJoker(int from, int to) {
         submit(new Action.MoveJoker(client.getSeat(), from, to));
+    }
+
+    /** Gluttony: eat the joker at {@code index} for its sell value plus the eat bonus (feeds the communal gauge). */
+    public void gluttonyEat(int index) {
+        submit(new Action.GluttonyEat(client.getSeat(), index));
+    }
+
+    /** Pride: pay {@code amount} into the blind legendary auction (all-pay, spent immediately). */
+    public void prideBid(int amount) {
+        submit(new Action.PrideBid(client.getSeat(), amount));
+    }
+
+    /** Envy: copy purchase-log entry {@code logIndex} for twice what the original buyer paid. */
+    public void envyCopy(int logIndex) {
+        submit(new Action.EnvyCopy(client.getSeat(), logIndex));
+    }
+
+    /** Envy: swap this seat's joker at {@code myIndex} with the joker at {@code theirIndex} on rival seat {@code rivalSeat}. */
+    public void envySwap(int myIndex, int rivalSeat, int theirIndex) {
+        submit(new Action.EnvySwap(client.getSeat(), myIndex, new model.game.player.PlayerId(rivalSeat), theirIndex));
     }
 
     /** Reorders the consumable area (drag-and-drop): the card at {@code from} reinserts at {@code to}. */
