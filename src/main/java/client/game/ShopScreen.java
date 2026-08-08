@@ -125,7 +125,8 @@ final class ShopScreen implements Screen {
                 textured = true;
             }
             else if (jtex != null) { r.imageFit(jtex, rr.x(), rr.y(), rr.w(), rr.h()); textured = true; }
-            else if ("shopSlot".equals(t.kind())) textured = r.consumableFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
+            else if ("shopSlot".equals(t.kind())) textured = r.consumableFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h())
+                    || r.relicFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
             else if ("shopPack".equals(t.kind())) textured = r.packFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
             else if ("shopVoucher".equals(t.kind())) textured = r.voucherFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
             if (textured && cf == null) r.editionEffect(t.edition(), rr.x(), rr.y(), rr.w(), rr.h(), 8);   // shimmer over a joker/consumable/pack face

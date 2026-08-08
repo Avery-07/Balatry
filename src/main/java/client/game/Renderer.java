@@ -90,7 +90,7 @@ public final class Renderer {
         Image img; int cols; double cw, ch;
         final java.util.Map<String, Integer> cell = new java.util.HashMap<>();
     }
-    private final Atlas planets = new Atlas(), tarots = new Atlas(), spectrals = new Atlas();
+    private final Atlas planets = new Atlas(), tarots = new Atlas(), spectrals = new Atlas(), relics = new Atlas();
 
     /** A display name reduced to its texture key — letters and digits only, the same rule the joker path uses. */
     private static String key(String displayName) { return displayName == null ? "" : displayName.replaceAll("[^A-Za-z0-9]", ""); }
@@ -144,6 +144,22 @@ public final class Renderer {
         g.drawImage(a.img, (cell % a.cols) * a.cw, (cell / a.cols) * a.ch, a.cw, a.ch,
                 x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
         return true;
+    }
+
+    // --- relic atlas (Relics.png, 5x2 = 10 cells; the ten relics in Relics enum order, so each maps to its ordinal).
+    // A relic shares the consumable slot pool but has its own sheet, so it gets a sibling of consumableFace. ---
+
+    /** The relic sheet (5x2). The ten relics are laid out in Relics enum order, so each maps to its own ordinal. */
+    public void relicSheet(Image img) {
+        if (img == null || img.isError() || img.getWidth() <= 0) return;
+        loadAtlas(relics, img, 5, 2);
+        for (model.items.relics.Relics rel : model.items.relics.Relics.values())
+            relics.cell.put(key(rel.spec().getName()), rel.ordinal());
+    }
+
+    /** Draws a relic's face for its display name into (x,y,w,h) preserving aspect, or false if the sheet has no such name. */
+    public boolean relicFace(String label, double x, double y, double w, double h) {
+        return drawCell(relics, key(label), x, y, w, h);
     }
 
     // --- pack atlases: one 2x2 sheet per kind, size -> cell (NORMAL 0, JUMBO 1, MEGA 2; cell 3 spare). Myth (relic

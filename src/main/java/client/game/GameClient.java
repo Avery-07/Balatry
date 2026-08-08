@@ -456,9 +456,11 @@ public final class GameClient extends Application {
         boolean packToOpen = blindWait && !packOpen && !ui.s.pendingPacks().isEmpty();
         if (!packOpen) ui.packSel = -1;   // no pack open: drop any stale preview selection
         if (packOpen) {
-            overlays.pack(ui);   // the pack panel sits up top until its picks are spent
-            if (!ui.s.hand().isEmpty())   // a targeted pick needs the hand shown below the panel to aim at
-                ui.hand.render(ui, 0, cTop, Ui.W, cH);   // centered on the screen, under the pack panel — not the play-area center
+            // Balatro-style: the dealt options rest on the table centre with a name/Skip bar at the bottom
+            // (Overlays.pack). Draw the hand first and raised toward the top, so the options have room below it.
+            if (!ui.s.hand().isEmpty())   // a targeted pick still aims at the hand
+                ui.hand.render(ui, 0, cTop, Ui.W, 343);   // shorter than cH → the fan rests high, clearing the dealt options
+            overlays.pack(ui);
         } else if (blindWait && ui.blindSkipped()) {
             // Skipped: the seat stays on the blind-selection tiles (read-only) behind the popup, not the board.
             screens.get(MatchPhase.SELECTION).render(ui, cx, cTop, cW, cH);
@@ -607,6 +609,7 @@ public final class GameClient extends Application {
             var in = getClass().getResourceAsStream("/sprites/consumables/Spectrals.png");
             if (in != null) { Image img = new Image(in); if (!img.isError() && img.getWidth() > 0) r.spectralSheet(img); }
         } catch (RuntimeException ignored) { }
+        loadSheet("/sprites/consumables/Relics.png",   r::relicSheet);
         loadSheet("/sprites/packs/ArcanaPacks.png",    img -> r.packSheet(model.items.packs.PackKind.ARCANA, img));
         loadSheet("/sprites/packs/BuffoonPacks.png",   img -> r.packSheet(model.items.packs.PackKind.BUFFOON, img));
         loadSheet("/sprites/packs/CelestialPacks.png", img -> r.packSheet(model.items.packs.PackKind.CELESTIAL, img));

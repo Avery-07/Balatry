@@ -277,8 +277,9 @@ final class Hud {
         double w = tileW * ui.itemRow.stretchX(it.id()), h = tileH * ui.itemRow.stretchY(it.id());   // squash & stretch
         Layout.Rect rr = new Layout.Rect(ui.itemRow.x(it.id()) - w / 2, ui.itemRow.y(it.id()) - h / 2 + bob, w, h);
         double sway = ui.itemRow.isDragged(it.id()) ? 0 : client.engine.Idle.swayDeg(ui.now, it.id(), 1.4);
-        r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // a consumable shows its planet/tarot/spectral face; a relic keeps the tile
-            if (!r.consumableFace(it.label(), rr.x(), rr.y(), rr.w(), rr.h()))
+        r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // a consumable shows its planet/tarot/spectral face; a relic its relic face
+            if (!r.consumableFace(it.label(), rr.x(), rr.y(), rr.w(), rr.h())
+                    && !r.relicFace(it.label(), rr.x(), rr.y(), rr.w(), rr.h()))
                 mini(r, rr, Color.web("#3d3357"), Fmt.shortName(it.label()));
             r.editionEffect(it.edition(), rr.x(), rr.y(), rr.w(), rr.h(), 8);   // Negative etc. on a consumable/relic
         });

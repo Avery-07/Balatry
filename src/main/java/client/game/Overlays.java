@@ -19,11 +19,11 @@ import static client.game.Palette.*;
  */
 final class Overlays {
 
-    private final Collection collection = new Collection();   // the in-game view of the same joker grid the menu shows
+    private final Collection collection = new Collection();   // the in-game view of the same collection grid the menu shows
 
     /**
-     * The in-game Options/pause modal, opened from the sidebar Options button: Resume, Collection (the shared joker
-     * grid), and Surrender (forfeit → main menu, behind a confirm). A full-screen scrim gates the table behind it,
+     * The in-game Options/pause modal, opened from the sidebar Options button: Resume, Collection (the shared
+     * grid of jokers/consumables/relics), and Surrender (forfeit → main menu, behind a confirm). A full-screen scrim gates the table behind it,
      * and it clears the frame's buttons so only its own controls are live.
      */
     void options(Ui ui, double now) {
@@ -177,28 +177,17 @@ final class Overlays {
         MatchSnapshot.PackOpeningView p = ui.s.opening();
         if (p == null) return;
         Renderer r = ui.r;
-        r.gc().setFill(Color.web("#040a08", 0.62)); r.gc().fillRect(0, 0, Ui.W, Ui.H);
-        // Sits below the top joker/consumable row and above the hand, so both stay visible and selectable for a
-        // targeted pick (hand cards for tarots/relic rank-suit-hand, a joker for Katadesmos).
-        double pw = 760, ph = 270, px = (Ui.W - pw) / 2, py = Ui.PAD + Ui.SLOT_H + 14;
-        r.panel(px, py, pw, ph, Color.web("#241a3a"), PURPLE, 14, 3);
-        r.textCenterBold(p.packName(), px + pw / 2, py + 26, 22, ORANGE);
-        r.textCenter("Choose " + p.picksLeft() + " — click a card to preview, then Use", px + pw / 2, py + 50, 13, DIM);
-
-        // Skip abandons the rest of the picks (Balatro-style) — registered as a pack button so the modal routes it.
-        double skW = 92, skH = 34, skX = px + pw - skW - 16, skY = py + 12;
-        r.panel(skX, skY, skW, skH, Color.web("#3a2c2c"), RED, 8, 2);
-        r.textCenterBold("Skip", skX + skW / 2, skY + skH / 2, 14, INK);
-        ui.packButtons.add(new Ui.Btn(new Layout.Rect(skX, skY, skW, skH), () -> ui.vm.skipPack()));
-
+        // No dimming panel: the options are dealt straight onto the table (Balatro-style). The board — joker bar,
+        // the raised hand (drawn by GameClient), deck pile — stays fully visible; a name/Skip bar sits at the bottom.
         int n = p.options().size();
         if (ui.packSel >= n || (ui.packSel >= 0 && p.options().get(ui.packSel).label() == null)) ui.packSel = -1;
         int selected = ui.hand.selectedModelIndices(ui.s.hand()).size();
 
         // The offered cards ride the same retained, count-scaled, draggable row the shop shelves use: a taken option
         // is a static "(taken)" hole, live ones lift and glide. Click previews (packSel); the Use button commits.
-        double tw = 108, th = 110, oy = py + 64, tileCY = oy + th / 2;
-        double[] all = Layout.slots(n, px + pw / 2, tw, 12, pw - 48);
+        // Tiles are hand-card sized and centred on the board, resting below the raised hand.
+        double cx = Ui.W / 2.0, tw = 104, th = 140, oy = 474, tileCY = oy + th / 2;
+        double[] all = Layout.slots(n, cx, tw, 16, 760);
         List<Integer> liveIds = new ArrayList<>();
         List<Double> liveX = new ArrayList<>();
         for (int i = 0; i < n; i++) {
@@ -234,7 +223,7 @@ final class Overlays {
                         r.card(cf.rank(), cf.suit(), cf.enhancement(), cf.seal(), cf.edition(), tx + tw / 2, ty + th / 2, cw, ch, 0, false);
                         textured = true;
                     } else if (tex != null) { r.imageFit(tex, tx, ty, tw, th); textured = true; }
-                    else textured = r.consumableFace(opt.label(), tx, ty, tw, th);
+                    else textured = r.consumableFace(opt.label(), tx, ty, tw, th) || r.relicFace(opt.label(), tx, ty, tw, th);
                     if (textured && cf == null) r.editionEffect(opt.edition(), tx, ty, tw, th, 8);   // shimmer over a joker/consumable face
                     if (textured) {
                         if (chosen) r.panel(tx, ty, tw, th, null, ORANGE, 8, 3);
@@ -248,24 +237,34 @@ final class Overlays {
                 ui.packButtons.add(new Ui.Btn(rr, () -> ui.packSel = idx));   // click previews; never commits
             }
 
-        // The selected option's Use button, so a pick is a deliberate two-step (no accidental close). The effect
-        // text is not repeated here — the hover tooltip already shows it.
+        // The bottom bar: [Use] the pack name/Choose count [Skip]. The name panel and Skip are always shown; the Use
+        // button only appears once an option is previewed, keeping a pick a deliberate two-step (no accidental close).
+        double barY = 664, barH = 84, nw = 250, nx = cx - nw / 2;
+        r.panel(nx, barY, nw, barH, Color.web("#241a3a"), PURPLE, 12, 3);
+        r.textCenterBold(p.packName(), cx, barY + 32, 20, ORANGE);
+        r.textCenter("Choose " + p.picksLeft(), cx, barY + 60, 14, DIM);
+
+        // Skip abandons the rest of the picks (Balatro-style) — registered as a pack button so the modal routes it.
+        double skW = 118, skX = nx + nw + 16;
+        r.panel(skX, barY, skW, barH, Color.web("#3a2c2c"), RED, 12, 2);
+        r.textCenterBold("Skip", skX + skW / 2, barY + barH / 2, 18, INK);
+        ui.packButtons.add(new Ui.Btn(new Layout.Rect(skX, barY, skW, barH), () -> ui.vm.skipPack()));
+
         if (ui.packSel >= 0) {
             MatchSnapshot.PackOption opt = p.options().get(ui.packSel);
-            double dy = oy + th + 12;
-            r.textCenterBold(opt.label(), px + pw / 2, dy, 14, ORANGE);
+            r.textCenterBold(opt.label(), cx, oy + th + 20, 15, ORANGE);
             String need = optionNeed(opt);
             boolean ready = optionReady(ui, opt, selected);
-            if (!need.isEmpty()) r.textCenter(need, px + pw / 2, dy + 18, 11, ready ? GREEN : ORANGE);
+            if (!need.isEmpty()) r.textCenter(need, cx, oy + th + 40, 12, ready ? GREEN : ORANGE);
             // Drawn and registered as a pack button (not ui.button) because only packButtons are live during the modal.
             String verb = opt.isRelic() || opt.minTargets() > 0 ? "Use" : "Take";
-            double bw = 120, bh = 36, bx = px + pw / 2 - bw / 2, by = py + ph - 52;
-            r.panel(bx, by, bw, bh, ready ? ORANGE : Color.web("#3a3a3a"), ready ? ORANGE.darker() : EDGE, 8, 2);
-            r.textCenterBold(verb, bx + bw / 2, by + bh / 2, 14, ready ? DARK : DIM);
+            double uW = 118, uX = nx - uW - 16;
+            r.panel(uX, barY, uW, barH, ready ? ORANGE : Color.web("#3a3a3a"), ready ? ORANGE.darker() : EDGE, 12, 2);
+            r.textCenterBold(verb, uX + uW / 2, barY + barH / 2, 16, ready ? DARK : DIM);
             int sel = ui.packSel;
-            ui.packButtons.add(new Ui.Btn(new Layout.Rect(bx, by, bw, bh), () -> pickOption(ui, sel, opt)));
+            ui.packButtons.add(new Ui.Btn(new Layout.Rect(uX, barY, uW, barH), () -> pickOption(ui, sel, opt)));
         } else {
-            r.textCenter("Click a card to see what it does.", px + pw / 2, py + ph - 30, 12, FAINT);
+            r.textCenter("Click a card to see what it does.", cx, oy + th + 26, 12, FAINT);
         }
     }
 
