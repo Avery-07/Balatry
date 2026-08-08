@@ -117,11 +117,11 @@ public final class Renderer {
         for (int i = 0; i < v.length && i < cell.length; i++) tarots.cell.put(key(v[i].spec().getName()), cell[i]);
     }
 
-    /** The Spectral sheet (5x4). The Soul sits at cell 0; Exorcism and Black Hole have no art (-1 => vector fallback). */
+    /** The Spectral sheet (5x4). The Soul sits at cell 0; Black Hole at cell 17; only Exorcism has no art (-1 => vector fallback). */
     public void spectralSheet(Image img) {
         if (img == null || img.isError() || img.getWidth() <= 0) return;
         loadAtlas(spectrals, img, 5, 4);
-        int[] cell = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -1, 16, 0, -1 };
+        int[] cell = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -1, 16, 0, 17 };
         var v = model.items.consumables.Spectrals.values();
         for (int i = 0; i < v.length && i < cell.length; i++) if (cell[i] >= 0) spectrals.cell.put(key(v[i].spec().getName()), cell[i]);
     }
