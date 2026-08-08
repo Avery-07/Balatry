@@ -8,6 +8,7 @@ import client.engine.Layout;
 import client.engine.Reconciler;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -236,19 +237,36 @@ final class Hand {
 
     int selectedCount() { int n = 0; for (CardEntity e : cards) if (e.selected()) n++; return n; }
 
-    /** The selected entities in hand order — what the HUD's play preview evaluates. */
-    List<CardEntity> selectedCards() {
+    /**
+     * The selected entities in the left-to-right order the player sees — honoring a rank/suit sort and any manual
+     * drag reorder, not the dealt/model order. Card order is meaningful: consumables like Sigil/Ouija/The World read
+     * "the first selected card", and a played hand scores its cards in this order, so both must follow the arrangement
+     * on screen. Falls back to dealt order before the first render has populated the visual order.
+     */
+    private List<CardEntity> selectedVisual() {
+        List<CardEntity> base = ordered.isEmpty() ? cards : ordered;
         List<CardEntity> out = new ArrayList<>();
-        for (CardEntity e : cards) if (e.selected()) out.add(e);
+        for (CardEntity e : base) if (e.selected()) out.add(e);
         return out;
     }
 
-    /** The model hand-indices of the selected cards, mapped through the snapshot by stable id. */
+    /** The selected entities in on-screen order — what the HUD's play preview evaluates. */
+    List<CardEntity> selectedCards() { return selectedVisual(); }
+
+    /**
+     * The model hand-indices of the selected cards, in on-screen order — so the model receives them arranged as the
+     * player sees them. The reorder is client-side (a card's model index never moves), so this is where the visual
+     * order is mapped back onto model indices; {@code resolveHand} then preserves it, making the leftmost selected
+     * card "the first" for a consumable and the first to score in a played hand.
+     */
     List<Integer> selectedModelIndices(List<MatchSnapshot.HandCardView> snapHand) {
-        Set<Integer> ids = new HashSet<>();
-        for (CardEntity e : cards) if (e.selected()) ids.add(e.id());
+        Map<Integer, Integer> indexById = new HashMap<>();
+        for (int i = 0; i < snapHand.size(); i++) indexById.put(snapHand.get(i).id(), i);
         List<Integer> out = new ArrayList<>();
-        for (int i = 0; i < snapHand.size(); i++) if (ids.contains(snapHand.get(i).id())) out.add(i);
+        for (CardEntity e : selectedVisual()) {
+            Integer idx = indexById.get(e.id());
+            if (idx != null) out.add(idx);
+        }
         return out;
     }
 }
