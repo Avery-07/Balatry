@@ -73,6 +73,9 @@ public final class CardEntity {
     /** Turns the card over (animated); feeding the current state every frame is a no-op. */
     public void setFaceDown(boolean down) { flip.retarget(down ? 1 : 0); }
 
+    /** Jumps the flip state instantly, with no turn animation (e.g. a freshly dealt card starts face-down, then turns up). */
+    public void snapFaceDown(boolean down) { flip.snap(down ? 1 : 0); }
+
     /** Flip progress in [0,1]: 0 face up, 1 face down, in between mid-turn. */
     public double flipT() { return flip.value(); }
 

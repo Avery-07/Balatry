@@ -253,6 +253,11 @@ public final class Renderer {
         return drawCell(deckBacks, key(deckName), x, y, w, h);
     }
 
+    private Integer deckBackCell;   // the seat's current deck-back cell, set once per frame so flipped cards wear it
+
+    /** Sets which deck back a flipped card wears this frame (the seat's own deck); call once per frame. */
+    public void deckBack(String deckName) { deckBackCell = deckBacks.cell.get(key(deckName)); }
+
     /** The stake-chip sheet (5x2). Eight stakes in Stake order map to their ordinals; the last two cells are unused. */
     public void stakeSheet(Image img) {
         if (img == null || img.isError() || img.getWidth() <= 0) return;
@@ -413,6 +418,12 @@ public final class Renderer {
      * until then, a vector back: felt-dark panel, double border, diamond lattice.
      */
     private void back(double x, double y, double w, double h, double arc) {
+        if (deckBacks.img != null && deckBackCell != null) {   // a flipped card wears the seat's deck back
+            int cell = deckBackCell;
+            g.drawImage(deckBacks.img, (cell % deckBacks.cols) * deckBacks.cw, (cell / deckBacks.cols) * deckBacks.ch,
+                    deckBacks.cw, deckBacks.ch, x, y, w, h);
+            return;
+        }
         if (backImage != null) { g.drawImage(backImage, x, y, w, h); return; }
         g.setFill(Color.web("#27436e")); g.fillRoundRect(x, y, w, h, arc, arc);
         g.setStroke(Color.web("#182a47")); g.setLineWidth(3); g.strokeRoundRect(x + 2, y + 2, w - 4, h - 4, arc, arc);

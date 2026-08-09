@@ -28,14 +28,15 @@ final class Hand {
     static final double CARD_W = 108, CARD_H = 151;
     private static final double EXIT_SECONDS = 0.45;   // how long a leaving card stays visible while flying out
 
-    /** Why the next batch of cards will leave the hand — it decides where they fly. */
-    enum Exit { PLAYED, DISCARDED }
+    /** Why the next batch of cards will leave the hand — it decides where they fly (or that they shatter in place). */
+    enum Exit { PLAYED, DISCARDED, DESTROYED }
 
     /** A card on its way out: it keeps animating but is no longer part of the live hand. */
     private static final class Exiting {
         final CardEntity card;
+        final boolean destroyed;   // true: shrink + fade + spin in place; false: fly off and fade
         double age;
-        Exiting(CardEntity card) { this.card = card; }
+        Exiting(CardEntity card, boolean destroyed) { this.card = card; this.destroyed = destroyed; }
     }
 
     private final List<CardEntity> cards = new ArrayList<>();
@@ -44,7 +45,7 @@ final class Hand {
     private List<CardEntity> ordered = new ArrayList<>();   // last drawn order (for topmost-first hit-testing)
     private int sort;                                        // 0 dealt/manual, 1 rank, 2 suit
     private final Map<Integer, Integer> manualRank = new LinkedHashMap<>();   // id -> drag-chosen position
-    private Exit nextExit = Exit.DISCARDED;                  // set by the Play/Discard gesture, read at reconcile
+    private Exit nextExit = Exit.DESTROYED;                  // set by the Play/Discard gesture; default = a card that vanished without one (glass, a tarot's destroy) shatters
     private CardEntity dragged;                              // the card the player is holding, or null
     private double time;                                     // frame clock for the idle sway
 
@@ -65,6 +66,8 @@ final class Hand {
             desired.add(new Reconciler.Desired(c.id(), c.rank(), c.suit(), c.enhancement(), c.seal(), c.edition(), c.label()));
             wantedIds.add(c.id());
         }
+        Set<Integer> oldIds = new HashSet<>();
+        for (CardEntity e : cards) oldIds.add(e.id());   // to spot freshly dealt cards below (they turn face-up on arrival)
         for (CardEntity e : cards)
             if (!wantedIds.contains(e.id())) beginExit(e, nextExit);
         // Stage the just-played cards left-to-right by where they sat on screen, so the scoring reel sweeps them in
@@ -72,9 +75,11 @@ final class Hand {
         if (nextExit == Exit.PLAYED) staged.sort(java.util.Comparator.comparingDouble(CardEntity::x));
         List<CardEntity> next = Reconciler.reconcile(cards, desired, spawnX, spawnY, 0.35, Easing.EASE_OUT_BACK_SOFT);
         cards.clear(); cards.addAll(next);
-        nextExit = Exit.DISCARDED;   // consumed; anything else that vanishes (a tarot ate it) slides out quietly
+        nextExit = Exit.DESTROYED;   // consumed; anything else that vanishes (glass shatter, a tarot's destroy) shatters in place
 
-        for (int i = 0; i < snapHand.size(); i++) cards.get(i).setFaceDown(snapHand.get(i).faceDown());
+        for (CardEntity e : cards)
+            if (!oldIds.contains(e.id())) e.snapFaceDown(true);   // a freshly dealt card arrives face-down…
+        for (int i = 0; i < snapHand.size(); i++) cards.get(i).setFaceDown(snapHand.get(i).faceDown());   // …then turns up (or stays down under a boss)
         manualRank.keySet().retainAll(wantedIds);   // departed cards release their drag-chosen positions
     }
 
@@ -84,9 +89,11 @@ final class Hand {
         if (dragged == e) dragged = null;
         if (reason == Exit.PLAYED) {
             staged.add(e);   // played cards stand centre-screen while the scoring reel runs, then fly off
-        } else {
+        } else if (reason == Exit.DISCARDED) {
             e.moveTo(Ui.W + CARD_W, e.y() + 40);   // discards leave straight away, off the right edge
-            exiting.add(new Exiting(e));
+            exiting.add(new Exiting(e, false));
+        } else {
+            exiting.add(new Exiting(e, true));   // destroyed: stays put and shatters (shrink + fade + spin)
         }
     }
 
@@ -112,7 +119,7 @@ final class Hand {
     void releaseStaged() {
         for (CardEntity e : staged) {
             e.moveTo(e.x(), e.y() - 220);
-            exiting.add(new Exiting(e));
+            exiting.add(new Exiting(e, false));   // fly up and fade
         }
         staged.clear();
     }
@@ -136,13 +143,19 @@ final class Hand {
     /** Fans the hand out (honoring the sort, manual drag order, and a lift on selected cards), and draws it. */
     void render(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
-        // Leaving cards draw first (under the live hand), fading as they age.
+        // Leaving cards draw first (under the live hand), fading as they age. A discard/played card flies out at full
+        // size; a destroyed card stays put and shatters — shrinking, spinning and drifting up as it fades.
         for (int i = 0; i < exiting.size(); i++) {
-            CardEntity e = exiting.get(i).card;
-            double alpha = Math.max(0, 1 - exiting.get(i).age / EXIT_SECONDS);
+            Exiting ex = exiting.get(i);
+            CardEntity e = ex.card;
+            double t = Math.min(1, ex.age / EXIT_SECONDS);   // 0 -> 1 over its lifetime
+            double alpha = Math.max(0, 1 - t);
+            double scale = ex.destroyed ? Math.max(0, 1 - t * t) : 1;   // quick shrink to nothing
+            double deg = ex.destroyed ? t * 40 : 0;                      // a little spin
+            double drift = ex.destroyed ? 40 * t : 0;                    // and a slight lift
             r.gc().setGlobalAlpha(alpha);
-            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), e.y(),
-                    CARD_W * e.stretchX(), CARD_H * e.stretchY(), 0, false, e.flipT());   // a leaving card streaks as it flies
+            r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), e.y() - drift,
+                    CARD_W * e.stretchX() * scale, CARD_H * e.stretchY() * scale, deg, false, e.flipT());
             r.gc().setGlobalAlpha(1);
         }
 

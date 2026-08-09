@@ -36,6 +36,7 @@ final class Hud {
     }
 
     void render(Ui ui) {
+        ui.r.deckBack(ui.s.deckType());   // flipped cards this frame wear the seat's own deck back
         drawSidebar(ui, Ui.PAD, Ui.PAD, Ui.SIDEBAR, Ui.H - 2 * Ui.PAD);
         double cx = Ui.PAD + Ui.SIDEBAR + 18;
         drawTopSlots(ui, cx, Ui.PAD, Ui.W - Ui.PAD - Ui.DECK_W - 18 - cx, Ui.SLOT_H);
@@ -337,11 +338,11 @@ final class Hud {
     private void drawDeck(Ui ui, double x, double y, double w, double h) {
         Renderer r = ui.r;
 
-        // The deck pile, at the bottom: the table's deck back drawn over the felt frame (falls back to the frame
-        // alone when the sheet is absent). Hovering it opens the full deck view (GameClient checks deckRect).
-        double cardH = 140, cardY = y + h - cardH - 24, bx = x + 5, bw = w - 10;
-        r.panel(bx, cardY, bw, cardH, Color.web("#d3c3a2"), Color.web("#7a5a3a"), 8, 3);
-        r.deckBackFace(ui.s.deckType(), bx + 2, cardY + 2, bw - 4, cardH - 4);   // no-op when the sheet isn't loaded
+        // The deck pile, at the bottom: just the deck-back art, scaled to fill (no frame behind it). Hovering it opens
+        // the full deck view (GameClient checks deckRect). If the sheet is absent it falls back to a drawn card back.
+        double cardH = 150, cardY = y + h - cardH - 24, bx = x + 3, bw = w - 6;
+        if (!r.deckBackFace(ui.s.deckType(), bx, cardY, bw, cardH))
+            r.card(-1, -1, bx + bw / 2, cardY + cardH / 2, bw, cardH, 0, false, 1);   // face-down fallback
         r.textCenter(ui.s.deckRemaining() + " / " + ui.s.deckTotal(), x + w / 2, y + h - 12, 14, INK);
         ui.deckRect = new Layout.Rect(bx, cardY, bw, cardH);
 
