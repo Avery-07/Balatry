@@ -40,6 +40,14 @@ public enum RngSource {
     STICKER_FLOAT      (30),       // where a Floating joker drifts to at the start of each hand
     PACK_HAND          (31),       // the temporary hand dealt for targeting a consumable opened from a pack outside a round
 
+    // Per-item category streams: an item's own code (see PlayerStats#nextSalt(source, itemCode)) isolates every
+    // joker / relic / tarot / spectral, so its emergent rolls never perturb another item's — the same play always
+    // yields the same result regardless of what else is owned.
+    JOKER              (40),       // any emergent roll made inside a joker's own effect, keyed by that joker
+    RELIC              (41),       // any emergent roll made inside a relic's own effect, keyed by that relic
+    TAROT              (42),       // any emergent roll made inside a tarot's own effect, keyed by that tarot
+    SPECTRAL           (43),       // any emergent roll made inside a spectral's own effect, keyed by that spectral
+
     MISC               (99);       // anything not yet promoted to its own source
 
     private final int code;

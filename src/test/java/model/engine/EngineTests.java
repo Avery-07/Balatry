@@ -12,6 +12,7 @@ import client.engine.PaintField;
 import client.engine.Particles;
 import client.engine.Reconciler;
 import client.engine.ScoreReel;
+import client.engine.SlideTransition;
 import client.engine.Spring;
 import client.engine.Squash;
 import client.engine.TileRow;
@@ -45,6 +46,7 @@ public final class EngineTests {
         flip();
         drag();
         fader();
+        slideTransition();
         idle();
         tileRow();
         scoreReel();
@@ -337,6 +339,29 @@ public final class EngineTests {
         check("it ends transparent and idle", f.alpha() == 0 && !f.active());
         f.advance(1);
         checkInt("and never fires again", switched[0], 1);
+    }
+
+    /** The push transition: outgoing slides off toward its exit edge while incoming slides in from its enter edge. */
+    private static void slideTransition() {
+        SlideTransition s = new SlideTransition(0.3, Easing.LINEAR);
+        check("idle before start", !s.active());
+        s.start(SlideTransition.Dir.LEFT, SlideTransition.Dir.RIGHT);
+        check("starting activates it", s.active());
+        near("outgoing starts home", s.outX(1000), 0);
+        near("incoming starts fully off from the right", s.inX(1000), 1000);
+        s.advance(0.15);   // halfway (linear ease)
+        near("outgoing is halfway off to the left", s.outX(1000), -500);
+        near("incoming is halfway in", s.inX(1000), 500);
+        s.advance(0.15);
+        check("it finishes at duration", !s.active());
+        near("outgoing ends fully off left", s.outX(1000), -1000);
+        near("incoming ends home", s.inX(1000), 0);
+
+        s.start(SlideTransition.Dir.UP, SlideTransition.Dir.DOWN);   // the other axis
+        s.advance(0.15);
+        near("exit UP drives outgoing up (negative y)", s.outY(800), -400);
+        near("a vertical exit leaves x untouched", s.outX(1000), 0);
+        near("enter-from-DOWN slides incoming up from below", s.inY(800), 400);
     }
 
     /** The idle sway is bounded, seed-de-phased, and deterministic in time. */

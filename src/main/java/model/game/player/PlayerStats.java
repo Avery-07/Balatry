@@ -27,6 +27,9 @@ public final class PlayerStats {
     // --- keyed RNG counters / shop counter / voucher ledger (unchanged) ---
 
     private final Map<RngSource, Integer> occurrences = new EnumMap<>(RngSource.class);
+    // Per-item occurrence counters: keyed by (category source, item code) so each joker/relic/tarot/spectral draws
+    // from its own isolated stream and its count is never advanced by any other item's draws.
+    private final Map<Long, Integer> itemOccurrences = new java.util.HashMap<>();
     private int shopsOpened;
     private final Set<VoucherSpec> redeemedVouchers = new HashSet<>();
     private boolean voucherRedeemedThisAnte;
@@ -69,6 +72,20 @@ public final class PlayerStats {
         int n = occurrences.getOrDefault(source, 0);
         occurrences.put(source, n + 1);
         return n;
+    }
+
+    /**
+     * Salt for the next draw by one specific item on {@code source} — its category ({@code JOKER}, {@code RELIC},
+     * {@code TAROT}, {@code SPECTRAL}) plus the item's stable {@code itemCode}. Each item advances only its own
+     * counter, so its Nth draw depends solely on that item's own history: two players who play an item identically
+     * get identical results no matter what other items they own. The salt folds the code and count so distinct items
+     * (and distinct occurrences) key distinct streams.
+     */
+    public long nextSalt(RngSource source, int itemCode) {
+        long key = model.game.rng.Rng.combine(source.getCode(), itemCode);
+        int n = itemOccurrences.getOrDefault(key, 0);
+        itemOccurrences.put(key, n + 1);
+        return model.game.rng.Rng.combine(itemCode, n);
     }
 
     /** How many draws have been taken on {@code source} so far. Does not advance the counter. */

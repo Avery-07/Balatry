@@ -298,11 +298,24 @@ final class Hud {
      */
     private static String jokerTip(MatchSnapshot.JokerView jv) {
         StringBuilder tip = new StringBuilder(jv.name());
-        if (!jv.description().isEmpty()) tip.append('\n').append(jv.description());
-        if (!jv.state().isEmpty()) tip.append('\n').append(jv.state());
+        if (!jv.description().isEmpty()) {
+            tip.append('\n').append(jv.description());
+            // Fold the live value into the effect line — "…per discard. (now +120 Chips)" — instead of a separate
+            // readout, so the current effect reads as part of the description.
+            if (!jv.state().isEmpty()) tip.append("  (").append(inlineState(jv.state())).append(')');
+        } else if (!jv.state().isEmpty()) {
+            tip.append('\n').append(jv.state());
+        }
         if (!jv.badge().isEmpty()) tip.append('\n').append(jv.badge());
         if (jv.debuffed()) tip.append('\n').append("DEBUFFED — no effect right now");
         return tip.toString();
+    }
+
+    /** Compacts a joker's live-state phrase for inline use: "Currently : +120 Chips" → "now +120 Chips". */
+    private static String inlineState(String state) {
+        for (String prefix : new String[] { "Currently : ", "Currently: " })
+            if (state.startsWith(prefix)) return "now " + state.substring(prefix.length());
+        return state;
     }
 
     /** A held item's hover text: name, effect, edition/stickers, and — for targeted cards — what it needs selected. */

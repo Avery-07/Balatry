@@ -4,6 +4,8 @@ import client.MatchSnapshot;
 import client.MatchViewModel;
 import client.engine.BackgroundPalette;
 import client.engine.CardEntity;
+import client.engine.Easing;
+import client.engine.SlideTransition;
 import client.engine.TileRow;
 import debug.Log;
 import javafx.animation.AnimationTimer;
@@ -42,7 +44,16 @@ public final class GameClient extends Application {
     private final Map<MatchPhase, Screen> screens = new EnumMap<>(MatchPhase.class);
 
     private final Menu menu = new Menu();
-    private final client.engine.Fader fader = new client.engine.Fader();
+
+    // Push transitions replace every fade-to-black: the outgoing scene is captured to a transparent buffer and slid
+    // off its edge while the incoming scene slides in from its own edge, so the animated backdrop never moves. Two
+    // scopes: `slide` moves just the centre panel on an in-match phase change; `boundarySlide` moves the whole
+    // foreground across a menu<->match boundary. They never overlap in time.
+    private final javafx.scene.canvas.Canvas slideBuf = new javafx.scene.canvas.Canvas(Ui.W, Ui.H);
+    private final SlideTransition slide = new SlideTransition(0.34, Easing.EASE_OUT_CUBIC);
+    private final SlideTransition boundarySlide = new SlideTransition(0.42, Easing.EASE_OUT_CUBIC);
+    private javafx.scene.image.WritableImage outCap;        // captured outgoing centre panel (transparent elsewhere)
+    private javafx.scene.image.WritableImage boundaryCap;   // captured outgoing full scene for a menu<->match boundary
 
     // Dev/cheat overlay for local testing, toggled with '*'. Gated so it can't be opened in a real match by accident:
     // set the BALATRY_DEV env var (inherited by the forked app JVM) or -Dbalatry.dev=true.
@@ -108,7 +119,8 @@ public final class GameClient extends Application {
                 hud.advance(dt);
                 menu.advance(dt);
                 anteBanner.advance(dt);
-                fader.advance(dt);
+                slide.advance(dt);
+                boundarySlide.advance(dt);
                 background.advance(dt);
                 particles.advance(dt);
                 ui.jokerRow.advance(dt);
@@ -170,6 +182,7 @@ public final class GameClient extends Application {
     private void handlePress(double x, double y) {
         pressX = x; pressY = y;
         pressOnHand = false; pressTarget = null;
+        if (slide.active() || boundarySlide.active()) return;   // no grabbing a panel mid-transition
         if (!inMatch() || ui.s == null || ui.showRunInfo) return;
         if (ui.atBlindBarrier() && ui.s.opening() == null) return;   // the barrier blocks input, except while opening a pack
 
@@ -269,7 +282,7 @@ public final class GameClient extends Application {
         try {
             client = opener.open(callbacks);
             menu.seat = client.getSeat().seat();
-            fader.start(() -> menu.enterMode(Menu.Mode.LOBBY));
+            menu.enterMode(Menu.Mode.LOBBY);   // main -> lobby is menu-internal; its own slide-in carries it, no fade
             menu.status = "";
         } catch (Exception e) {
             client = null;
@@ -313,10 +326,11 @@ public final class GameClient extends Application {
         Platform.runLater(() -> ui.status = who + " left the match.");
     }
 
-    /** FX thread: the server closed the lobby and everyone has built the same match — fade into it. */
+    /** FX thread: the server closed the lobby and everyone has built the same match — push from the lobby into it. */
     private void onMatchStarted() {
         Log.phase("LOBBY", "MATCH");
-        fader.start(() -> {
+        startBoundary(() -> { menu.render(ui); overlays.tooltip(ui); },   // capture the lobby (the match already "started")
+                SlideTransition.Dir.LEFT, SlideTransition.Dir.RIGHT, () -> {
             vm = new MatchViewModel(client);
             ui.vm = vm;
             vm.snapshotProperty().addListener((o, old, snap) -> { if (snap != null) onSnapshot(snap); });
@@ -335,7 +349,8 @@ public final class GameClient extends Application {
      */
     private void leaveLobby() {
         leaving = true;   // set synchronously so an involuntary-drop callback racing the teardown knows this was us
-        fader.start(() -> {
+        startBoundary(this::drawForeground,   // capture the live game/lobby scene before it is torn down
+                SlideTransition.Dir.RIGHT, SlideTransition.Dir.LEFT, () -> {
             shutdown();
             client = null;
             hosted = null;
@@ -374,6 +389,13 @@ public final class GameClient extends Application {
      */
     private void onSnapshot(MatchSnapshot snap) {
         MatchSnapshot previous = ui.s;
+        // A phase change starts a push transition: capture the outgoing panel now, while the old ui state is still
+        // live (before ui.s and the hand are updated below), then slide it out as the incoming panel slides in.
+        if (previous != null && previous.phase() != snap.phase()
+                && previous.phase() != MatchPhase.LOBBY && snap.phase() != MatchPhase.LOBBY) {
+            captureOutgoing(previous.phase());
+            slide.start(exitDir(previous.phase()), enterDir(snap.phase()));
+        }
         ui.s = snap;
         hand.reconcile(snap.hand(), Ui.W - 90, Ui.H * 0.55);
         updateBackground(snap);
@@ -438,8 +460,22 @@ public final class GameClient extends Application {
     private void render() {
         ui.newFrame();
         r.clock(ui.now);   // the edition shimmers animate on this
-        paintBackground();
-        if (!inMatch()) { menu.render(ui); overlays.tooltip(ui); drawFade(); return; }   // menu owns the screen; its hover tips draw last
+        paintBackground();   // the backdrop never moves — the foreground slides over it during a transition
+        // A menu<->match boundary pushes the whole foreground: the incoming scene draws under a translate here, the
+        // captured outgoing scene (backdrop-free) is blitted sliding its own way. The in-match centre-panel slide is
+        // nested inside the game foreground below.
+        boolean boundary = boundarySlide.active();
+        if (boundary) { r.gc().save(); r.gc().translate(boundarySlide.inX(Ui.W), boundarySlide.inY(Ui.H)); }
+        drawForeground();
+        if (boundary) {
+            r.gc().restore();
+            if (boundaryCap != null) r.gc().drawImage(boundaryCap, boundarySlide.outX(Ui.W), boundarySlide.outY(Ui.H));
+        }
+    }
+
+    /** The whole scene above the backdrop: the menu, or the in-match board (which runs its own centre-panel slide). */
+    private void drawForeground() {
+        if (!inMatch()) { menu.render(ui); overlays.tooltip(ui); return; }   // menu owns the screen; its hover tips draw last
         if (ui.s == null) { r.textCenter("Dealing…", Ui.W / 2.0, Ui.H / 2.0, 22, Palette.INK); return; }
         if (lastPhase != ui.s.phase()) { Log.phase(lastPhase, ui.s.phase()); lastPhase = ui.s.phase(); }
 
@@ -455,6 +491,10 @@ public final class GameClient extends Application {
         // waits for it, and the seat gets an "Open" gate here rather than the dead waiting popup — skipped or played.
         boolean packToOpen = blindWait && !packOpen && !ui.s.pendingPacks().isEmpty();
         if (!packOpen) ui.packSel = -1;   // no pack open: drop any stale preview selection
+        // During a phase transition the centre panel slides: the incoming content is drawn under a translate, and the
+        // captured outgoing panel (backdrop-free) is blitted sliding its own way just after this block.
+        boolean sliding = slide.active();
+        if (sliding) { r.gc().save(); r.gc().translate(slide.inX(Ui.W), slide.inY(Ui.H)); }
         if (packOpen) {
             // Balatro-style: the dealt options rest on the table centre with a name/Skip bar at the bottom
             // (Overlays.pack). Draw the hand first and raised toward the top, so the options have room below it.
@@ -469,6 +509,10 @@ public final class GameClient extends Application {
             if (screen != null) screen.render(ui, cx, cTop, cW, cH);   // a finished blind keeps the round board behind the popup
             else r.textCenter(String.valueOf(ui.s.phase()), cx + cW / 2, cTop + cH / 2, 20, Palette.DIM);
             if (!blindWait) overlays.contextActions(ui);   // no contextual buy/use/sell while waiting at the barrier
+        }
+        if (sliding) {
+            r.gc().restore();
+            if (outCap != null) r.gc().drawImage(outCap, slide.outX(Ui.W), slide.outY(Ui.H));
         }
         if (packToOpen) overlays.pendingPackPrompt(ui);   // the "Open" gate for a free skip/Wrath pack, over the barrier
         if (!ui.status.isEmpty()) r.textLeft(ui.status, Ui.PAD + 8, Ui.H - 20, 12, Palette.DIM);
@@ -495,8 +539,7 @@ public final class GameClient extends Application {
         if (ui.showOptions) { overlays.options(ui, ui.now); overlays.tooltip(ui); }
 
         if (anteBanner.active()) anteBanner.render(ui);   // the ante-change sin handover banner
-        if (DEV) dev.render(ui, localRun());   // cheat overlay on top of everything but the fade
-        drawFade();
+        if (DEV) dev.render(ui, localRun());   // cheat overlay on top of everything
     }
 
     /** The local seat's live {@link model.game.player.Run} for the dev panel to mutate, or null before the match starts. */
@@ -504,12 +547,55 @@ public final class GameClient extends Application {
         return (client != null && client.isStarted()) ? client.getLocalHost().getMatch().getRun(client.getSeat()) : null;
     }
 
-    /** The fade-to-black transition overlay; the screen switch itself happens inside the Fader at full black. */
-    private void drawFade() {
-        double a = fader.alpha();
-        if (a <= 0) return;
-        r.gc().setFill(javafx.scene.paint.Color.web("#000000", a));
-        r.gc().fillRect(0, 0, Ui.W, Ui.H);
+    // --- screen-to-screen slide transition -----------------------------------
+
+    /** The edge the outgoing panel of {@code phase} slides off toward. */
+    private static SlideTransition.Dir exitDir(MatchPhase phase) {
+        return switch (phase) {
+            case BLIND, RESULT -> SlideTransition.Dir.LEFT;
+            case SHOP          -> SlideTransition.Dir.DOWN;
+            default            -> SlideTransition.Dir.UP;   // SELECTION lifts away
+        };
+    }
+
+    /** The edge the incoming panel of {@code phase} arrives from. */
+    private static SlideTransition.Dir enterDir(MatchPhase phase) {
+        return switch (phase) {
+            case SELECTION -> SlideTransition.Dir.UP;    // drops in from the top
+            case BLIND     -> SlideTransition.Dir.DOWN;  // the board rises from the bottom
+            default        -> SlideTransition.Dir.RIGHT; // RESULT / SHOP push in from the right
+        };
+    }
+
+    /** Captures the outgoing centre panel (the {@code phase} screen, backdrop-free) into {@link #outCap} for the slide. */
+    private void captureOutgoing(MatchPhase phase) {
+        Screen screen = screens.get(phase);
+        if (screen == null) { outCap = null; return; }
+        double cx = Ui.PAD + Ui.SIDEBAR + 18, cTop = Ui.PAD + Ui.SLOT_H + 12;
+        double cW = Ui.W - Ui.PAD - Ui.DECK_W - 18 - cx, cH = Ui.H - Ui.PAD - cTop;
+        var buf = slideBuf.getGraphicsContext2D();
+        buf.clearRect(0, 0, Ui.W, Ui.H);
+        r.withTarget(buf, () -> screen.render(ui, cx, cTop, cW, cH));   // drawn with the still-old ui state
+        javafx.scene.SnapshotParameters sp = new javafx.scene.SnapshotParameters();
+        sp.setFill(javafx.scene.paint.Color.TRANSPARENT);
+        outCap = slideBuf.snapshot(sp, outCap);
+    }
+
+    /**
+     * A menu<->match boundary push: capture the outgoing scene (drawn by {@code drawOld}) to the transparent buffer,
+     * run {@code switchScene} to swap state, then slide the old capture out toward {@code exit} while the new scene
+     * slides in from {@code enter}. The capture must happen before the switch, while the old state is still live.
+     */
+    private void startBoundary(Runnable drawOld, SlideTransition.Dir exit, SlideTransition.Dir enter, Runnable switchScene) {
+        var buf = slideBuf.getGraphicsContext2D();
+        buf.clearRect(0, 0, Ui.W, Ui.H);
+        ui.newFrame();                       // a clean registry for the throwaway capture render
+        r.withTarget(buf, drawOld);          // draw the outgoing scene, backdrop-free, into the buffer
+        javafx.scene.SnapshotParameters sp = new javafx.scene.SnapshotParameters();
+        sp.setFill(javafx.scene.paint.Color.TRANSPARENT);
+        boundaryCap = slideBuf.snapshot(sp, boundaryCap);
+        switchScene.run();
+        boundarySlide.start(exit, enter);
     }
 
     /**
@@ -533,6 +619,7 @@ public final class GameClient extends Application {
     }
 
     private void handleClick(double x, double y) {
+        if (slide.active() || boundarySlide.active()) return;   // mid-transition; ignore clicks on the sliding scene
         if (suppressClick) { suppressClick = false; return; }   // this click was the tail end of a drag
         for (Ui.Btn b : ui.devButtons) if (b.rect().contains(x, y)) { b.action().run(); return; }   // cheat controls win any phase
         if (!inMatch()) {   // menu/lobby: only the widgets it registered this frame are live

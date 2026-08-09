@@ -143,14 +143,14 @@ public final class RelicTests {
         Shop s2 = shopper.openShop();
         check("Limos is one-shot: next shop is clean", !s2.getSlot(0).isDebuffed());
 
-        // Metabole: rerolls the shared next-ante boss. Two identical matches diverge only by the reroll.
+        // Metabole: immediately rerolls THIS ante's shared boss. Two identical matches diverge only by the reroll.
         Match plain = Match.create(99L, List.of("A", "B"));
         Match meta = Match.create(99L, List.of("A", "B"));
-        runToAnte2Boss(plain, false);
-        runToAnte2Boss(meta, true);
-        check("both matches reached an ante-2 boss",
+        runToAnte1Boss(plain, false);
+        runToAnte1Boss(meta, true);
+        check("both matches reached this ante's boss",
                 plain.getCurrentBoss() != null && meta.getCurrentBoss() != null);
-        check("Metabole changes the shared boss",
+        check("Metabole changes this ante's boss",
                 plain.getCurrentBoss() != meta.getCurrentBoss());
     }
 
@@ -261,8 +261,8 @@ public final class RelicTests {
         run.addMoney(amount - run.getMoney());
     }
 
-    /** Drives a match to the ante-2 boss deal; if {@code useMetabole}, a seat spends Metabole during the first shop. */
-    private static void runToAnte2Boss(Match match, boolean useMetabole) {
+    /** Drives a match to this ante's boss deal; if {@code useMetabole}, a seat spends Metabole in the first shop, before the boss. */
+    private static void runToAnte1Boss(Match match, boolean useMetabole) {
         for (PlayerId id : match.getSeats()) stackToWin(match.getRun(id));   // each seat clears every blind in one hand
         match.start();                                   // ante 1 small
         winAll(match);
@@ -270,14 +270,12 @@ public final class RelicTests {
         if (useMetabole) {
             PlayerId caster = match.getSeats().get(0);
             match.getRun(caster).addRelic(Relics.METABOLE.make());
-            match.useRelic(caster, 0, RelicTarget.none());   // arms a reroll for ante 2 (ante==1 here)
+            match.useRelic(caster, 0, RelicTarget.none());   // rerolls this ante's boss immediately (ante==1 here)
         }
-        match.nextBlind();
-        for (int i = 0; i < 4; i++) {                    // big, boss, ante2 small, ante2 big -> leaves us at ante2 boss
-            winAll(match);
-            match.toShop();
-            match.nextBlind();
-        }
+        match.nextBlind();                               // -> big
+        winAll(match);
+        match.toShop();
+        match.nextBlind();                               // -> boss
     }
 
     /** Stacks {@code run} so a single hand clears any blind under any boss: eight Aces in cycling suits (so any 3- or 5-card window is a same-rank hand, never an accidental flush) and every hand type leveled far up. */

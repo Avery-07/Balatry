@@ -74,7 +74,7 @@ public enum Jokers {
             })),
     MISPRINT("Misprint", "+0 to +15 Mult (random), then X0.75 to X1.5 Mult (random).", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
-                RandomGenerator g = gen(run, RngSource.MISC);
+                RandomGenerator g = gen(run, self);
                 run.getScoring().addMult(g.nextInt(16));
                 run.getScoring().multiplyMult(BigDecimal.valueOf(75 + 25L * g.nextInt(4), 2));
             })),
@@ -170,7 +170,7 @@ public enum Jokers {
                 List<Integer> adj = new ArrayList<>();
                 if (i - 1 >= 0 && !js.get(i - 1).hasSticker(Sticker.ETERNAL)) adj.add(i - 1);
                 if (i + 1 < js.size() && !js.get(i + 1).hasSticker(Sticker.ETERNAL)) adj.add(i + 1);
-                if (!adj.isEmpty()) run.destroyJoker(js.get(adj.get(gen(run, RngSource.MISC).nextInt(adj.size()))));
+                if (!adj.isEmpty()) run.destroyJoker(js.get(adj.get(gen(run, self).nextInt(adj.size()))));
             })
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(onePlus("0.5", self.getCounter())))),
     // endregion
@@ -180,7 +180,7 @@ public enum Jokers {
                 int hits = run.getStats().getTimesTargeted();
                 if (hits > 0) run.getScoring().multiplyMult(onePlus("0.2", hits));
             })),
-    SCALPER("Scalper", "Gains X0.1 upon emptying a shop", Rarity.COMMON, 5, b -> b
+    SCALPER("Scalper", "Gains X0.1 Mult whenever you buy out the shop's card slots.", Rarity.COMMON, 5, b -> b
             .on(Trigger.ON_SHOP_EMPTIED, (run, self) -> self.addCounter(1))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 if (self.getCounter() > 0) run.getScoring().multiplyMult(onePlus("0.1", self.getCounter()));
@@ -192,7 +192,7 @@ public enum Jokers {
                 if (m == null || run.getPlayerId() == null) return;
                 List<PlayerId> above = m.seatsAbove(run.getPlayerId());
                 if (above.isEmpty()) return;
-                RandomGenerator g = gen(run, RngSource.MISC);
+                RandomGenerator g = gen(run, self);
                 List<JokerCard> theirs = m.getRun(above.get(g.nextInt(above.size()))).getJokers();
                 if (theirs.isEmpty()) return;
                 Sticker[] pool = { Sticker.ETERNAL, Sticker.PERISHABLE, Sticker.RENTAL, Sticker.STICKY, Sticker.DELAYED, Sticker.FLOATING, Sticker.FRAGILE };
@@ -226,7 +226,7 @@ public enum Jokers {
                 if (leader == run) return;                                    // we are already leading — no one to copy
                 List<JokerCard> theirs = leader.getJokers();
                 if (theirs.isEmpty()) return;
-                JokerCard pick = theirs.get(gen(run, RngSource.MISC).nextInt(theirs.size()));
+                JokerCard pick = theirs.get(gen(run, self).nextInt(theirs.size()));
                 run.queueJokerFromSale(new JokerCard(pick.getSpec()));        // a fresh copy takes the slot the sale frees
             })
             .state(card -> "Owned " + card.getCounter() + " round" + (card.getCounter() == 1 ? "" : "s"))),
@@ -244,20 +244,20 @@ public enum Jokers {
                         && countsAs(run, c, Rank.SIX)) {
                     self.setCounter(hand);
                     run.destroyDeckCards(List.of(c));
-                    run.createConsumable(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
+                    run.createConsumable(Spectrals.random(gen(run, self)).spec());
                 }
             })),
     CELESTIAL_7("Celestial 7", "1 in 4 chance to create an editioned Planet card when a 7 is played.", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
-                if (c != null && countsAs(run, c, Rank.SEVEN) && run.roll(RngSource.MISC, 1, 4))
-                    createEditioned(run, new ConsumableCard(Planets.random(gen(run, RngSource.PLANET_GENERATION)).spec()));
+                if (c != null && countsAs(run, c, Rank.SEVEN) && roll(run, self, 1, 4))
+                    createEditioned(run, self, new ConsumableCard(Planets.random(gen(run, self)).spec()));
             })),
     EIGHT_BALL("8 Ball", "1 in 4 chance for each played 8 to create an editioned Tarot card when scored.", Rarity.COMMON, 5, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> {
                 DeckCard c = scored(run);
-                if (c != null && countsAs(run, c, Rank.EIGHT) && run.roll(RngSource.TAROT_GENERATION, 1, 4))
-                    createEditioned(run, new ConsumableCard(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()));
+                if (c != null && countsAs(run, c, Rank.EIGHT) && roll(run, self, 1, 4))
+                    createEditioned(run, self, new ConsumableCard(Tarots.random(gen(run, self)).spec()));
             })),
     CLOUD_9("Cloud 9", "Earn $1 for each 9 in your full deck at end of round.", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_ROUND_END,
             (run, self) -> {
@@ -325,13 +325,13 @@ public enum Jokers {
     // endregion
     // region Jokers 051-055
     ARROWHEAD("Arrowhead", "1 in 2 chance for played Spade cards to give +75 Chips when scored.", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.SPADE) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().addChips(75); })),
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.SPADE) && roll(run, self, 1, 2)) run.getScoring().addChips(75); })),
     BLOODSTONE("Bloodstone", "1 in 2 chance for played Heart cards to give X1.5 Mult when scored.", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().multiplyMult(x("1.5")); })),
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.HEART) && roll(run, self, 1, 2)) run.getScoring().multiplyMult(x("1.5")); })),
     ONYX_AGATE("Onyx Agate", "1 in 2 chance for played Club cards to give +16 Mult when scored.", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.CLUB) && run.roll(RngSource.MISC, 1, 2)) run.getScoring().addMult(16); })),
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.CLUB) && roll(run, self, 1, 2)) run.getScoring().addMult(16); })),
     ROUGH_GEM("Rough Gem", "1 in 2 chance for played Diamond cards to give $2 when scored.", Rarity.UNCOMMON, 7, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+            (run, self) -> { if (isSuit(run.getScoring(), Suit.DIAMOND) && roll(run, self, 1, 2)) run.addMoney(2); })),
     FLOWER_POT("Flower Pot", "X1 Mult for every different suit in the played hand.", Rarity.UNCOMMON, 6, b -> b
             .on(Trigger.ON_SCORED_CARD, (run, self) -> {
                 int hand = run.getStats().getTotalHandsPlayed();
@@ -352,20 +352,22 @@ public enum Jokers {
             (run, self) -> { DeckCard c = scored(run); if (c != null && anyRank(run, c, Jokers::isOdd)) run.getScoring().addChips(31); })),
     EVEN_STEVEN("Even Steven", "Played even-rank cards give +4 Mult when scored.", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
             (run, self) -> { DeckCard c = scored(run); if (c != null && anyRank(run, c, Jokers::isEven)) run.getScoring().addMult(4); })),
-    THE_IDOL("The Idol", "Each played card of a set rank and suit gives X2 Mult (changes every round).", Rarity.UNCOMMON, 6, b -> b
+    THE_IDOL("The Idol", "Each played card of a set rank and suit gives X2 Mult (a card drawn from your deck, changing every round).", Rarity.UNCOMMON, 6, b -> b
             .state(self -> "Idolized card this round: " + rankName(self.getCounter() / 4) + " of " + suitIndexName(self.getCounter() % 4))
-            .on(Trigger.ON_ROUND_START, (run, self) -> {
-                RandomGenerator g = gen(run, RngSource.MISC);
-                self.setCounter(g.nextInt(Rank.values().length) * 4 + g.nextInt(4));
-            })
+            .on(Trigger.ON_ROUND_START, (run, self) ->
+                    self.setCounter(idolTargetFromDeck(run.getDeck(), gen(run, self))))
             .on(Trigger.ON_SCORED_CARD, (run, self) -> {
                 DeckCard c = scored(run);
                 if (c != null && countsAs(run, c, Rank.values()[self.getCounter() / 4]) && matchesSuit(c, self.getCounter() % 4))
                     run.getScoring().multiplyMult(x("2"));
             })),
-    ANCIENT_JOKER("Ancient Joker", "Each played card of a set suit gives X1.5 Mult (suit changes each round).", Rarity.RARE, 8, b -> b
+    ANCIENT_JOKER("Ancient Joker", "Each played card of a set suit gives X1.5 Mult (a suit drawn from your deck, changing each round).", Rarity.RARE, 8, b -> b
             .state(self -> self.getCounter() > 0 ? "Suit this round: " + suitIndexName(self.getCounter() - 1) : "Suit chosen at round start")
-            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(4) + 1))
+            .on(Trigger.ON_ROUND_START, (run, self) -> {
+                java.util.List<DeckCard> deck = run.getDeck();
+                RandomGenerator g = gen(run, self);
+                self.setCounter((deck.isEmpty() ? g.nextInt(4) : suitIndex(deck.get(g.nextInt(deck.size())))) + 1);
+            })
             .on(Trigger.ON_SCORED_CARD, (run, self) -> { DeckCard c = scored(run); if (c != null && self.getCounter() > 0 && matchesSuit(c, self.getCounter() - 1)) run.getScoring().multiplyMult(x("1.5")); })),
     SUPERNOVA("Supernova", "Adds the number of times this hand type has been played this run to Mult.", Rarity.COMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().addMult(run.getStats().getHandPlays(run.getScoring().getHand().type())))),
@@ -424,14 +426,14 @@ public enum Jokers {
                 List<DeckCard> cards = run.getScoring().getScoringCards();
                 if (run.getScoring().getHand().type() == HandType.FULL_HOUSE && !cards.isEmpty()) {
                     Enhancement[] all = Enhancement.values();
-                    cards.get(0).apply(all[gen(run, RngSource.MISC).nextInt(all.length)]);
+                    cards.get(0).apply(all[gen(run, self).nextInt(all.length)]);
                 }
             })),
     SEANCE("Séance", "If the played hand contains a Straight Flush, create a Negative Spectral card.", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> {
                 var hand = run.getScoring().getHand();
                 if (hand.hasStraight() && hand.hasFlush()) {   // a straight and a flush together is a straight flush
-                    ConsumableCard card = new ConsumableCard(Spectrals.random(gen(run, RngSource.SPECTRAL_GENERATION)).spec());
+                    ConsumableCard card = new ConsumableCard(Spectrals.random(gen(run, self)).spec());
                     card.apply(Edition.NEGATIVE);
                     run.addConsumable(card);
                 }
@@ -464,10 +466,9 @@ public enum Jokers {
             (run, self) -> {
                 DeckCard stone = new DeckCard(Rank.ACE, DeckCard.Suit.SPADES);
                 stone.apply(Enhancement.STONE);
-                long salt = run.getDeck().size();
-                if (run.getRng().chance(RngSource.MISC, salt, 1, 2)) {
+                if (roll(run, self, 1, 2)) {
                     Seal[] seals = Seal.values();
-                    stone.apply(seals[run.getRng().nextInt(RngSource.CARD_SEAL, salt, seals.length)]);
+                    stone.apply(seals[gen(run, self).nextInt(seals.length)]);
                 }
                 run.addCardToDeck(stone);
             })),
@@ -477,7 +478,7 @@ public enum Jokers {
     // region Jokers 081-085 (missing : Dyscalculie, Pareidolie)
     CERTIFICATE("Certificate", "When the round begins, add a random playing card with a random seal and enhancement to your hand.", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
             (run, self) -> {
-                RandomGenerator g = gen(run, RngSource.MISC);
+                RandomGenerator g = gen(run, self);
                 DeckCard c = new DeckCard(Rank.values()[g.nextInt(Rank.values().length)], DeckCard.Suit.values()[g.nextInt(4)]);
                 c.apply(Seal.values()[g.nextInt(Seal.values().length)]);
                 c.apply(Enhancement.values()[g.nextInt(Enhancement.values().length)]);
@@ -506,7 +507,7 @@ public enum Jokers {
                 HandType type = run.getScoring().getHand().type();
                 boolean straight = type == HandType.STRAIGHT || type == HandType.STRAIGHT_FLUSH;
                 boolean ace = run.getScoring().getScoringCards().stream().anyMatch(c -> countsAs(run, c, Rank.ACE));
-                if (straight && ace) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
+                if (straight && ace) run.createConsumable(Tarots.random(gen(run, self)).spec());
             })),
     SHORTCUT("Shortcut", "Allows Straights to be made with gaps of 1 rank.", Rarity.UNCOMMON, 7, b -> b.trait(JokerTrait.SHORTCUT)),
     OOPS_ALL_6S("Oops! All 6s", "Doubles all listed probabilities.", Rarity.UNCOMMON, 4, b -> b.trait(JokerTrait.PROBABILITY_DOUBLER)),
@@ -528,12 +529,12 @@ public enum Jokers {
     // region Jokers 096-100
     MIME("Mime", "Retriggers all cards held in hand.", Rarity.UNCOMMON, 5, b -> b.retriggerHeld((run, self, card) -> 1)),
     BUSINESS_CARD("Business Card", "Played face cards have a 1 in 2 chance to give $2 when scored.", Rarity.COMMON, 4, b -> b.on(Trigger.ON_SCORED_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c) && roll(run, self, 1, 2)) run.addMoney(2); })),
     RESERVED_PARKING("Reserved Parking", "Each face card held in hand has a 1 in 2 chance to give $1.", Rarity.COMMON, 6, b -> b.on(Trigger.ON_HELD_CARD,
-            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c) && run.roll(RngSource.MISC, 1, 2)) run.addMoney(2); })),
+            (run, self) -> { DeckCard c = scored(run); if (c != null && run.isFaceCard(c) && roll(run, self, 1, 2)) run.addMoney(2); })),
     TO_DO_LIST("To Do List", "Earn $4 if the played poker hand is a set type (changes at end of round).", Rarity.COMMON, 4, b -> b
             .state(self -> "Listed hand this round: " + handTypeName(self.getCounter()))
-            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(HandType.values().length)))
+            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, self).nextInt(HandType.values().length)))
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> { if (run.getScoring().getHand().type().ordinal() == self.getCounter()) run.addMoney(4); })),
     STARGAZING("Stargazing", "Earn $3 if played hand type is the same as last played by any other player.", Rarity.COMMON, 4, b -> b.trait(JokerTrait.SEAT_COUPLING).on(Trigger.ON_HAND_PLAYED, (run, self) -> {
                 Match m = run.getMatch();
@@ -548,7 +549,7 @@ public enum Jokers {
     // region Jokers 101-105
     MAIL_IN_REBATE("Mail-In Rebate", "Earn $4 for each discarded card of a set rank (changes every round).", Rarity.COMMON, 4, b -> b
             .state(self -> "Rebate rank this round: " + rankName(self.getCounter()))
-            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, RngSource.MISC).nextInt(Rank.values().length)))
+            .on(Trigger.ON_ROUND_START, (run, self) -> self.setCounter(gen(run, self).nextInt(Rank.values().length)))
             .on(Trigger.ON_HAND_DISCARDED, (run, self) -> {
                 int n = 0;
                 for (DeckCard c : run.getLastDiscarded()) if (countsAs(run, c, Rank.values()[self.getCounter()])) n++;
@@ -648,7 +649,7 @@ public enum Jokers {
                 if (planet || celestial) run.makePurchaseFree();
             })),
     SPACE_JOKER("Space Joker", "1 in 4 chance to upgrade the level of the played poker hand.", Rarity.UNCOMMON, 5, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.roll(RngSource.MISC, 1, 4)) run.levelUpHand(run.getScoring().getHand().type()); })),
+            (run, self) -> { if (roll(run, self, 1, 4)) run.levelUpHand(run.getScoring().getHand().type()); })),
     CONSTELLATION("Constellation", "Gains X0.1 Mult every time a Planet card is used.", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().multiplyMult(onePlus("0.1", run.getStats().getConsumablesUsed(ConsumableType.PLANET))))),
     // endregion
@@ -659,16 +660,16 @@ public enum Jokers {
                     run.levelUpHand(new HandEvaluator().evaluate(run.getLastDiscarded()).type());
             })),
     HALLUCINATION("Hallucination", "1 in 2 chance to create a Tarot card when any Booster Pack is opened.", Rarity.COMMON, 4, b -> b.on(Trigger.ON_PACK_OPENED, (run, self) -> {
-                if (run.roll(RngSource.MISC, 1, 2)) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec());
+                if (roll(run, self, 1, 2)) run.createConsumable(Tarots.random(gen(run, self)).spec());
             })),
     CARTOMANCER("Cartomancer", "Create a Tarot card when a Blind is selected.", Rarity.UNCOMMON, 6, b -> b.on(Trigger.ON_ROUND_START,
-            (run, self) -> run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()))),
+            (run, self) -> run.createConsumable(Tarots.random(gen(run, self)).spec()))),
     FORTUNE_TELLER("Fortune Teller", "+1 Mult per Tarot card used this run.", Rarity.COMMON, 6, b -> b
             .state((self, info) -> "Currently : +" + info.consumablesUsed(ConsumableType.TAROT) + " Mult")
             .on(Trigger.ON_HAND_PLAYED,
             (run, self) -> run.getScoring().addMult(run.getStats().getConsumablesUsed(ConsumableType.TAROT)))),
     VAGABOND("Vagabond", "Creates a Tarot card if a hand is played with $4 or less.", Rarity.RARE, 8, b -> b.on(Trigger.ON_HAND_PLAYED,
-            (run, self) -> { if (run.getMoney() <= 4) run.createConsumable(Tarots.random(gen(run, RngSource.TAROT_GENERATION)).spec()); })),
+            (run, self) -> { if (run.getMoney() <= 4) run.createConsumable(Tarots.random(gen(run, self)).spec()); })),
     // endregion
     // region Jokers 126-130
     ICE_CREAM("Ice Cream", "+100 Chips, -5 Chips for every hand played.", Rarity.COMMON, 5, b -> b
@@ -692,10 +693,10 @@ public enum Jokers {
             })),
     GROS_MICHEL("Gros Michel", "+15 Mult; 1 in 6 chance to be destroyed at end of round.", Rarity.COMMON, 5, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().addMult(15))
-            .on(Trigger.ON_ROUND_END, (run, self) -> { if (run.roll(RngSource.MISC, 1, 6)) run.destroyJoker(self); })),
+            .on(Trigger.ON_ROUND_END, (run, self) -> { if (roll(run, self, 1, 6)) run.destroyJoker(self); })),
     CAVENDISH("Cavendish", "X3 Mult; 1 in 1000 chance to be destroyed at end of round.", Rarity.COMMON, 4, b -> b
             .on(Trigger.ON_HAND_PLAYED, (run, self) -> run.getScoring().multiplyMult(x("3")))
-            .on(Trigger.ON_ROUND_END, (run, self) -> { if (run.roll(RngSource.MISC, 1, 1000)) self.setCounter(1); })
+            .on(Trigger.ON_ROUND_END, (run, self) -> { if (roll(run, self, 1, 1000)) self.setCounter(1); })
             .on(Trigger.ON_ROUND_START, (run, self) -> { if (self.getCounter() == 1) run.destroyJoker(self); })),
     // endregion
     // region Jokers 131-135 (missing : Turtle Bean, Diet Cola)
@@ -748,7 +749,7 @@ public enum Jokers {
     RIFF_RAFF("Riff-Raff", "When Blind is selected, create 2 Common Jokers.", Rarity.COMMON, 6, b -> b
             .on(Trigger.ON_ROUND_START, (run, self) -> {
                 for (int k = 0; k < 2; k++)
-                    run.createJoker(Jokers.randomOfRarity(Rarity.COMMON, gen(run, RngSource.JOKER_GENERATION)).make());
+                    run.createJoker(Jokers.randomOfRarity(Rarity.COMMON, gen(run, self)).make());
             })),
     DRUNKARD("Drunkard", "+1 discard each round.", Rarity.COMMON, 4, b -> b
             .on(Trigger.ON_BOUGHT, (run, self) -> run.setBaseDiscards(run.getBaseDiscards() + 2))
@@ -842,7 +843,7 @@ public enum Jokers {
             (run, self) -> {
                 for (ConsumableCard cc : run.getConsumables())
                     if (cc.getEdition() == null)
-                        cc.apply(switch (gen(run, RngSource.CARD_EDITION).nextInt(3)) {
+                        cc.apply(switch (gen(run, self).nextInt(3)) {
                             case 0 -> Edition.FOIL; case 1 -> Edition.HOLOGRAPHIC; default -> Edition.POLYCHROME; });
             })),
     // endregion
@@ -854,7 +855,7 @@ public enum Jokers {
                 if(self.getCounter() >= 2) {
                     List<JokerCard> js = run.getJokers();
                     js.remove(self);
-                    run.createJoker(js.get(gen(run, RngSource.MISC).nextInt(js.size())));
+                    run.createJoker(js.get(gen(run, self).nextInt(js.size())));
                 }
             })
     ),
@@ -904,7 +905,7 @@ public enum Jokers {
     PERKEO("Perkeo", "Creates a copy of 1 random consumable in your possession at end of shop.", Rarity.LEGENDARY, 20, b -> b
             .on(Trigger.ON_SHOP_END, (run, self) -> {
                 List<ConsumableCard> cs = run.getConsumables();
-                if (!cs.isEmpty()) run.createConsumable(cs.get(gen(run, RngSource.MISC).nextInt(cs.size())).getSpec());
+                if (!cs.isEmpty()) run.createConsumable(cs.get(gen(run, self).nextInt(cs.size())).getSpec());
             }));
     // endregion
 
@@ -1027,6 +1028,21 @@ public enum Jokers {
         };
     }
 
+    /** A card's own suit as the 0-3 index {@link #matchesSuit}/{@link #suitIndexName} use (spade 0, heart 1, club 2, diamond 3). */
+    private static int suitIndex(DeckCard c) {
+        if (c.isHeart()) return 1;
+        if (c.isClub())  return 2;
+        if (c.isDiamond()) return 3;
+        return 0;   // spade (and the default for anything unusual)
+    }
+
+    /** A rank/suit for The Idol drawn from an actual card in {@code deck}, so deck-fixing steers it; falls back to a uniform pick on an empty deck. Encoded as {@code rank*4 + suitIndex}. */
+    private static int idolTargetFromDeck(java.util.List<DeckCard> deck, RandomGenerator g) {
+        if (deck.isEmpty()) return g.nextInt(Rank.values().length) * 4 + g.nextInt(4);
+        DeckCard pick = deck.get(g.nextInt(deck.size()));
+        return pick.getRank().ordinal() * 4 + suitIndex(pick);
+    }
+
     /** Bitmask of the suits a card counts as (bit0 spade, 1 heart, 2 club, 3 diamond); WILD is all four. */
     private static int suitMask(DeckCard c) {
         return (c.isSpade() ? 1 : 0) | (c.isHeart() ? 2 : 0) | (c.isClub() ? 4 : 0) | (c.isDiamond() ? 8 : 0);
@@ -1086,8 +1102,21 @@ public enum Jokers {
     }
 
     /** A keyed sub-stream for an emergent joker draw. */
-    private static RandomGenerator gen(model.game.player.Run run, RngSource source) {
-        return run.getRng().streamFor(source, run.nextSalt(source));
+    /** A joker's stable RNG identity: its unique name's hash, which is JVM-stable and never a per-instance id. */
+    private static int jokerCode(JokerCard self) { return self.getSpec().getName().hashCode(); }
+
+    /**
+     * This joker's own RNG stream. Every emergent roll a joker makes is keyed by {@link RngSource#JOKER} plus the
+     * joker's own code, so it draws from a stream isolated to that joker: two players who own and play it identically
+     * get identical results no matter what other jokers they own.
+     */
+    private static RandomGenerator gen(model.game.player.Run run, JokerCard self) {
+        return run.getRng().streamFor(RngSource.JOKER, run.nextSalt(RngSource.JOKER, jokerCode(self)));
+    }
+
+    /** This joker's own chance roll (per-joker isolated stream; Oops! All 6s still doubles the odds). */
+    private static boolean roll(model.game.player.Run run, JokerCard self, int numerator, int denominator) {
+        return run.roll(RngSource.JOKER, jokerCode(self), numerator, denominator);
     }
 
     /** The most frequent rank among {@code cards} (the set/trips rank of the played hand), or null if empty. */
@@ -1128,10 +1157,9 @@ public enum Jokers {
         return copy;
     }
 
-    /** Gives {@code card} a random shiny edition and adds it to the consumable area if there is room. */
-    private static void createEditioned(model.game.player.Run run, ConsumableCard card) {
-        RandomGenerator g = gen(run, RngSource.CARD_EDITION);
-        card.apply(switch (g.nextInt(3)) { case 0 -> Edition.FOIL; case 1 -> Edition.HOLOGRAPHIC; default -> Edition.POLYCHROME; });
+    /** Gives {@code card} a random shiny edition (keyed to the creating joker {@code self}) and adds it to the consumable area. */
+    private static void createEditioned(model.game.player.Run run, JokerCard self, ConsumableCard card) {
+        card.apply(switch (gen(run, self).nextInt(3)) { case 0 -> Edition.FOIL; case 1 -> Edition.HOLOGRAPHIC; default -> Edition.POLYCHROME; });
         run.addConsumable(card);
     }
 }

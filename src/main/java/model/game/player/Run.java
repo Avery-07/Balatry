@@ -125,6 +125,19 @@ public final class Run {
         return rng.chance(source, stats.nextSalt(source), num, denominator);
     }
 
+    /**
+     * As {@link #roll(RngSource, int, int)}, but isolated to one item: {@code source} is its category and
+     * {@code itemCode} its stable identity, so this chance draws from that item's own stream and advances only its
+     * own counter. Oops! All 6s still doubles the odds.
+     */
+    public boolean roll(RngSource source, int itemCode, int numerator, int denominator) {
+        int doublings = 0;
+        for (JokerCard j : board.view()) if (j.hasActiveTrait(JokerTrait.PROBABILITY_DOUBLER)) doublings++;
+        int num = doublings == 0 ? numerator
+                : Math.min(denominator, numerator << Math.min(doublings, 20));
+        return rng.chance(source, stats.nextSalt(source, itemCode), num, denominator);
+    }
+
     public ScoringSession getScoring()        { return scoring; }
     public int getMoney()                     { return money; }
     public void addMoney(int amount) {
@@ -376,6 +389,9 @@ public final class Run {
 
     /** Salt for the next draw on {@code source}; advances that source's per-player occurrence counter. */
     public long nextSalt(RngSource source) { return stats.nextSalt(source); }
+
+    /** Salt for the next per-item draw on {@code source}, isolated by {@code itemCode} (its own counter/stream). */
+    public long nextSalt(RngSource source, int itemCode) { return stats.nextSalt(source, itemCode); }
 
     /** Permanently removes each card (by identity) from the deck and, if a round is active, from the hand. */
     public void destroyDeckCards(List<DeckCard> cards) {
@@ -637,9 +653,20 @@ public final class Run {
         return round;
     }
 
+    /**
+     * A stream isolated to the current boss type for its per-round emergent rolls (Quartz's debuffs, Amber Acorn's
+     * shuffle, Crimson Heart's pick). Keyed by the boss's own code so one boss's rolls never advance another's — and,
+     * since the boss is table-level, every seat facing it draws in lockstep.
+     */
+    private RandomGenerator bossStream() {
+        BossBlind eff = effectiveBoss();
+        int code = eff == null ? 0 : eff.name().hashCode();
+        return rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT, code));
+    }
+
     /** The Quartz: debuffs roughly 1-in-{@code oneIn} of this round's cards, tracked so they are restored at round end. */
     private void applyQuartzDebuff(int oneIn) {
-        RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
+        RandomGenerator r = bossStream();
         List<DeckCard> cards = new ArrayList<>(round.getHand());
         cards.addAll(round.getDrawPile());                 // hand + draw pile == this round's full deck (same instances)
         for (DeckCard card : cards) {
@@ -657,7 +684,7 @@ public final class Run {
 
     /** Amber Acorn: randomizes the joker board order on the boss-effect stream. */
     private void shuffleJokerBoard() {
-        board.shuffle(rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT)));
+        board.shuffle(bossStream());
     }
 
     /** Crimson Heart: re-picks the disabled joker for the coming hand — a different one than last hand when the board allows it. */
@@ -665,7 +692,7 @@ public final class Run {
         JokerCard previous = bossState.clearCrimsonHeart();
         BossBlind eff = effectiveBoss();
         if (eff == null || !eff.disablesJokerPerHand() || board.isEmpty()) return;
-        RandomGenerator r = rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
+        RandomGenerator r = bossStream();
         JokerCard pick = board.get(r.nextInt(board.size()));
         while (board.size() > 1 && pick == previous) pick = board.get(r.nextInt(board.size()));   // "a different joker each hand"
         bossState.disableJoker(pick);
@@ -676,7 +703,7 @@ public final class Run {
 
     /** A fresh boss-effect stream draw (occurrence-salted); package tools for in-round boss randomness. */
     RandomGenerator bossEffectStream() {
-        return rng.streamFor(RngSource.BOSS_EFFECT, stats.nextSalt(RngSource.BOSS_EFFECT));
+        return bossStream();
     }
 
     public BossBlind getActiveBoss() { return bossState.getActiveBoss(); }
@@ -800,10 +827,10 @@ public final class Run {
         }
     }
 
-    /** A tag-granted free shop joker of {@code rarity}, drawn from the occurrence-salted generation stream. */
+    /** A tag-granted free shop joker of {@code rarity}, drawn from a stream isolated per rarity so the Rare/Uncommon/Common tag grants never advance each other's counter. */
     private JokerCard rolledTagJoker(model.items.jokers.Rarity rarity) {
         return model.items.jokers.Jokers.randomOfRarity(rarity,
-                rng.streamFor(RngSource.JOKER_GENERATION, stats.nextSalt(RngSource.JOKER_GENERATION))).make();
+                rng.streamFor(RngSource.JOKER_GENERATION, stats.nextSalt(RngSource.JOKER_GENERATION, rarity.name().hashCode()))).make();
     }
 
     /** Closes the active shop. */

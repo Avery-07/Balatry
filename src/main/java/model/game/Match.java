@@ -82,7 +82,7 @@ public final class Match {
     private BossBehavior bossBehavior = BossBehavior.NONE;   // the boss's Match-level behaviour; NONE outside boss rounds
     private SkipTag currentTag;                    // the tag this blind offers for skipping (table-level, seeded)
     private ConsumableSpec lastConsumableUsed;     // last consumable any seat used (Mimesis)
-    private int rerollBossFromAnte = Integer.MAX_VALUE;   // Metabole: reroll the table boss from this ante onward
+    private long bossRerolls;                      // Metabole: how many times this match's boss has been rerolled (a deterministic salt)
     private final Map<PlayerId, Boolean> blindChoice = new LinkedHashMap<>();   // SELECTION: seat -> play(true)/skip(false)
     private final java.util.Set<PlayerId> readySeats = new java.util.LinkedHashSet<>();   // RESULT/SHOP: signalled ready
     private final Set<PlayerId> departed = new LinkedHashSet<>();               // seats whose players have left
@@ -323,7 +323,7 @@ public final class Match {
             case BOSS  -> {
                 ante++;
                 blind = Blind.SMALL;
-                anteBoss = selectBoss();   // lock the new ante's boss up front (after any Metabole reroll armed last ante)
+                anteBoss = selectBoss();   // lock the new ante's boss up front, so its effect shows during blind selection
                 activeSin = sinSelector.selectFor(ante, rng);
                 for (Player p : players.values()) p.run().beginAnte();
                 refreshSinForAnte();
@@ -471,14 +471,9 @@ public final class Match {
     /** The provider that resolves sin player-choices (e.g. Pride's multiplier); injected via {@link MatchConfig}. */
     public SinChoiceProvider getSinChoiceProvider() { return sinChoiceProvider; }
 
-    /** This ante's boss, rerolled to a different one if a Metabole armed the reroll for this ante. */
+    /** This ante's boss, freshly selected at ante start (Metabole rerolls it in place later, via {@link #rerollBoss()}). */
     private BossBlind selectBoss() {
-        BossBlind boss = bossSelector.select(ante, rng.streamFor(RngSource.BOSS_BLIND, ante), null);
-        if (ante >= rerollBossFromAnte) {
-            boss = bossSelector.select(ante, rng.streamFor(RngSource.BOSS_BLIND, Rng.combine(ante, 1L)), boss);
-            rerollBossFromAnte = Integer.MAX_VALUE;
-        }
-        return boss;
+        return bossSelector.select(ante, rng.streamFor(RngSource.BOSS_BLIND, ante), null);
     }
 
     // --- cross-player operations ---
@@ -539,24 +534,25 @@ public final class Match {
         Run caster = getRun(casterId);
         RelicKind kind = relic.getSpec().getKind();
 
+        int relicCode = relic.getSpec().getName().hashCode();   // stable per-relic identity for its isolated RNG stream
         if (kind == RelicKind.SELF || kind == RelicKind.GLOBAL) {
-            relic.getSpec().getEffect().resolve(new RelicContext(this, caster, casterId, null, null, target));
+            relic.getSpec().getEffect().resolve(new RelicContext(this, caster, casterId, null, null, target, relicCode));
             sinModifier.onConsumableUsed(caster);
             return;
         }
 
-        for (PlayerId victim : resolveTargets(casterId, kind, target)) {
+        for (PlayerId victim : resolveTargets(casterId, kind, target, relicCode)) {
             Run victimRun = getRun(victim);
             victimRun.getStats().recordTargeted();                    // Anger: the targeting attempt counts
             if (victimRun.getAfflictions().consumeAegis()) continue;   // Aegis: absorbed for this seat only
             relic.getSpec().getEffect().resolve(
-                    new RelicContext(this, caster, casterId, victimRun, victim, target));
+                    new RelicContext(this, caster, casterId, victimRun, victim, target, relicCode));
         }
         sinModifier.onConsumableUsed(caster);   // a relic is a consumable used, even if every effect was absorbed
     }
 
-    /** The seats a hostile relic lands on, given its kind and the caster's chosen seat (empty means it fizzles). */
-    private List<PlayerId> resolveTargets(PlayerId casterId, RelicKind kind, RelicTarget target) {
+    /** The seats a hostile relic lands on, given its kind, the caster's chosen seat, and the relic's own code (empty means it fizzles). */
+    private List<PlayerId> resolveTargets(PlayerId casterId, RelicKind kind, RelicTarget target, int relicCode) {
         PlayerId chosen = target.opponent();
         return switch (kind) {
             case OPPONENT -> {
@@ -568,8 +564,8 @@ public final class Match {
             case RANDOM_RIVAL -> {
                 List<PlayerId> above = seatsAbove(casterId);
                 if (above.isEmpty()) yield List.of();       // nobody outranks the caster: the cast fizzles
-                long salt = getRun(casterId).nextSalt(RngSource.RELIC_EFFECT);   // deterministic, per-cast random victim
-                yield List.of(above.get(rng.nextInt(RngSource.RELIC_EFFECT, salt, above.size())));
+                long salt = getRun(casterId).nextSalt(RngSource.RELIC, relicCode);   // this relic's own stream: owning other RANDOM_RIVAL relics never shifts it
+                yield List.of(above.get(rng.nextInt(RngSource.RELIC, salt, above.size())));
             }
             case RIVALS -> seatsAbove(casterId);            // the caster picks no seat; may be empty and fizzle
             default -> List.of();
@@ -829,8 +825,16 @@ public final class Match {
     /** The last consumable any seat used, or {@code null} if none yet (Mimesis copies it). */
     public ConsumableSpec getLastConsumableUsed() { return lastConsumableUsed; }
 
-    /** Metabole: arms a reroll of the shared boss blind for the next ante. */
-    public void rerollNextBoss() { rerollBossFromAnte = Math.min(rerollBossFromAnte, ante + 1); }
+    /**
+     * Metabole: immediately rerolls this ante's shared boss blind to a different one. Used mid-ante (before the boss
+     * blind is reached), it changes the boss every seat will face; {@code currentBoss} is derived from {@code anteBoss}
+     * at deal time, so no in-progress round is disturbed. Deterministic — the salt advances with each reroll.
+     */
+    public void rerollBoss() {
+        if (anteBoss == null) return;
+        bossRerolls++;
+        anteBoss = bossSelector.select(ante, rng.streamFor(RngSource.BOSS_BLIND, Rng.combine(ante, bossRerolls)), anteBoss);
+    }
 
     private void require(MatchPhase expected, String op) {
         if (phase != expected)

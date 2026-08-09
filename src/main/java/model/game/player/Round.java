@@ -228,7 +228,8 @@ public final class Round {
                 || (boss.drawsFaceDownAfterPlay() && afterFirstDeal)
                 || (boss.faceCardsFaceDown() && drawn.isFace())
                 || (boss.faceDownOneIn() > 0
-                    && run.getRng().chance(model.game.rng.RngSource.MISC, drawIndex, 1, boss.faceDownOneIn()));
+                    && run.getRng().chance(model.game.rng.RngSource.BOSS_EFFECT,
+                        model.game.rng.Rng.combine(boss.name().hashCode(), drawIndex), 1, boss.faceDownOneIn()));
         if (hide) faceDownIds.add(drawn.id());
     }
 

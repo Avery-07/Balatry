@@ -109,6 +109,23 @@ public final class JokerTests {
         checkInt("marble grew the deck by 1", after - before, 1);
         DeckCard added = m.getDeck().get(m.getDeck().size() - 1);
         check("added card is Stone", added.getEnhancement() == Enhancement.STONE);
+
+        // The Idol / Ancient Joker draw their target from an actual deck card, so deck-fixing steers them.
+        Run heartRun = new Run(0L);
+        heartRun.resetDeck(List.of());
+        for (int i = 0; i < 8; i++) heartRun.addCardToDeck(new DeckCard(Rank.ACE, Suit.HEARTS));
+        heartRun.board().add(Jokers.ANCIENT_JOKER.make());
+        heartRun.beginRound(300);
+        checkInt("Ancient Joker locks the deck's only suit (Hearts=1)", heartRun.getJokers().get(0).getCounter() - 1, 1);
+
+        Run kingRun = new Run(0L);
+        kingRun.resetDeck(List.of());
+        for (int i = 0; i < 8; i++) kingRun.addCardToDeck(new DeckCard(Rank.KING, Suit.SPADES));
+        kingRun.board().add(Jokers.THE_IDOL.make());
+        kingRun.beginRound(300);
+        int idol = kingRun.getJokers().get(0).getCounter();
+        check("The Idol idolizes the deck's only card (King of Spades)",
+                idol / 4 == Rank.KING.ordinal() && idol % 4 == 0);
     }
 
     /** The retrigger primitive (held cards and jokers) plus the debt/shop economy hooks. */

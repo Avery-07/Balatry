@@ -35,8 +35,8 @@ public enum SkipTag {
     }),
     TOP_UP_TAG   ("Top-up Tag",    run -> {
         for (int i = 0; i < 3; i++)
-            run.createJoker(Jokers.randomOfRarity(Rarity.COMMON,
-                    run.getRng().streamFor(RngSource.JOKER_GENERATION, run.nextSalt(RngSource.JOKER_GENERATION))).make());
+            run.createJoker(Jokers.randomOfRarity(Rarity.COMMON,   // isolated per rarity, like the other tag joker grants
+                    run.getRng().streamFor(RngSource.JOKER_GENERATION, run.nextSalt(RngSource.JOKER_GENERATION, Rarity.COMMON.name().hashCode()))).make());
     }),
 
     // --- next boss: consumed by the Match when the next boss blind is defeated ---

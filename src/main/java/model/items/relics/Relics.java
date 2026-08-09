@@ -44,9 +44,9 @@ public enum Relics {
             ctx.target().getHandLevels().levelDown(ctx.selection().handType());
     }),
 
-    /** Rerolls the shared boss blind of the next ante (a table-level change for every seat). */
-    METABOLE("Metabole", "Rerolls the shared boss blind of the next ante.",
-            RelicSelector.NONE, RelicKind.GLOBAL, ctx -> ctx.match().rerollNextBoss()),
+    /** Rerolls this ante's shared boss blind (a table-level change for every seat). */
+    METABOLE("Metabole", "Rerolls this ante's boss blind.",
+            RelicSelector.NONE, RelicKind.GLOBAL, ctx -> ctx.match().rerollBoss()),
 
     /** Creates a copy of the last consumable used by any player. */
     MIMESIS("Mimesis", "Creates a copy of the last consumable used by any player.",

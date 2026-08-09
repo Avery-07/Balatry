@@ -16,7 +16,7 @@ import javafx.scene.text.TextAlignment;
  */
 public final class Renderer {
 
-    private final GraphicsContext g;
+    private GraphicsContext g;   // usually the canvas; temporarily retargeted to an offscreen buffer during a capture
     private Image sheet;
     private double cellW, cellH;
     private Image enhSheet;              // enhancement backgrounds (3x3 grid of 71x95); the transparent face draws on top
@@ -39,6 +39,18 @@ public final class Renderer {
     public Renderer(GraphicsContext g) { this.g = g; g.setImageSmoothing(false); }
 
     public GraphicsContext gc() { return g; }
+
+    /**
+     * Runs {@code draw} with every draw call redirected to {@code target} (an offscreen buffer), then restores the
+     * main canvas. Used to capture a screen's panels to a transparent buffer for the slide transition, so the
+     * animated backdrop is never part of the captured image.
+     */
+    public void withTarget(GraphicsContext target, Runnable draw) {
+        GraphicsContext prev = g;
+        g = target;
+        target.setImageSmoothing(false);
+        try { draw.run(); } finally { g = prev; }
+    }
 
     private double clock;   // frame time (seconds), set once per frame; drives the animated edition shimmers
     /** Sets the frame clock the edition effects animate on; call once per frame before drawing cards. */

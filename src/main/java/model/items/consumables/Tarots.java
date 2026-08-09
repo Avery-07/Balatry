@@ -24,13 +24,13 @@ public enum Tarots {
     }),
     THE_MAGICIAN("The Magician", "Enhances up to 2 selected cards into Lucky cards.", 1, (run, self) -> enhance(run, 2, Enhancement.LUCKY)),
     THE_HIGH_PRIESTESS("The High Priestess", "Creates 2 random Planet cards (if you have room).", (run, self) -> {
-        createRandomPlanet(run);
-        createRandomPlanet(run);
+        createRandomPlanet(run, self);
+        createRandomPlanet(run, self);
     }),
     THE_EMPRESS("The Empress", "Enhances up to 2 selected cards into Mult cards.", 1, (run, self) -> enhance(run, 2, Enhancement.MULT)),
     THE_EMPEROR("The Emperor", "Creates 2 random Tarot cards (if you have room).", (run, self) -> {
-        createRandomTarot(run);
-        createRandomTarot(run);
+        createRandomTarot(run, self);
+        createRandomTarot(run, self);
     }),
     THE_HIEROPHANT("The Hierophant", "Enhances up to 2 selected cards into Bonus cards.", 1, (run, self) -> enhance(run, 2, Enhancement.BONUS)),
     THE_LOVERS("The Lovers", "Enhances up to 2 selected cards into Wild cards.", 1, (run, self) -> enhance(run, 2, Enhancement.WILD)),
@@ -94,7 +94,7 @@ public enum Tarots {
         RandomGenerator stream = run.getRng().streamFor(RngSource.SUN_EDITION, run.nextSalt(RngSource.SUN_EDITION));
         jokers.get(stream.nextInt(jokers.size())).apply(randomShinyEdition(stream));
     }),
-    JUDGEMENT("Judgement", "Creates a random joker (if you have room).", (run, self) -> createRandomJoker(run)),
+    JUDGEMENT("Judgement", "Creates a random joker (if you have room).", (run, self) -> createRandomJoker(run, self)),
     THE_WORLD("The World", "Select 3 cards: the first two take the suit of the third.", 3, (run, self) -> {
         List<DeckCard> targets = run.getDeckCardTargets();
         if (targets.size() < 3) return;
@@ -135,19 +135,24 @@ public enum Tarots {
         for (int i = 0; i < Math.min(max, targets.size()); i++) targets.get(i).apply(enhancement);
     }
 
-    private static void createRandomPlanet(Run run) {
-        RandomGenerator stream = run.getRng().streamFor(RngSource.PLANET_GENERATION, run.nextSalt(RngSource.PLANET_GENERATION));
-        run.createConsumable(Planets.random(stream).spec());
+    /** A tarot's stable RNG identity (its unique name's hash) — its own isolated stream, unperturbed by other tarots. */
+    private static int tarotCode(ConsumableCard self) { return self.getSpec().getName().hashCode(); }
+
+    /** This tarot's own RNG stream: keyed by {@link RngSource#TAROT} plus its code, so its rolls stay isolated to it. */
+    private static RandomGenerator tarotGen(Run run, ConsumableCard self) {
+        return run.getRng().streamFor(RngSource.TAROT, run.nextSalt(RngSource.TAROT, tarotCode(self)));
     }
 
-    private static void createRandomTarot(Run run) {
-        RandomGenerator stream = run.getRng().streamFor(RngSource.TAROT_GENERATION, run.nextSalt(RngSource.TAROT_GENERATION));
-        run.createConsumable(Tarots.random(stream).spec());
+    private static void createRandomPlanet(Run run, ConsumableCard self) {
+        run.createConsumable(Planets.random(tarotGen(run, self)).spec());
     }
 
-    private static void createRandomJoker(Run run) {
-        RandomGenerator stream = run.getRng().streamFor(RngSource.JOKER_GENERATION, run.nextSalt(RngSource.JOKER_GENERATION));
-        run.createJoker(Jokers.weightedRandom(stream).make());
+    private static void createRandomTarot(Run run, ConsumableCard self) {
+        run.createConsumable(Tarots.random(tarotGen(run, self)).spec());
+    }
+
+    private static void createRandomJoker(Run run, ConsumableCard self) {
+        run.createJoker(Jokers.weightedRandom(tarotGen(run, self)).make());
     }
 
     /** One of Foil / Holographic / Polychrome (Negative excluded), drawn from {@code stream}. */

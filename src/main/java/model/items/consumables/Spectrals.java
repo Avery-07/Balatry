@@ -24,17 +24,17 @@ import java.util.random.RandomGenerator;
 public enum Spectrals {
 
     FAMILIAR("Familiar", "Destroys up to 3 random cards in hand, then adds 3 random enhanced face cards.", (run, self) -> {
-        RandomGenerator s = gen(run);
+        RandomGenerator s = gen(run, self);
         destroyRandomHeld(run, 3, s);
         for (int i = 0; i < 3; i++) run.addCardToHand(enhancedFace(s));
     }),
     GRIM("Grim", "Destroys up to 2 random cards in hand, then adds 2 random enhanced Aces.", (run, self) -> {
-        RandomGenerator s = gen(run);
+        RandomGenerator s = gen(run, self);
         destroyRandomHeld(run, 2, s);
         for (int i = 0; i < 2; i++) run.addCardToHand(enhanced(Rank.ACE, s));
     }),
     INCANTATION("Incantation", "Destroys up to 4 random cards in hand, then adds 4 random enhanced numbered cards.", (run, self) -> {
-        RandomGenerator s = gen(run);
+        RandomGenerator s = gen(run, self);
         destroyRandomHeld(run, 4, s);
         for (int i = 0; i < 4; i++) run.addCardToHand(enhancedNumbered(s));
     }),
@@ -42,10 +42,10 @@ public enum Spectrals {
     AURA("Aura", "Gives 1 selected card a random shiny edition (Foil, Holo, Poly, or Negative).", (run, self) -> {
         List<Card> t = run.getConsumableTargets();   // any selected card: deck card, joker, or consumable
         if (t.isEmpty()) return;
-        t.get(0).apply(randomAuraEdition(gen(run)));
+        t.get(0).apply(randomAuraEdition(gen(run, self)));
     }),
     WRAITH("Wraith", "Creates a random Rare joker, but divides your money by 3.", (run, self) -> {
-        run.createJoker(Jokers.randomOfRarity(Rarity.RARE, gen(run)).make());
+        run.createJoker(Jokers.randomOfRarity(Rarity.RARE, gen(run, self)).make());
         run.addMoney(run.getMoney() / 3 - run.getMoney());   // divide money by 3
     }),
     SIGIL("Sigil", "Converts up to 5 selected cards to the suit of the first.", (run, self) -> {
@@ -62,17 +62,17 @@ public enum Spectrals {
     }),
     ECTOPLASM("Ectoplasm", "Gives a random joker a Negative edition, and −1 hand size.", (run, self) -> {
         List<JokerCard> jokers = run.getJokers();
-        if (!jokers.isEmpty()) jokers.get(gen(run).nextInt(jokers.size())).apply(Edition.NEGATIVE);
+        if (!jokers.isEmpty()) jokers.get(gen(run, self).nextInt(jokers.size())).apply(Edition.NEGATIVE);
         run.setHandSize(run.getHandSize() - 1);
     }),
     IMMOLATE("Immolate", "Destroys up to 5 random cards in hand, then gives $20.", (run, self) -> {
-        destroyRandomHeld(run, 5, gen(run));
+        destroyRandomHeld(run, 5, gen(run, self));
         run.addMoney(20);
     }),
     ANKH("Ankh", "Creates a copy of a random joker, then destroys a random joker.", (run, self) -> {
         List<JokerCard> jokers = run.getJokers();
         if (jokers.isEmpty()) return;
-        RandomGenerator s = gen(run);
+        RandomGenerator s = gen(run, self);
         JokerCard source = jokers.get(s.nextInt(jokers.size()));
         JokerSpec spec = source.getSpec();
         int value = source.getShopValue();
@@ -83,7 +83,7 @@ public enum Spectrals {
     HEX("Hex", "Gives a random joker Polychrome, then destroys a random joker.", (run, self) -> {
         List<JokerCard> jokers = run.getJokers();
         if (jokers.isEmpty()) return;
-        RandomGenerator s = gen(run);
+        RandomGenerator s = gen(run, self);
         int i = s.nextInt(jokers.size());
         jokers.get(i).apply(Edition.POLYCHROME);
         if (jokers.size() > 1) {
@@ -100,14 +100,14 @@ public enum Spectrals {
         Card card = t.get(0);
         List<Sticker> stickers = new ArrayList<>(card.getStickers().keySet());
         if (stickers.isEmpty()) return;
-        card.remove(stickers.get(gen(run).nextInt(stickers.size())));
+        card.remove(stickers.get(gen(run, self).nextInt(stickers.size())));
     }),
     CRYPTID("Cryptid", "Creates 2 copies of 1 selected card in your hand.", (run, self) -> {
         List<DeckCard> t = run.getDeckCardTargets();
         if (t.isEmpty()) return;
         for (int i = 0; i < 2; i++) run.addCardToHand(copyOf(t.get(0)));
     }),
-    THE_SOUL("The Soul", 0, "Creates a random Legendary joker (if you have room).", (run, self) -> run.createJoker(Jokers.randomOfRarity(Rarity.LEGENDARY, gen(run)).make())),
+    THE_SOUL("The Soul", 0, "Creates a random Legendary joker (if you have room).", (run, self) -> run.createJoker(Jokers.randomOfRarity(Rarity.LEGENDARY, gen(run, self)).make())),
     BLACK_HOLE("Black Hole", 0, "Levels up every hand type by 1 (your most-played gains an extra level).", (run, self) -> {
         for (HandType h : HandType.values()) run.levelUpHand(h);
         HandType mostPlayed = run.getStats().getMostPlayedHand();
@@ -151,8 +151,12 @@ public enum Spectrals {
 
     // --- effect helpers ---
 
-    private static RandomGenerator gen(Run run) {
-        return run.getRng().streamFor(RngSource.SPECTRAL_GENERATION, run.nextSalt(RngSource.SPECTRAL_GENERATION));
+    /** A spectral's stable RNG identity (its unique name's hash) — its own isolated stream, unperturbed by other spectrals. */
+    private static int spectralCode(ConsumableCard self) { return self.getSpec().getName().hashCode(); }
+
+    /** This spectral's own RNG stream: keyed by {@link RngSource#SPECTRAL} plus its code, so its rolls stay isolated to it. */
+    private static RandomGenerator gen(Run run, ConsumableCard self) {
+        return run.getRng().streamFor(RngSource.SPECTRAL, run.nextSalt(RngSource.SPECTRAL, spectralCode(self)));
     }
 
     private static void sealFirst(Run run, Seal seal) {

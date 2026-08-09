@@ -24,9 +24,11 @@ public enum Planets {
 
     Planets(String displayName, HandType hand) {
         this.hand = hand;
-        String pretty = hand.name().replace('_', ' ').toLowerCase();
-        this.spec = new ConsumableSpec(displayName, ConsumableType.PLANET, COST,
-                "Levels up your " + pretty + " (raises its Chips and Mult).",
+        // Spell out exactly what a level buys for this hand, the way Balatro's planet cards do: its own per-level
+        // Mult and Chips (pulled from HandType so the text can never drift from the numbers that actually apply).
+        String desc = "Levels up " + hand.displayName() + ": +" + hand.getMultPerLevel() + " Mult and +"
+                + hand.getChipsPerLevel() + " Chips per level.";
+        this.spec = new ConsumableSpec(displayName, ConsumableType.PLANET, COST, desc,
                 (run, self) -> run.levelUpHand(hand));
     }
 
