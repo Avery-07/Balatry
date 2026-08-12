@@ -286,12 +286,22 @@ public final class Renderer {
     // --- CRT / VHS post effect: layered overlays drawn last, over the whole finished frame ---
     private Paint vignette, scanBand;
 
+    /** Whether the CRT/VHS overlay is drawn at all (flipped by the in-game Settings). */
+    public boolean crtEnabled = true;
+
     /**
-     * A CRT/VHS overlay over the finished frame: a soft edge vignette, thin scanlines, and a faint light band that
-     * drifts slowly down the screen (VHS tracking). Pure Canvas 2D — no per-pixel chromatic aberration or curvature,
-     * just the layered overlays. Draw last of all; {@code now} is the frame clock in seconds. All alphas are tunable.
+     * Internal resolution knob: the pixels between scanlines. Smaller = a finer, higher-resolution CRT (more, thinner
+     * lines); larger = a coarser, lower-resolution look. The scanline thickness tracks it so the ratio stays constant.
+     */
+    public double crtScanGap = 5;
+
+    /**
+     * A CRT/VHS overlay over the finished frame: a soft edge vignette, scanlines (spaced by {@link #crtScanGap}), and a
+     * faint light band that drifts slowly down the screen (VHS tracking). Pure Canvas 2D — no per-pixel chromatic
+     * aberration or curvature, just the layered overlays. Draw last of all; {@code now} is the frame clock in seconds.
      */
     public void crt(double now, double w, double h) {
+        if (!crtEnabled) return;
         if (vignette == null) {
             vignette = new RadialGradient(0, 0, 0.5, 0.5, 0.72, true, CycleMethod.NO_CYCLE,
                     new Stop(0.55, Color.TRANSPARENT), new Stop(1.0, Color.web("#04060c", 0.55)));
@@ -301,8 +311,9 @@ public final class Renderer {
         g.setFill(vignette);
         g.fillRect(0, 0, w, h);
 
-        g.setFill(Color.web("#000000", 0.10));            // scanlines: one thin dark line every 3px
-        for (double y = 0; y < h; y += 3) g.fillRect(0, y, w, 1.4);
+        double gap = Math.max(1, crtScanGap), lineH = gap * 0.47;   // one thin dark line per gap; thickness scales with it
+        g.setFill(Color.web("#000000", 0.10));
+        for (double y = 0; y < h; y += gap) g.fillRect(0, y, w, lineH);
 
         double bandH = 110, span = h + bandH * 2;         // the tracking band drifts down and wraps
         double band = (now * 55) % span - bandH * 2;

@@ -124,7 +124,7 @@ final class Hud {
         cy += hMoney + gap;
 
         ui.button(ix, cy, 92, hAnte, "Options", ORANGE, DARK,
-                () -> { ui.showOptions = true; ui.showCollection = false; ui.confirmSurrender = false; }, true);
+                () -> { ui.showOptions = true; ui.showCollection = false; ui.showSettings = false; ui.confirmSurrender = false; }, true);
         cell(r, ix + 102, cy, cellW, hAnte, "Ante", s.ante() + "/" + s.anteCount(), ORANGE);
         cell(r, ix + 102 + cellW + 10, cy, cellW, hAnte, "Round", String.valueOf(s.roundNumber()), ORANGE);
         cy += hAnte + gap;

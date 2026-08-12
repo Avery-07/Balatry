@@ -360,6 +360,7 @@ public final class GameClient extends Application {
             ui.status = "";
             ui.showOptions = false;
             ui.showCollection = false;
+            ui.showSettings = false;
             ui.confirmSurrender = false;
             background.transitionTo(BackgroundTheme.DEFAULT, 1.0);   // back to the neutral menu field
             bgKey = "";
