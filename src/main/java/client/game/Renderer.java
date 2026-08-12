@@ -66,11 +66,17 @@ public final class Renderer {
     // "Half Joker" -> HalfJoker.png and "Oops! All 6s" -> OopsAll6s.png. Absent file => vector tile fallback.
     private final java.util.Map<String, Image> jokerTex = new java.util.HashMap<>();
 
+    // Some jokers have no art of their own and reuse another's: Wee Joker is the base Joker, drawn small. The alias
+    // redirects the texture load (so both share one cached image); the scale shrinks it at draw time (see jokerFace).
+    private static final java.util.Map<String, String> JOKER_TEX_ALIAS = java.util.Map.of("WeeJoker", "Joker");
+    private static final java.util.Map<String, Double>  JOKER_TEX_SCALE = java.util.Map.of("WeeJoker", 0.6);
+
     /** The face texture for a joker's display name, or {@code null} if no PNG is present (caller draws the vector tile). */
     public Image jokerTexture(String displayName) {
         if (displayName == null || displayName.isEmpty()) return null;
         String key = displayName.replaceAll("[^A-Za-z0-9]", "");
         if (key.isEmpty()) return null;
+        key = JOKER_TEX_ALIAS.getOrDefault(key, key);   // reuse another joker's art where declared
         if (jokerTex.containsKey(key)) return jokerTex.get(key);
         Image img = null;
         try {
@@ -80,6 +86,20 @@ public final class Renderer {
         } catch (RuntimeException ignored) {}
         jokerTex.put(key, img);
         return img;
+    }
+
+    /**
+     * Draws a joker's face aspect-fit into (x,y,w,h), applying any per-joker render scale (Wee Joker reuses the base
+     * Joker art at 0.6× so it reads as a tiny joker in a normal slot). Returns false when no texture exists, so the
+     * caller falls back to its vector tile exactly as before.
+     */
+    public boolean jokerFace(String displayName, double x, double y, double w, double h) {
+        Image tex = jokerTexture(displayName);
+        if (tex == null) return false;
+        String key = displayName.replaceAll("[^A-Za-z0-9]", "");
+        double s = JOKER_TEX_SCALE.getOrDefault(key, 1.0);
+        imageFit(tex, x + w * (1 - s) / 2, y + h * (1 - s) / 2, w * s, h * s);
+        return true;
     }
 
     /**

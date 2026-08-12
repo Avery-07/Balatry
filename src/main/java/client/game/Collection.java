@@ -107,12 +107,7 @@ final class Collection {
             case 0 -> {
                 for (model.items.jokers.Jokers j : model.items.jokers.Jokers.values()) {
                     String name = j.spec().getName();
-                    out.add(new Entry(name, j.spec().getDescription(), (r, x, y, w, h) -> {
-                        javafx.scene.image.Image tex = r.jokerTexture(name);
-                        if (tex == null) return false;
-                        r.imageFit(tex, x, y, w, h);
-                        return true;
-                    }));
+                    out.add(new Entry(name, j.spec().getDescription(), (r, x, y, w, h) -> r.jokerFace(name, x, y, w, h)));
                 }
             }
             case 1 -> { for (var c : model.items.consumables.Tarots.values()) out.add(consumable(c.spec())); }

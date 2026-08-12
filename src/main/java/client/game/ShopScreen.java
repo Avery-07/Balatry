@@ -138,7 +138,6 @@ final class ShopScreen implements Screen {
         // A shop tile shows its face when one exists — a playing card (Magic Trick), a joker PNG or a
         // planet/tarot/spectral cell (shopSlot), or a pack's art (shopPack); all fit, never stretched. Otherwise a tile.
         MatchSnapshot.CardFace cf = t.card();
-        javafx.scene.image.Image jtex = (cf == null && "shopSlot".equals(t.kind())) ? r.jokerTexture(t.label()) : null;
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
             boolean textured = false;
             if (cf != null) {
@@ -146,7 +145,7 @@ final class ShopScreen implements Screen {
                 r.card(cf.rank(), cf.suit(), cf.enhancement(), cf.seal(), cf.edition(), rr.centerX(), rr.centerY(), cw, ch, 0, false);
                 textured = true;
             }
-            else if (jtex != null) { r.imageFit(jtex, rr.x(), rr.y(), rr.w(), rr.h()); textured = true; }
+            else if ("shopSlot".equals(t.kind()) && r.jokerFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h())) textured = true;
             else if ("shopSlot".equals(t.kind())) textured = r.consumableFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h())
                     || r.relicFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());
             else if ("shopPack".equals(t.kind())) textured = r.packFace(t.label(), rr.x(), rr.y(), rr.w(), rr.h());

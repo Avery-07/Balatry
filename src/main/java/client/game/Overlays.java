@@ -229,14 +229,13 @@ final class Overlays {
                 boolean chosen = ui.packSel == i;
                 Layout.Rect rr = new Layout.Rect(tx, ty, tw, th);
                 MatchSnapshot.CardFace cf = opt.card();   // a Standard-pack playing card draws as a real card
-                javafx.scene.image.Image tex = cf == null ? r.jokerTexture(opt.label()) : null;   // else a joker or consumable face
                 r.rotated(rr.centerX(), rr.centerY(), sway, () -> {   // the same idle sway/bob a card carries
                     boolean textured = false;
                     if (cf != null) {
                         double ch = Math.min(th, tw * 95.0 / 71.0), cw = ch * 71.0 / 95.0;
                         r.card(cf.rank(), cf.suit(), cf.enhancement(), cf.seal(), cf.edition(), tx + tw / 2, ty + th / 2, cw, ch, 0, false);
                         textured = true;
-                    } else if (tex != null) { r.imageFit(tex, tx, ty, tw, th); textured = true; }
+                    } else if (r.jokerFace(opt.label(), tx, ty, tw, th)) { textured = true; }
                     else textured = r.consumableFace(opt.label(), tx, ty, tw, th) || r.relicFace(opt.label(), tx, ty, tw, th);
                     if (textured && cf == null) r.editionEffect(opt.edition(), tx, ty, tw, th, 8);   // shimmer over a joker/consumable face
                     if (textured) {

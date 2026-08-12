@@ -258,11 +258,9 @@ final class Hud {
         tileW = w; tileH = h;
         // The same idle sway a card carries; the held tile follows the cursor instead, so it never sways.
         double sway = ui.jokerRow.isDragged(jv.id()) ? 0 : client.engine.Idle.swayDeg(ui.now, jv.id(), 1.4);
-        javafx.scene.image.Image tex = r.jokerTexture(jv.name());
         r.rotated(rr.centerX(), rr.centerY(), sway, () -> {
             // A debuffed joker greys out; a badge (edition/stickers) draws as a footer strip on the tile.
-            if (tex != null) {
-                r.imageFit(tex, rr.x(), rr.y(), rr.w(), rr.h());
+            if (r.jokerFace(jv.name(), rr.x(), rr.y(), rr.w(), rr.h())) {
                 if (jv.debuffed()) r.panel(rr.x(), rr.y(), rr.w(), rr.h(), Color.web("#1a1a1eaa"), null, 8, 0);
             } else {
                 mini(r, rr, jv.debuffed() ? Color.web("#4a4a4f") : Color.web("#c0392b"), Fmt.shortName(jv.name()));
