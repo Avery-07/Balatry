@@ -471,6 +471,7 @@ public final class GameClient extends Application {
             r.gc().restore();
             if (boundaryCap != null) r.gc().drawImage(boundaryCap, boundarySlide.outX(Ui.W), boundarySlide.outY(Ui.H));
         }
+        r.crt(ui.now, Ui.W, Ui.H);   // the CRT/VHS overlay sits over everything, like a monitor
     }
 
     /** The whole scene above the backdrop: the menu, or the in-match board (which runs its own centre-panel slide). */

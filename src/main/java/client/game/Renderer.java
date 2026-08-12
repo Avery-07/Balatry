@@ -6,6 +6,11 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.effect.BlendMode;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Paint;
+import javafx.scene.paint.RadialGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
 
@@ -277,6 +282,33 @@ public final class Renderer {
 
     /** Sets which deck back a flipped card wears this frame (the seat's own deck); call once per frame. */
     public void deckBack(String deckName) { deckBackCell = deckBacks.cell.get(key(deckName)); }
+
+    // --- CRT / VHS post effect: layered overlays drawn last, over the whole finished frame ---
+    private Paint vignette, scanBand;
+
+    /**
+     * A CRT/VHS overlay over the finished frame: a soft edge vignette, thin scanlines, and a faint light band that
+     * drifts slowly down the screen (VHS tracking). Pure Canvas 2D — no per-pixel chromatic aberration or curvature,
+     * just the layered overlays. Draw last of all; {@code now} is the frame clock in seconds. All alphas are tunable.
+     */
+    public void crt(double now, double w, double h) {
+        if (vignette == null) {
+            vignette = new RadialGradient(0, 0, 0.5, 0.5, 0.72, true, CycleMethod.NO_CYCLE,
+                    new Stop(0.55, Color.TRANSPARENT), new Stop(1.0, Color.web("#04060c", 0.55)));
+            scanBand = new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                    new Stop(0.0, Color.TRANSPARENT), new Stop(0.5, Color.web("#ffffff", 0.045)), new Stop(1.0, Color.TRANSPARENT));
+        }
+        g.setFill(vignette);
+        g.fillRect(0, 0, w, h);
+
+        g.setFill(Color.web("#000000", 0.10));            // scanlines: one thin dark line every 3px
+        for (double y = 0; y < h; y += 3) g.fillRect(0, y, w, 1.4);
+
+        double bandH = 110, span = h + bandH * 2;         // the tracking band drifts down and wraps
+        double band = (now * 55) % span - bandH * 2;
+        g.setFill(scanBand);
+        g.fillRect(0, band, w, bandH);
+    }
 
     /** The stake-chip sheet (5x2). Eight stakes in Stake order map to their ordinals; the last two cells are unused. */
     public void stakeSheet(Image img) {
