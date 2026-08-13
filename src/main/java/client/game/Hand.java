@@ -107,10 +107,11 @@ final class Hand {
             CardEntity e = staged.get(i);
             e.moveTo(sx + i * step, y);
             double pop = ui.scorePop(e.id());   // the trigger animation: this card's beat is live
-            double size = 1 + 0.18 * pop;
+            double popX = 1 - 0.18 * pop, popY = 1 + 0.32 * pop;   // the beat squishes: it springs tall and narrow
+            double popTilt = 5 * pop * (e.id() % 2 == 0 ? 1 : -1);   // and leans a touch, in time with its effect chip
             double cx = e.x(), cy = e.y() - 18 * pop;
-            double cw = CARD_W * size * e.stretchX(), ch = CARD_H * size * e.stretchY();   // squash & stretch from its motion
-            ui.r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), cx, cy, cw, ch, 0, pop > 0.05, e.flipT());
+            double cw = CARD_W * popX * e.stretchX(), ch = CARD_H * popY * e.stretchY();   // squash & stretch: the beat's squish times the motion's
+            ui.r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), cx, cy, cw, ch, popTilt, pop > 0.05, e.flipT());
             ui.noteSourceRect(e.id(), new Layout.Rect(cx - cw / 2, cy - ch / 2, cw, ch));
         }
     }
@@ -184,11 +185,12 @@ final class Hand {
             // The trigger animation: a held card whose scoring beat is live (Steel's X1.5) swells and lifts,
             // and its screen rect is captured so the effect square can anchor over the card rather than centre-screen.
             double pop = ui.scorePop(e.id());
-            double size = 1 + 0.18 * pop;
+            double popX = 1 - 0.18 * pop, popY = 1 + 0.32 * pop;   // the beat squishes: it springs tall and narrow
+            double popTilt = 5 * pop * (e.id() % 2 == 0 ? 1 : -1);   // and leans a touch, in time with its effect chip
             double drawY = e.y() + bob - 18 * pop;
-            double cw = CARD_W * size * e.stretchX(), ch = CARD_H * size * e.stretchY();   // squash & stretch from its motion
+            double cw = CARD_W * popX * e.stretchX(), ch = CARD_H * popY * e.stretchY();   // squash & stretch: the beat's squish times the motion's
             r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), drawY, cw, ch,
-                    fan.get(k).rotationDeg() + sway, e.selected() || pop > 0.05, e.flipT());
+                    fan.get(k).rotationDeg() + sway + popTilt, e.selected() || pop > 0.05, e.flipT());
             ui.noteSourceRect(e.id(), new Layout.Rect(e.x() - cw / 2, drawY - ch / 2, cw, ch));
             if (!e.showsBack())
                 ui.tip(new Layout.Rect(e.x() - CARD_W / 2, e.y() - CARD_H / 2, CARD_W, CARD_H),

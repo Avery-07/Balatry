@@ -79,11 +79,19 @@ public final class GameClient extends Application {
         ui = new Ui(r, hand);
         buildDragTargets();
         loadAssets();
-        canvas.setOnMouseClicked(e -> handleClick(e.getX(), e.getY()));
+        // Left button: the whole click/drag grammar. Right button held: paint-select hand cards by dragging over them.
+        canvas.setOnMouseClicked(e -> { if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) handleClick(e.getX(), e.getY()); });
         canvas.setOnMouseMoved(e -> { ui.mouseX = e.getX(); ui.mouseY = e.getY(); });
-        canvas.setOnMousePressed(e -> handlePress(e.getX(), e.getY()));
-        canvas.setOnMouseDragged(e -> { ui.mouseX = e.getX(); ui.mouseY = e.getY(); handleDrag(e.getX(), e.getY()); });
-        canvas.setOnMouseReleased(e -> handleRelease(e.getX(), e.getY()));
+        canvas.setOnMousePressed(e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.SECONDARY) paintSelectAt(e.getX(), e.getY());
+            else handlePress(e.getX(), e.getY());
+        });
+        canvas.setOnMouseDragged(e -> {
+            ui.mouseX = e.getX(); ui.mouseY = e.getY();
+            if (e.isSecondaryButtonDown()) paintSelectAt(e.getX(), e.getY());   // sweep the cursor across cards to select them
+            else handleDrag(e.getX(), e.getY());
+        });
+        canvas.setOnMouseReleased(e -> { if (e.getButton() != javafx.scene.input.MouseButton.SECONDARY) handleRelease(e.getX(), e.getY()); });
 
         screens.put(MatchPhase.SELECTION, new SelectionScreen());
         screens.put(MatchPhase.BLIND, new BlindScreen());
@@ -176,6 +184,22 @@ public final class GameClient extends Application {
                 new DragTarget(ui.shopVoucherRow, () -> ui.s.inShop(), NOWHERE),
                 new DragTarget(ui.shopPackRow, () -> ui.s.inShop(), NOWHERE));
         packDrag = new DragTarget(ui.packRow, () -> true, NOWHERE);   // handled specially: only during a pack opening
+    }
+
+    /**
+     * Right-button paint-select: while the secondary button is held, sweeping the cursor over a hand card selects it
+     * (additively, never deselecting), so a drag picks several at once. Honours the same contexts as clicking a card —
+     * the blind or a pack's targeting hand — and the 5-card cap.
+     */
+    private void paintSelectAt(double x, double y) {
+        if (slide.active() || boundarySlide.active()) return;
+        if (!inMatch() || ui.s == null) return;
+        boolean packOpen = ui.s.opening() != null;
+        if (!(packOpen || (ui.s.phase() == MatchPhase.BLIND && !ui.atBlindBarrier()))) return;
+        CardEntity e = hand.cardAt(x, y);
+        if (e == null || e.selected()) return;
+        if (hand.selectedCount() >= Ui.MAX_SELECTION) { ui.status = "At most " + Ui.MAX_SELECTION + " cards."; return; }
+        e.setSelected(true);
     }
 
     /** Records what the press landed on; nothing moves until the cursor travels past the threshold. */

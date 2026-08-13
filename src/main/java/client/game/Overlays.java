@@ -555,17 +555,25 @@ final class Overlays {
             case "DESTROYED"     -> { fill = Color.web("#6b6f78"); emphasis = 1.00; font = 13; }
             default              -> { fill = PURPLE;             emphasis = 1.06; font = 14; }   // RETRIGGER, BALANCE
         }
+        // The chip squishes as it snaps in — briefly tall and narrow like the card's beat — and leans a touch before
+        // it straightens, so the box's pop echoes the card's. {@code punch} is 1 at the snap-in, 0 once settled.
+        double punch = 1 - Easing.clamp01(t / 0.22);
+        double sqX = 1 - 0.16 * punch, sqY = 1 + 0.30 * punch;
         double scale = in * emphasis;
-        double w = (Math.max(60, text.length() * 8.4 + 20)) * scale, h = 30 * scale;
+        double w = Math.max(60, text.length() * 8.4 + 20) * scale * sqX, h = 30 * scale * sqY;
         double x = cx - w / 2, y = cy - h / 2;
+        double tilt = 6 * punch * (e.sourceId() % 2 == 0 ? 1 : -1);   // a brief playful lean, straightening as it lands
 
         var g = r(ui).gc();
-        g.setGlobalAlpha(alpha * 0.32);
-        r(ui).panel(x - 7, y - 7, w + 14, h + 14, fill, null, 13, 0);          // soft glow halo
-        g.setGlobalAlpha(alpha);
-        r(ui).panel(x, y, w, h, fill, Color.web("#000a"), 9, 2.5);             // the chip
-        r(ui).textCenterBold(text, cx, cy, font * scale, INK);
-        g.setGlobalAlpha(1);
+        r(ui).rotated(cx, cy, tilt, () -> {
+            g.setGlobalAlpha(alpha * 0.30);
+            r(ui).panel(x + 3, y + 5, w, h, Color.web("#000000"), null, 9, 0);   // drop shadow for depth
+            r(ui).panel(x - 7, y - 7, w + 14, h + 14, fill, null, 13, 0);         // soft glow halo
+            g.setGlobalAlpha(alpha);
+            r(ui).panel(x, y, w, h, fill, Color.web("#000a"), 9, 2.5);            // the chip
+            r(ui).textCenterBold(text, cx, cy, font * scale, INK);
+            g.setGlobalAlpha(1);
+        });
     }
 
     /** The words on an effect square. */

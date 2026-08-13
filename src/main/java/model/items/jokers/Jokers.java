@@ -743,7 +743,7 @@ public enum Jokers {
     MERCHANT("Merchant", "+2 consumable slots.", Rarity.COMMON, 4, b -> b
             .on(Trigger.ON_BOUGHT, (run, self) -> run.setConsumableSlots(run.getConsumableSlots() + 2))
             .on(Trigger.ON_SOLD, (run, self) -> run.setConsumableSlots(run.getConsumableSlots() - 2))),
-    THE_VOID("The Void", "+1 Joker slot.", Rarity.UNCOMMON, 6, b -> b
+    THE_VOID("The Void", "+1 Joker slot.", Rarity.COMMON, 3, b -> b
             .on(Trigger.ON_BOUGHT, (run, self) -> run.setJokerSlots(run.getJokerSlots() + 1))
             .on(Trigger.ON_SOLD, (run, self) -> run.setJokerSlots(run.getJokerSlots() - 1))),
     RIFF_RAFF("Riff-Raff", "When Blind is selected, create 2 Common Jokers.", Rarity.COMMON, 6, b -> b
