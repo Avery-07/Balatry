@@ -114,7 +114,11 @@ public final class ActionTests {
 
         check("a planet pick is used, not stored", run.getConsumables().size() == consumablesBefore);
         check("a planet pick leveled a hand immediately", totalHandLevels(run) > levelsBefore);
-        check("the opening closed once its budget was spent", run.getCurrentOpening() == null);
+        // The opening is no longer auto-closed on the last pick: it lingers with 0 picks (so the client can animate any
+        // card change), and a no-pick SkipPack closes it — which is what the client submits once the animation settles.
+        check("the opening lingers with no picks left", run.getCurrentOpening() != null && run.getCurrentOpening().getPicksLeft() == 0);
+        m.apply(new Action.SkipPack(a));
+        check("a no-pick SkipPack then closes it", run.getCurrentOpening() == null);
     }
 
     /** Skipping a pack abandons its remaining picks and closes the opening; skipping with none open is rejected. */

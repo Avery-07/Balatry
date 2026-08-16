@@ -283,6 +283,19 @@ public final class Renderer {
     /** Sets which deck back a flipped card wears this frame (the seat's own deck); call once per frame. */
     public void deckBack(String deckName) { deckBackCell = deckBacks.cell.get(key(deckName)); }
 
+    /** A brief white flash filling a card silhouette at ({@code cx},{@code cy}) {@code w}×{@code h} rotated {@code deg} — the "just modified" highlight. */
+    public void cardFlash(double cx, double cy, double w, double h, double deg, double alpha) {
+        if (alpha <= 0) return;
+        g.save();
+        g.translate(cx, cy);
+        g.rotate(deg);
+        g.setGlobalAlpha(Math.min(1, alpha));
+        g.setFill(Color.web("#ffffff"));
+        g.fillRoundRect(-w / 2, -h / 2, w, h, 10, 10);
+        g.setGlobalAlpha(1);
+        g.restore();
+    }
+
     // --- CRT / VHS post effect: layered overlays drawn last, over the whole finished frame ---
     private Paint vignette, scanBand;
 

@@ -722,7 +722,8 @@ public final class Match {
         else if (picked instanceof ConsumableCard consumable) run.useLooseConsumable(consumable, targets);
         else if (picked instanceof DeckCard card) run.addCardToDeck(card);
         else run.acquire(picked);   // jokers are kept
-        if (opening.getPicksLeft() == 0) run.clearOpening();   // after use, so the selection hand survives the pick
+        // The opening is NOT auto-closed on the last pick: it stays open (0 picks) with the modified selection hand
+        // visible, so the client can play the modify animation, then closes it with SkipPack (a no-pick skip).
         return picked;
     }
 

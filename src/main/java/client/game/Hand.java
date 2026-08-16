@@ -127,6 +127,12 @@ final class Hand {
 
     boolean hasStaged() { return !staged.isEmpty(); }
 
+    /** Whether any card is still mid-modification (its just-modified pulse hasn't faded) — the pack waits on this. */
+    boolean animating() {
+        for (CardEntity e : cards) if (e.modPulse() > 0.02) return true;
+        return false;
+    }
+
     void advance(double dt) {
         time += dt;
         for (CardEntity c : cards) c.advance(dt);
@@ -187,10 +193,14 @@ final class Hand {
             double pop = ui.scorePop(e.id());
             double popX = 1 - 0.18 * pop, popY = 1 + 0.32 * pop;   // the beat squishes: it springs tall and narrow
             double popTilt = 5 * pop * (e.id() % 2 == 0 ? 1 : -1);   // and leans a touch, in time with its effect chip
+            double mod = e.modPulse();                 // a just-modified card pops and flashes white
+            double modScale = 1 + 0.16 * mod;
             double drawY = e.y() + bob - 18 * pop;
-            double cw = CARD_W * popX * e.stretchX(), ch = CARD_H * popY * e.stretchY();   // squash & stretch: the beat's squish times the motion's
+            double deg = fan.get(k).rotationDeg() + sway + popTilt;
+            double cw = CARD_W * popX * modScale * e.stretchX(), ch = CARD_H * popY * modScale * e.stretchY();   // squash & stretch: the beat's squish times the motion's, plus the modify pop
             r.card(e.rank(), e.suit(), e.enhancement(), e.seal(), e.edition(), e.x(), drawY, cw, ch,
-                    fan.get(k).rotationDeg() + sway + popTilt, e.selected() || pop > 0.05, e.flipT());
+                    deg, e.selected() || pop > 0.05, e.flipT());
+            if (mod > 0.02) r.cardFlash(e.x(), drawY, cw, ch, deg, 0.5 * mod);
             ui.noteSourceRect(e.id(), new Layout.Rect(e.x() - cw / 2, drawY - ch / 2, cw, ch));
             if (!e.showsBack())
                 ui.tip(new Layout.Rect(e.x() - CARD_W / 2, e.y() - CARD_H / 2, CARD_W, CARD_H),

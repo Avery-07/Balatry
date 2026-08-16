@@ -54,6 +54,7 @@ public final class GameClient extends Application {
     private final SlideTransition boundarySlide = new SlideTransition(0.42, Easing.EASE_OUT_CUBIC);
     private javafx.scene.image.WritableImage outCap;        // captured outgoing centre panel (transparent elsewhere)
     private javafx.scene.image.WritableImage boundaryCap;   // captured outgoing full scene for a menu<->match boundary
+    private boolean packClosePending;   // a fully-picked pack's auto-close was submitted; wait for it to land before re-submitting
 
     // Dev/cheat overlay for local testing, toggled with '*'. Gated so it can't be opened in a real match by accident:
     // set the BALATRY_DEV env var (inherited by the forked app JVM) or -Dbalatry.dev=true.
@@ -421,6 +422,7 @@ public final class GameClient extends Application {
             captureOutgoing(previous.phase());
             slide.start(exitDir(previous.phase()), enterDir(snap.phase()));
         }
+        if (snap.opening() == null) packClosePending = false;   // the auto-close landed (or no pack open): re-arm
         ui.s = snap;
         hand.reconcile(snap.hand(), Ui.W - 90, Ui.H * 0.55);
         updateBackground(snap);
@@ -513,6 +515,12 @@ public final class GameClient extends Application {
         hud.render(ui);
         boolean blindWait = ui.atBlindBarrier();   // this seat is done with the blind, waiting on the others
         boolean packOpen = ui.s.opening() != null;
+        // A fully-picked pack stays open so its modified cards can animate; once that settles, close it (SkipPack with
+        // no picks left just closes — no Red Joker). One submit, guarded until the close lands.
+        if (packOpen && ui.s.opening().picksLeft() == 0 && !hand.animating() && !packClosePending) {
+            vm.skipPack();
+            packClosePending = true;
+        }
         // A resolved round can still owe the seat a free pack (a skip tag's, or Wrath's per-round pack): the barrier
         // waits for it, and the seat gets an "Open" gate here rather than the dead waiting popup — skipped or played.
         boolean packToOpen = blindWait && !packOpen && !ui.s.pendingPacks().isEmpty();

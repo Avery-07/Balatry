@@ -264,7 +264,7 @@ public final class Run {
     /** Abandons the current opening via an explicit Skip (not the quiet end-of-phase cleanup), firing ON_PACK_SKIPPED (Red Joker). */
     public void skipPack() {
         if (currentOpening == null) return;
-        fire(Trigger.ON_PACK_SKIPPED);
+        if (currentOpening.getPicksLeft() > 0) fire(Trigger.ON_PACK_SKIPPED);   // only abandoning real picks is a "skip" (Red Joker); a fully-picked pack just closes
         clearOpening();
     }
 

@@ -12,6 +12,8 @@ public final class CardEntity {
 
     /** How long the face-to-back turn takes; fast enough to read as a flick, slow enough to see. */
     private static final double FLIP_SECONDS = 0.28;
+    /** How long the "just modified" pulse (a card's suit/rank/seal/enhancement/edition changing) takes to fade. */
+    private static final double MOD_SECONDS = 0.45;
 
     private final int id;
     private int rank;
@@ -22,6 +24,7 @@ public final class CardEntity {
     private String label;
     private final Motion motion;
     private final Tween flip;   // 0 = face up, 1 = face down; mid-flight values are the turn itself
+    private final Tween modPulse = new Tween(0, MOD_SECONDS, Easing.EASE_OUT_CUBIC);   // spikes to 1 on a change, decays to 0
     private boolean selected;
     private boolean dragging;   // while true the position is the player's hand, not the layout's
 
@@ -46,7 +49,7 @@ public final class CardEntity {
     /** Retargets the layout position — ignored while the card is being dragged (the drag owns it). */
     public void moveTo(double x, double y) { if (!dragging) motion.moveTo(x, y); }
 
-    public void advance(double dt) { motion.advance(dt); flip.advance(dt); }
+    public void advance(double dt) { motion.advance(dt); flip.advance(dt); modPulse.advance(dt); }
 
     public int id()          { return id; }
     public int rank()        { return rank; }
@@ -98,5 +101,16 @@ public final class CardEntity {
     /** Releases the card: the layout owns it again and the next {@link #moveTo} glides it into place. */
     public void endDrag() { dragging = false; }
 
-    void update(int rank, int suit, int enhancement, int seal, int edition, String label) { this.rank = rank; this.suit = suit; this.enhancement = enhancement; this.seal = seal; this.edition = edition; this.label = label; }
+    void update(int rank, int suit, int enhancement, int seal, int edition, String label) {
+        // A visible property changing (a tarot's suit/rank convert, a seal or enhancement added/removed, an edition
+        // applied) fires a one-shot pulse the renderer flashes; a mask reveal (-1 -> real) is the flip's job, not this.
+        boolean changed = (rank != this.rank || suit != this.suit || enhancement != this.enhancement
+                || seal != this.seal || edition != this.edition)
+                && rank >= 0 && this.rank >= 0;   // ignore boss face-down mask/reveal transitions
+        this.rank = rank; this.suit = suit; this.enhancement = enhancement; this.seal = seal; this.edition = edition; this.label = label;
+        if (changed) { modPulse.snap(1); modPulse.retarget(0); }
+    }
+
+    /** The "just modified" pulse, 1 at the change and decaying to 0 — the renderer flashes/pops the card by it. */
+    public double modPulse() { return modPulse.value(); }
 }
